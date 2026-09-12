@@ -123,8 +123,8 @@ async def seed() -> None:
                 insert(engineer_schedules).values(
                     engineer_id=engineer_id,
                     work_date=planning_date,
-                    shift_start=time(8, 0),
-                    shift_end=time(19, 0),
+                    shift_start=time(0, 0),
+                    shift_end=time(23, 59),
                 )
             )
             await session.execute(
@@ -200,7 +200,7 @@ async def _refresh_demo(session: AsyncSession, project_id: int, planning_date) -
                 engineer_schedules.c.engineer_id == row.id,
                 engineer_schedules.c.work_date == planning_date,
             )
-            .values(shift_start=time(8, 0), shift_end=time(19, 0))
+            .values(shift_start=time(0, 0), shift_end=time(23, 59))
         )
 
     addresses = {
