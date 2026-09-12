@@ -13,7 +13,6 @@ from planning.infrastructure.persistence.tables import (
     engineer_qualifications,
     engineer_schedules,
     engineers,
-    equipment_availability,
     equipment_types,
     jobs,
     planning_config,
@@ -43,6 +42,7 @@ async def seed() -> None:
         project_id = await _id(
             session,
             projects,
+            internal_code="PRJ-PERM-DEMO",
             name="Perm Demo",
             planning_timezone="Asia/Yekaterinburg",
             planning_one_day_enabled=True,
@@ -60,6 +60,7 @@ async def seed() -> None:
             project_id=project_id,
             code="OTDR",
             name="Optical tester",
+            available_units=1,
             active=True,
         )
         install_type_id = await _id(
@@ -110,6 +111,7 @@ async def seed() -> None:
                     session,
                     engineers,
                     project_id=project_id,
+                    internal_code=f"ENG-PERM-{len(engineer_ids) + 1}",
                     name=name,
                     active=True,
                     transport_type=transport,
@@ -133,14 +135,6 @@ async def seed() -> None:
                     qualification_id=qualification_id,
                 )
             )
-        await session.execute(
-            insert(equipment_availability).values(
-                project_id=project_id,
-                equipment_type_id=equipment_id,
-                availability_date=planning_date,
-                available_units=1,
-            )
-        )
         now = datetime.now(timezone.utc)
         job_values = []
         for number, (address, work_type_id) in enumerate(
@@ -160,12 +154,14 @@ async def seed() -> None:
                 {
                     "project_id": project_id,
                     "external_id": f"PERM-{number}",
+                    "internal_code": f"JOB-PERM-{number}",
                     "status": "NEW",
                     "address": address,
                     "latitude": None,
                     "longitude": None,
                     "sla_date": planning_date + timedelta(days=0 if number in (1, 2, 7, 8) else 1),
                     "work_type_id": work_type_id,
+                    "service_duration_min": 60 if work_type_id == install_type_id else 45,
                     "created_at": now + timedelta(seconds=number),
                     "updated_at": now,
                 }
@@ -178,7 +174,7 @@ async def seed() -> None:
                 active=True,
                 travel_provider=getenv("DEMO_TRAVEL_PROVIDER", "VALHALLA_LOCAL"),
                 solver_time_limit_sec=60,
-                max_jobs_per_run=100,
+                max_jobs_per_run=1000,
             )
         )
         await session.commit()
@@ -219,12 +215,20 @@ async def _refresh_demo(session: AsyncSession, project_id: int, planning_date) -
             .values(address=address, latitude=None, longitude=None)
         )
     await session.execute(
+        update(equipment_types)
+        .where(equipment_types.c.project_id == project_id)
+        .values(available_units=1)
+    )
+    await session.execute(
         update(planning_config)
         .where(
             planning_config.c.project_id == project_id,
             planning_config.c.active.is_(True),
         )
-        .values(travel_provider=getenv("DEMO_TRAVEL_PROVIDER", "VALHALLA_LOCAL"))
+        .values(
+            travel_provider=getenv("DEMO_TRAVEL_PROVIDER", "VALHALLA_LOCAL"),
+            max_jobs_per_run=1000,
+        )
     )
 
 

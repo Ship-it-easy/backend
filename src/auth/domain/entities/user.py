@@ -19,6 +19,8 @@ class User:
     is_active: bool
     role: UserRoleEnum
     is_verified: bool
+    project_id: int | None = None
+    engineer_id: int | None = None
 
 
 def create_user(
@@ -27,6 +29,8 @@ def create_user(
     password_hash: PasswordHash,
     role: UserRoleEnum,
     is_verified: bool,
+    project_id: int | None = None,
+    engineer_id: int | None = None,
 ) -> User:
     return User(
         id=id,
@@ -35,4 +39,6 @@ def create_user(
         is_active=True,
         role=role,
         is_verified=is_verified,
+        project_id=project_id,
+        engineer_id=engineer_id,
     )

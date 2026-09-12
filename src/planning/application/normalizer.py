@@ -38,8 +38,17 @@ class PlanningInputNormalizer:
             }
         )
         equipment_units = source["equipment_units"]
+        local_today = datetime.now(timezone.utc).astimezone(
+            ZoneInfo(timezone_name)
+        ).date()
         engineers = await self._normalize_engineers(
-            source["engineers"], source, current_minute_ceil(timezone_name)
+            source["engineers"],
+            source,
+            (
+                current_minute_ceil(timezone_name)
+                if planning_date == local_today
+                else None
+            ),
         )
         jobs, pre_unassigned = await self._normalize_jobs(
             source["jobs"], source, planning_date, config
@@ -137,12 +146,12 @@ class PlanningInputNormalizer:
         self,
         rows: list[dict[str, Any]],
         source: dict[str, Any],
-        current_minute: int,
+        current_minute: int | None,
     ) -> list[Engineer]:
         result = []
         for row in rows:
             shift_end_min = _time_to_end_minute(row["shift_end"])
-            if current_minute > shift_end_min:
+            if current_minute is not None and current_minute > shift_end_min:
                 continue
             coordinate = await self._coordinate(
                 row["start_latitude"],

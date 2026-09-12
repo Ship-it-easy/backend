@@ -7,6 +7,7 @@ from auth.application.interfaces.session_data_gateway import SessionDataGateway
 from auth.application.interfaces.transaction_manager import TransactionManager
 from auth.application.interfaces.user_data_gateway import UserDataGateway
 from auth.domain.entities.session import Session, SessionId
+from auth.domain.entities.user import User
 from auth.domain.user_role import UserRoleEnum
 from auth.entrypoint.config import SessionConfig
 
@@ -66,6 +67,10 @@ class IdentityProviderSession(IdentityProvider):
         return True
 
     async def get_role(self) -> UserRoleEnum:
+        user = await self.get_user()
+        return user.role
+
+    async def get_user(self) -> User:
         session_id: SessionId = self._request_manager.get_session_id_from_request()
 
         if session_id is None:
@@ -84,7 +89,7 @@ class IdentityProviderSession(IdentityProvider):
 
             await self._transaction_manager.commit()
 
-            return False
+            raise AuthenticationError("You are not authenticated.")
 
         new_expiration: datetime = datetime.now(timezone.utc) + timedelta(
             minutes=self._session_config.expiration_minutes
@@ -94,8 +99,10 @@ class IdentityProviderSession(IdentityProvider):
             session_id=session_id, expiration=new_expiration
         )
 
-        role = await self._user_data_gateway.get_role(user_id=session.user_id)
+        user = await self._user_data_gateway.read_by_id(user_id=session.user_id)
+        if user is None or not user.is_active:
+            raise AuthenticationError("You are not authenticated.")
 
         await self._transaction_manager.commit()
 
-        return role
+        return user

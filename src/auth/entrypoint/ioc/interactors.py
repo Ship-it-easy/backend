@@ -7,7 +7,6 @@ from auth.application.interactors.sign_up import SignUpInteractor
 from auth.application.interactors.user_hello_world import UserHelloWorldInteractor
 
 
-
 class InteractorProvider(Provider):
     scope = Scope.REQUEST
 

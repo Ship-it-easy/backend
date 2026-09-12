@@ -2,6 +2,7 @@ from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entrypoint.config import Config, PlanningServiceConfig
+from planning.application.access import ProjectAccess
 from planning.application.interfaces import (
     Geocoder,
     JobsRepository,
@@ -38,3 +39,4 @@ class PlanningProvider(Provider):
     matrix_factory = provide(TravelMatrixProviderFactory)
     validator = provide(PlanningValidator)
     service = provide(PlanningService)
+    access = provide(ProjectAccess)

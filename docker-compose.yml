@@ -17,7 +17,9 @@ services:
         condition: service_healthy
       nominatim:
         condition: service_healthy
-    command: "gunicorn -c conf/gunicorn.conf.py 'auth.run:make_app()'"
+    command: >-
+      sh -c "alembic upgrade head &&
+      gunicorn -c conf/gunicorn.conf.py 'auth.run:make_app()'"
 
   postgres:
     container_name: postgres

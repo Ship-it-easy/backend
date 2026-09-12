@@ -1,9 +1,11 @@
 import hashlib
 import json
+import uuid
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, insert, select, update
 from sqlalchemy.exc import IntegrityError
@@ -23,6 +25,7 @@ from planning.infrastructure.persistence.tables import (
     engineer_schedules,
     engineers,
     equipment_availability,
+    equipment_types,
     jobs,
     planning_config,
     planning_equipment_assignments,
@@ -41,13 +44,28 @@ class SqlaPlanningRunRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def get_project_timezone(self, project_id: int) -> str:
+        row = (
+            await self._session.execute(
+                select(projects.c.planning_timezone, projects.c.status).where(
+                    projects.c.id == project_id
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise ProjectNotFound("Project not found")
+        if row.status != "ACTIVE":
+            raise PlanningUnavailable("Project is blocked")
+        return str(row.planning_timezone)
+
     async def create_project(self, values: dict[str, Any]) -> dict[str, Any]:
+        values.setdefault("internal_code", f"PRJ-{uuid.uuid4().hex[:12].upper()}")
         row = (await self._session.execute(insert(projects).values(**values).returning(*projects.c))).mappings().one()
         await self._session.execute(
             insert(planning_config).values(
                 project_id=row["id"], version=1, active=True,
                 travel_provider="VALHALLA_LOCAL", solver_time_limit_sec=60,
-                max_jobs_per_run=100, travel_cost_per_minute=1,
+                max_jobs_per_run=1000, travel_cost_per_minute=1,
             )
         )
         await self._session.commit()
@@ -65,14 +83,22 @@ class SqlaPlanningRunRepository:
         )
         if project is None:
             raise ProjectNotFound("Project not found")
-        work_type = await self._session.scalar(
-            select(work_types.c.id).where(
+        work_type = (
+            await self._session.execute(
+                select(work_types.c.id, work_types.c.default_service_duration_min).where(
                 work_types.c.id == values["work_type_id"],
                 work_types.c.project_id == project_id,
+                work_types.c.active.is_(True),
             )
-        )
+            )
+        ).one_or_none()
         if work_type is None:
             raise InvalidPlanningRequest("work_type_id does not belong to project")
+        values.setdefault("internal_code", f"JOB-{uuid.uuid4().hex[:12].upper()}")
+        # The duration is a snapshot of the selected type and is not client-controlled.
+        values["service_duration_min"] = work_type.default_service_duration_min
+        if not values["service_duration_min"]:
+            raise InvalidPlanningRequest("work type has no positive service duration")
         try:
             row = (
                 (
@@ -124,6 +150,7 @@ class SqlaPlanningRunRepository:
         exists = await self._session.scalar(select(projects.c.id).where(projects.c.id == project_id))
         if exists is None:
             raise ProjectNotFound("Project not found")
+        values.setdefault("internal_code", f"ENG-{uuid.uuid4().hex[:12].upper()}")
         row = (await self._session.execute(insert(engineers).values(project_id=project_id, **values).returning(*engineers.c))).mappings().one()
         await self._session.commit()
         return dict(row)
@@ -182,6 +209,7 @@ class SqlaPlanningRunRepository:
         return [dict(row) for row in rows]
 
     async def create_catalog_item(self, table, project_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        values.setdefault("code", f"REF-{uuid.uuid4().hex[:12].upper()}")
         row = (await self._session.execute(insert(table).values(project_id=project_id, **values).returning(*table.c))).mappings().one()
         await self._session.commit()
         return dict(row)
@@ -206,7 +234,7 @@ class SqlaPlanningRunRepository:
         await self._session.commit()
 
     async def create_run(
-        self, project_id: int, planning_date: date, timezone_name: str
+        self, project_id: int, planning_date: date, timezone_name: str, initiated_by_user_id: Any | None = None
     ) -> int:
         project = (
             (
@@ -225,6 +253,8 @@ class SqlaPlanningRunRepository:
             )
         if not project.planning_one_day_enabled:
             raise PlanningUnavailable("One-day planning is not enabled for project")
+        if project.status != "ACTIVE":
+            raise PlanningUnavailable("Project is blocked")
         try:
             run_id = await self._session.scalar(
                 insert(planning_runs)
@@ -234,6 +264,7 @@ class SqlaPlanningRunRepository:
                     timezone=timezone_name,
                     status=PlanningRunStatus.PREPARING.value,
                     started_at=datetime.now(timezone.utc),
+                    initiated_by_user_id=initiated_by_user_id,
                 )
                 .returning(planning_runs.c.id)
             )
@@ -333,9 +364,9 @@ class SqlaPlanningRunRepository:
         equipment_rows = (
             (
                 await self._session.execute(
-                    select(equipment_availability).where(
-                        equipment_availability.c.project_id == project_id,
-                        equipment_availability.c.availability_date == planning_date,
+                    select(equipment_types.c.id, equipment_types.c.available_units).where(
+                        equipment_types.c.project_id == project_id,
+                        equipment_types.c.active.is_(True),
                     )
                 )
             )
@@ -351,7 +382,7 @@ class SqlaPlanningRunRepository:
             "required_equipment": required_equipment,
             "engineer_qualifications": engineer_quals,
             "equipment_units": {
-                int(row.equipment_type_id): int(row.available_units)
+                int(row.id): int(row.available_units)
                 for row in equipment_rows
             },
         }
@@ -391,7 +422,7 @@ class SqlaPlanningRunRepository:
                 normalized_input_hash=normalized_hash,
                 input_jobs_count=data.input_jobs_count,
                 eligible_jobs_count=len(data.jobs),
-                traffic_reference_time=datetime.now(timezone.utc),
+                traffic_reference_time=_traffic_reference_time(data),
             )
         )
         await self._session.commit()
@@ -646,3 +677,21 @@ def _ortools_version() -> str:
         return ortools.__version__
     except Exception:
         return "unknown"
+
+
+def _traffic_reference_time(data: PlanningInput) -> datetime:
+    zone = ZoneInfo(data.timezone)
+    now_local = datetime.now(timezone.utc).astimezone(zone)
+    earliest_shift_min = min(
+        (engineer.shift_start_min for engineer in data.engineers),
+        default=0,
+    )
+    shift_reference = datetime(
+        data.planning_date.year,
+        data.planning_date.month,
+        data.planning_date.day,
+        tzinfo=zone,
+    ) + timedelta(minutes=earliest_shift_min)
+    if data.planning_date == now_local.date():
+        return max(now_local, shift_reference).astimezone(timezone.utc)
+    return shift_reference.astimezone(timezone.utc)

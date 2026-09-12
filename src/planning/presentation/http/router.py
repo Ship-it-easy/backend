@@ -2,19 +2,23 @@ from datetime import date, datetime, time
 from typing import Annotated, Any
 
 import httpx
-
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from auth.entrypoint.config import PlanningServiceConfig
 from planning.application.errors import PlanningError
 from planning.application.interfaces import JobsRepository
 from planning.application.service import PlanningService
-from auth.entrypoint.config import PlanningServiceConfig
-from planning.infrastructure.persistence.tables import equipment_types, qualifications, work_types
+from planning.infrastructure.persistence.tables import (
+    equipment_types,
+    qualifications,
+    work_types,
+)
 
 planning_router = APIRouter(prefix="/api/projects", tags=["Planning"])
+planning_runs_router = APIRouter(prefix="/api/projects", tags=["Planning"])
 geocoding_router = APIRouter(prefix="/api/geocoding", tags=["Geocoding"])
 
 
@@ -40,7 +44,7 @@ class StartPlanningRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     planning_date: date
-    timezone: str = Field(min_length=1, max_length=64)
+    timezone: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class CreateProjectRequest(BaseModel):
@@ -445,7 +449,7 @@ async def replace_work_type_requirements(project_id: int, work_type_id: int, bod
     await repository.replace_work_type_requirements(work_type_id, body.qualification_ids, body.equipment_type_ids)
 
 
-@planning_router.post(
+@planning_runs_router.post(
     "/{project_id}/planning/runs",
     response_model=StartPlanningRunResponse,
     status_code=status.HTTP_201_CREATED,
@@ -463,7 +467,7 @@ async def start_run(
         return _error_response(error)
 
 
-@planning_router.get(
+@planning_runs_router.get(
     "/{project_id}/planning/runs/{run_id}",
     response_model=PlanningRunDetailsResponse,
     responses=ERROR_RESPONSES,
@@ -480,7 +484,7 @@ async def get_run(
         return _error_response(error)
 
 
-@planning_router.get(
+@planning_runs_router.get(
     "/{project_id}/planning/runs",
     response_model=list[PlanningRunRecord],
     responses=ERROR_RESPONSES,

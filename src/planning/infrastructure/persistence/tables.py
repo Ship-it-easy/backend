@@ -25,8 +25,12 @@ projects = Table(
     metadata_obj,
     Column("id", BigInteger, primary_key=True),
     Column("name", String(255), nullable=False),
+    Column("internal_code", String(64), nullable=False, unique=True),
     Column("planning_timezone", String(64), nullable=False),
     Column("planning_one_day_enabled", Boolean, nullable=False, server_default="true"),
+    Column("status", String(16), nullable=False, server_default="ACTIVE"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
 )
 
 work_types = Table(
@@ -36,6 +40,7 @@ work_types = Table(
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("code", String(64), nullable=False),
     Column("name", String(255), nullable=False),
+    Column("active", Boolean, nullable=False, server_default="true"),
     Column("default_service_duration_min", Integer),
     Column("required_transport", String(16)),
     UniqueConstraint("project_id", "code"),
@@ -51,6 +56,7 @@ jobs = Table(
     Column("id", BigInteger, primary_key=True),
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("external_id", String(255)),
+    Column("internal_code", String(64), nullable=False),
     Column("status", String(32), nullable=False),
     Column("address", Text, nullable=False),
     Column("address_hash", String(64)),
@@ -75,6 +81,7 @@ jobs = Table(
         server_default=text("now()"),
     ),
     UniqueConstraint("project_id", "external_id"),
+    UniqueConstraint("project_id", "internal_code"),
     CheckConstraint(
         "service_duration_min IS NULL OR service_duration_min > 0",
         name="job_duration_positive",
@@ -90,6 +97,7 @@ engineers = Table(
     Column("id", BigInteger, primary_key=True),
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("name", String(255), nullable=False),
+    Column("internal_code", String(64), nullable=False),
     Column("active", Boolean, nullable=False, server_default="true"),
     Column("transport_type", String(16), nullable=False),
     Column("start_address", Text),
@@ -111,6 +119,7 @@ engineers = Table(
         "(start_latitude IS NULL) = (start_longitude IS NULL)",
         name="engineer_coordinate_pair",
     ),
+    UniqueConstraint("project_id", "internal_code"),
     CheckConstraint(
         "start_address IS NOT NULL OR start_latitude IS NOT NULL",
         name="engineer_start_present",
@@ -138,6 +147,7 @@ qualifications = Table(
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("code", String(64), nullable=False),
     Column("name", String(255), nullable=False),
+    Column("active", Boolean, nullable=False, server_default="true"),
     UniqueConstraint("project_id", "code"),
 )
 
@@ -176,8 +186,10 @@ equipment_types = Table(
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("code", String(64), nullable=False),
     Column("name", String(255), nullable=False),
+    Column("available_units", Integer, nullable=False, server_default="0"),
     Column("active", Boolean, nullable=False, server_default="true"),
     UniqueConstraint("project_id", "code"),
+    CheckConstraint("available_units >= 0", name="equipment_type_units_nonnegative"),
 )
 
 work_type_required_equipment = Table(
@@ -377,6 +389,66 @@ planning_unassigned_jobs = Table(
     Column("primary_reason_code", String(64), nullable=False),
     Column("diagnostic_flags", JSONB, nullable=False, server_default="{}"),
     UniqueConstraint("planning_run_id", "job_id"),
+)
+
+daily_plans = Table(
+    "daily_plans",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("planning_date", Date, nullable=False),
+    Column(
+        "current_version_id",
+        BigInteger,
+        ForeignKey("plan_versions.id", use_alter=True, name="fk_daily_plans_current_version"),
+    ),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    UniqueConstraint("project_id", "planning_date"),
+)
+
+plan_versions = Table(
+    "plan_versions",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("daily_plan_id", ForeignKey("daily_plans.id", ondelete="CASCADE"), nullable=False),
+    Column("version_number", Integer, nullable=False),
+    Column("planning_run_id", ForeignKey("planning_runs.id"), nullable=False, unique=True),
+    Column("status", String(32), nullable=False, server_default="PUBLISHED"),
+    Column("published_by", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),
+    Column("published_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column("superseded_at", DateTime(timezone=True)),
+    UniqueConstraint("daily_plan_id", "version_number"),
+)
+
+assignments = Table(
+    "assignments",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("plan_version_id", ForeignKey("plan_versions.id", ondelete="CASCADE"), nullable=False),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
+    Column("sequence", Integer, nullable=False),
+    Column("planned_start", DateTime(timezone=True), nullable=False),
+    Column("planned_finish", DateTime(timezone=True), nullable=False),
+    Column("route_data", JSONB, nullable=False, server_default="{}"),
+    Column("requirement_snapshot", JSONB, nullable=False, server_default="{}"),
+    Column("active", Boolean, nullable=False, server_default="true"),
+    UniqueConstraint("plan_version_id", "job_id"),
+    UniqueConstraint("plan_version_id", "engineer_id", "sequence"),
+)
+
+job_status_history = Table(
+    "job_status_history",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("job_id", ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
+    Column("assignment_id", ForeignKey("assignments.id")),
+    Column("old_status", String(32), nullable=False),
+    Column("new_status", String(32), nullable=False),
+    Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),
+    Column("reason", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
 )
 
 geocoding_cache = Table(

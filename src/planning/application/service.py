@@ -4,11 +4,12 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from auth.application.interfaces.identity_provider import IdentityProvider
 from auth.domain.errors import AccessControlError
-from auth.domain.user_role import UserRoleEnum, has_required_role
+from auth.domain.user_role import UserRoleEnum, is_dispatcher
 from planning.application.errors import (
     InvalidPlanningRequest,
     PlanningError,
     PlanningUnavailable,
+    ProjectNotFound,
 )
 from planning.application.interfaces import PlanningRunRepository
 from planning.application.normalizer import PlanningInputNormalizer
@@ -37,12 +38,16 @@ class PlanningService:
         self._validator = validator
 
     async def start_run(
-        self, project_id: int, planning_date: date, timezone_name: str
+        self, project_id: int, planning_date: date, timezone_name: str | None
     ) -> dict:
-        await self._require_role(UserRoleEnum.ADMIN)
+        user = await self._require_project(project_id, write=True)
+        project_timezone = await self._repository.get_project_timezone(project_id)
+        if timezone_name is not None and timezone_name != project_timezone:
+            raise InvalidPlanningRequest("timezone must match the project planning timezone")
+        timezone_name = project_timezone
         self._validate_date(planning_date, timezone_name)
         run_id = await self._repository.create_run(
-            project_id, planning_date, timezone_name
+            project_id, planning_date, timezone_name, user.id
         )
         logger.info(
             "planning_run_started project_id=%s planning_run_id=%s",
@@ -110,7 +115,7 @@ class PlanningService:
             ) from error
 
     async def get_run(self, project_id: int, run_id: int) -> dict:
-        await self._require_role(UserRoleEnum.USER)
+        await self._require_project(project_id)
         return await self._repository.get_run(project_id, run_id)
 
     async def list_runs(
@@ -121,15 +126,22 @@ class PlanningService:
         limit: int,
         offset: int,
     ) -> list[dict]:
-        await self._require_role(UserRoleEnum.USER)
+        await self._require_project(project_id)
         return await self._repository.list_runs(
             project_id, planning_date, status, min(limit, 100), offset
         )
 
-    async def _require_role(self, required: UserRoleEnum) -> None:
-        role = await self._identity_provider.get_role()
-        if not has_required_role(role, required):
-            raise AccessControlError("The required role does not exist.")
+    async def _require_project(self, project_id: int, *, write: bool = False):
+        user = await self._identity_provider.get_user()
+        # ADMIN is retained as a legacy superuser for the existing demo database.
+        if user.role is UserRoleEnum.ADMIN:
+            return user
+        if not is_dispatcher(user.role):
+            raise AccessControlError("You do not have access to this project.")
+        if user.project_id != project_id:
+            raise ProjectNotFound("Project not found")
+        await self._repository.get_project_timezone(project_id)
+        return user
 
     @staticmethod
     def _validate_date(planning_date: date, timezone_name: str) -> None:

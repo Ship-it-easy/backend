@@ -26,7 +26,6 @@ class OrToolsPlanningSolver:
         self._matrix_provider = matrix_provider
 
     async def solve(self, data: PlanningInput) -> PlanningResult:
-        started = monotonic_time.perf_counter()
         if not data.jobs or not data.engineers:
             drop_cost = sum(item.drop_penalty for item in data.pre_unassigned)
             return PlanningResult(
@@ -52,9 +51,6 @@ class OrToolsPlanningSolver:
         }
         result = await asyncio.to_thread(self._solve_sync, data, matrices)
         result.travel_matrices = matrices
-        result.solver_time_ms = int((monotonic_time.perf_counter() - started) * 1000)
-        if result.solver_time_ms >= data.config.solver_time_limit_sec * 950:
-            result.solver_status = "FEASIBLE_TIME_LIMIT"
         return result
 
     def _solve_sync(
@@ -85,7 +81,9 @@ class OrToolsPlanningSolver:
                     data.jobs[from_node].duration_min if from_node < job_count else 0
                 )
                 if to_node == end_node:
-                    return service
+                    # Dummy end has no travel and no time. Completion of the last
+                    # service is enforced explicitly for every job/vehicle pair.
+                    return 0
                 travel = matrix[from_node][to_node]
                 return service + (BLOCKED_MINUTES if travel is None else travel)
 
@@ -96,7 +94,7 @@ class OrToolsPlanningSolver:
                     return 0
                 travel = matrix[from_node][to_node]
                 minutes = BLOCKED_MINUTES if travel is None else travel
-                return minutes
+                return minutes * data.config.travel_cost_per_minute
 
             transit_index = routing.RegisterTransitCallback(transit)
             cost_index = routing.RegisterTransitCallback(cost)
@@ -135,6 +133,18 @@ class OrToolsPlanningSolver:
             compatible_vehicles[job.id] = compatible
             routing.VehicleVar(index).SetValues(compatible + [-1])
             routing.AddDisjunction([index], job.drop_penalty)
+            for vehicle in compatible:
+                assigned_to_vehicle = routing.solver().IsEqualCstVar(
+                    routing.VehicleVar(index), vehicle
+                )
+                routing.solver().Add(
+                    time_dimension.CumulVar(index)
+                    <= data.engineers[vehicle].shift_end_min
+                    - job.duration_min
+                    + 2880 * (1 - assigned_to_vehicle)
+                )
+
+        self._forbid_missing_arcs(routing, manager, data, matrices)
 
         self._add_equipment_constraints(routing, manager, data, compatible_vehicles)
         parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -145,10 +155,14 @@ class OrToolsPlanningSolver:
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
         parameters.time_limit.FromSeconds(data.config.solver_time_limit_sec)
+        solve_started = monotonic_time.perf_counter()
         assignment = routing.SolveWithParameters(parameters)
+        solver_time_ms = int(
+            (monotonic_time.perf_counter() - solve_started) * 1000
+        )
         if assignment is None:
             raise RuntimeError("OR-Tools did not return a feasible solution")
-        return self._extract(
+        result = self._extract(
             data,
             matrices,
             manager,
@@ -157,6 +171,54 @@ class OrToolsPlanningSolver:
             assignment,
             compatible_vehicles,
         )
+        result.solver_time_ms = solver_time_ms
+        routing_status = routing.status()
+        search_status = routing_enums_pb2.RoutingSearchStatus.Value
+        if routing_status == (
+            search_status.ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED
+        ):
+            result.solver_status = "FEASIBLE_TIME_LIMIT"
+        elif routing_status == search_status.ROUTING_OPTIMAL:
+            result.solver_status = "OPTIMAL"
+        else:
+            result.solver_status = "FEASIBLE"
+        return result
+
+    def _forbid_missing_arcs(
+        self,
+        routing,
+        manager,
+        data: PlanningInput,
+        matrices: dict[str, list[list[int | None]]],
+    ) -> None:
+        """Remove arcs that the routing provider explicitly marked unavailable."""
+        solver = routing.solver()
+        job_count = len(data.jobs)
+        for vehicle, engineer in enumerate(data.engineers):
+            profile = "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+            matrix = matrices[profile]
+            start_index = routing.Start(vehicle)
+            start_node = job_count + vehicle
+            for to_node in range(job_count):
+                to_index = manager.NodeToIndex(to_node)
+                if matrix[start_node][to_node] is None:
+                    routing.NextVar(start_index).RemoveValue(to_index)
+            for from_node in range(job_count):
+                from_index = manager.NodeToIndex(from_node)
+                for to_node in range(job_count):
+                    if from_node == to_node or matrix[from_node][to_node] is not None:
+                        continue
+                    to_index = manager.NodeToIndex(to_node)
+                    from_not_vehicle = solver.IsDifferentCstVar(
+                        routing.VehicleVar(from_index), vehicle
+                    )
+                    to_not_vehicle = solver.IsDifferentCstVar(
+                        routing.VehicleVar(to_index), vehicle
+                    )
+                    not_successor = solver.IsDifferentCstVar(
+                        routing.NextVar(from_index), to_index
+                    )
+                    solver.Add(from_not_vehicle + to_not_vehicle + not_successor >= 1)
 
     def _add_equipment_constraints(
         self,
@@ -240,10 +302,9 @@ class OrToolsPlanningSolver:
                     start_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
-                    # Do not emit an invalid route even if the routing assignment
-                    # retained incompatible time bounds. The job will be added to
-                    # unassigned below, while later jobs are still considered.
-                    continue
+                    raise RuntimeError(
+                        f"Solver returned an invalid timetable for job {job.id}"
+                    )
                 planned_start = _utc_at(data, start_min)
                 route_jobs.append(
                     RouteJob(
@@ -281,7 +342,9 @@ class OrToolsPlanningSolver:
                         equipment_type_ids=equipment,
                     )
                 )
-                travel_cost += total_travel
+                travel_cost += (
+                    total_travel * data.config.travel_cost_per_minute
+                )
 
         unassigned = list(data.pre_unassigned)
         for job in data.jobs:
