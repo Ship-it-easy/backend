@@ -8,6 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from auth.entrypoint.config import Config
 from auth.presentation.http.base.error_handler import init_error_handlers
 from auth.presentation.http.middlewares.asgi_auth import ASGIAuthMiddleware
+from planning.presentation.http.base.error_handler import (
+    init_planning_error_handlers,
+)
 
 
 def create_app(lifespan) -> FastAPI:
@@ -37,10 +40,14 @@ def configure_app(app: FastAPI, root_router: APIRouter) -> None:
     )
     app.add_middleware(ASGIAuthMiddleware)
     init_error_handlers(app)
+    init_planning_error_handlers(app)
 
 
 def configure_logging(level=DEBUG):
-    format = "[%(asctime)s.%(msecs)03d] %(module)15s:%(lineno)-3d %(levelname)-7s - %(message)s"
+    format = (
+        "[%(asctime)s.%(msecs)03d] %(module)15s:%(lineno)-3d "
+        "%(levelname)-7s - %(message)s"
+    )
     datefmt = "%Y-%m-%d %H:%M:%S"
 
     file_handler = FileHandler("logs.log")

@@ -20,7 +20,7 @@ class TestSignUpInteractor:
         mock_transaction_manager: AsyncMock,
         mock_password_hasher: MagicMock,
         mock_user_id_generator: MagicMock,
-        mock_sender_letter: AsyncMock,
+
     ) -> SignUpInteractor:
         return SignUpInteractor(
             identity_provider=mock_identity_provider,
@@ -28,7 +28,7 @@ class TestSignUpInteractor:
             transaction_manager=mock_transaction_manager,
             password_hasher=mock_password_hasher,
             user_id_generator=mock_user_id_generator,
-            sender_letter=mock_sender_letter,
+  
         )
 
     async def test_successful_sign_up(
@@ -36,7 +36,7 @@ class TestSignUpInteractor:
         interactor: SignUpInteractor,
         mock_user_data_gateway: AsyncMock,
         mock_transaction_manager: AsyncMock,
-        mock_sender_letter: AsyncMock,
+
         user_id,
     ):
         request = SignUpRequest(username="newuser", raw_password="ValidPass1")
@@ -46,7 +46,6 @@ class TestSignUpInteractor:
         assert isinstance(result, SignUpResponse)
         assert result.id == user_id
         mock_user_data_gateway.add.assert_called_once()
-        mock_sender_letter.send_letter.assert_called_once()
         mock_transaction_manager.commit.assert_called_once()
 
     async def test_sign_up_fails_if_already_authenticated(
