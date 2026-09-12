@@ -1,9 +1,10 @@
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, insert, select, update
 from sqlalchemy.exc import IntegrityError
@@ -22,7 +23,7 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineer_qualifications,
     engineer_schedules,
     engineers,
-    equipment_availability,
+    equipment_types,
     jobs,
     planning_config,
     planning_equipment_assignments,
@@ -41,8 +42,26 @@ class SqlaPlanningRunRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def get_project_timezone(self, project_id: int) -> str:
+        row = (
+            await self._session.execute(
+                select(projects.c.planning_timezone, projects.c.status).where(
+                    projects.c.id == project_id
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise ProjectNotFound("Project not found")
+        if row.status != "ACTIVE":
+            raise PlanningUnavailable("Project is blocked")
+        return str(row.planning_timezone)
+
     async def create_run(
-        self, project_id: int, planning_date: date, timezone_name: str
+        self,
+        project_id: int,
+        planning_date: date,
+        timezone_name: str,
+        initiated_by_user_id: Any | None = None,
     ) -> int:
         project = (
             (
@@ -61,6 +80,8 @@ class SqlaPlanningRunRepository:
             )
         if not project.planning_one_day_enabled:
             raise PlanningUnavailable("One-day planning is not enabled for project")
+        if project.status != "ACTIVE":
+            raise PlanningUnavailable("Project is blocked")
         try:
             run_id = await self._session.scalar(
                 insert(planning_runs)
@@ -70,6 +91,7 @@ class SqlaPlanningRunRepository:
                     timezone=timezone_name,
                     status=PlanningRunStatus.PREPARING.value,
                     started_at=datetime.now(timezone.utc),
+                    initiated_by_user_id=initiated_by_user_id,
                 )
                 .returning(planning_runs.c.id)
             )
@@ -169,9 +191,12 @@ class SqlaPlanningRunRepository:
         equipment_rows = (
             (
                 await self._session.execute(
-                    select(equipment_availability).where(
-                        equipment_availability.c.project_id == project_id,
-                        equipment_availability.c.availability_date == planning_date,
+                    select(
+                        equipment_types.c.id,
+                        equipment_types.c.available_units,
+                    ).where(
+                        equipment_types.c.project_id == project_id,
+                        equipment_types.c.active.is_(True),
                     )
                 )
             )
@@ -187,7 +212,7 @@ class SqlaPlanningRunRepository:
             "required_equipment": required_equipment,
             "engineer_qualifications": engineer_quals,
             "equipment_units": {
-                int(row.equipment_type_id): int(row.available_units)
+                int(row.id): int(row.available_units)
                 for row in equipment_rows
             },
         }
@@ -227,7 +252,7 @@ class SqlaPlanningRunRepository:
                 normalized_input_hash=normalized_hash,
                 input_jobs_count=data.input_jobs_count,
                 eligible_jobs_count=len(data.jobs),
-                traffic_reference_time=datetime.now(timezone.utc),
+                traffic_reference_time=_traffic_reference_time(data),
             )
         )
         await self._session.commit()
@@ -482,3 +507,21 @@ def _ortools_version() -> str:
         return ortools.__version__
     except Exception:
         return "unknown"
+
+
+def _traffic_reference_time(data: PlanningInput) -> datetime:
+    zone = ZoneInfo(data.timezone)
+    now_local = datetime.now(timezone.utc).astimezone(zone)
+    earliest_shift_min = min(
+        (engineer.shift_start_min for engineer in data.engineers),
+        default=0,
+    )
+    shift_reference = datetime(
+        data.planning_date.year,
+        data.planning_date.month,
+        data.planning_date.day,
+        tzinfo=zone,
+    ) + timedelta(minutes=earliest_shift_min)
+    if data.planning_date == now_local.date():
+        return max(now_local, shift_reference).astimezone(timezone.utc)
+    return shift_reference.astimezone(timezone.utc)

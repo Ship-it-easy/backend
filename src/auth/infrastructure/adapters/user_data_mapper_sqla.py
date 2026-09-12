@@ -1,6 +1,5 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.operators import eq
 
 from auth.application.interfaces.user_data_gateway import UserDataGateway
 from auth.domain.entities.user import User, UserId, UserName
@@ -23,7 +22,7 @@ class UserDataMapperSqla(UserDataGateway):
         return user
 
     async def read_by_username(self, username: UserName) -> User | None:
-        stmt = select(User).where(eq(User.username, username))
+        stmt = select(User).where(func.lower(User.username) == str(username).lower())
 
         user = (await self._session.execute(stmt)).scalar_one_or_none()
 

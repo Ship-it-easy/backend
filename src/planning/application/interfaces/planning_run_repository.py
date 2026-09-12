@@ -7,8 +7,15 @@ from planning.domain.entities.planning import PlanningInput, PlanningResult
 
 class PlanningRunRepository(Protocol):
     @abstractmethod
+    async def get_project_timezone(self, project_id: int) -> str: ...
+
+    @abstractmethod
     async def create_run(
-        self, project_id: int, planning_date: date, timezone: str
+        self,
+        project_id: int,
+        planning_date: date,
+        timezone: str,
+        initiated_by_user_id: Any | None = None,
     ) -> int: ...
 
     @abstractmethod

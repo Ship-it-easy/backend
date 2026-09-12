@@ -1,6 +1,7 @@
 from dishka import Provider, Scope, provide
 
 from auth.entrypoint.config import Config
+from planning.application.access import ProjectAccess
 from planning.application.interfaces.geocoder import Geocoder
 from planning.application.interfaces.jobs_repository import JobsRepository
 from planning.application.interfaces.planning_run_repository import (
@@ -37,6 +38,7 @@ class PlanningAdaptersProvider(Provider):
         return config.planning_service_config
 
     geocoder = provide(NominatimGeocoder, provides=Geocoder)
+    project_access = provide(ProjectAccess)
     jobs_repository = provide(SqlaJobsRepository, provides=JobsRepository)
     planning_run_repository = provide(
         SqlaPlanningRunRepository,

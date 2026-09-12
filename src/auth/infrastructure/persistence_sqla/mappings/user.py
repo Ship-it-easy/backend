@@ -1,4 +1,13 @@
-from sqlalchemy import UUID, Boolean, Column, Enum, String, Table
+from sqlalchemy import (
+    UUID,
+    BigInteger,
+    Boolean,
+    Column,
+    Enum,
+    ForeignKey,
+    String,
+    Table,
+)
 
 from auth.domain.entities.user import User
 from auth.domain.user_role import UserRoleEnum
@@ -13,6 +22,8 @@ users_table = Table(
     Column("is_active", Boolean, nullable=False),
     Column("role", Enum(UserRoleEnum), nullable=False),
     Column("is_verified", Boolean, nullable=False),
+    Column("project_id", BigInteger, ForeignKey("projects.id")),
+    Column("engineer_id", BigInteger, ForeignKey("engineers.id"), unique=True),
 )
 
 

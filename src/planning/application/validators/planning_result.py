@@ -118,4 +118,15 @@ class PlanningValidator:
         for equipment_id, used in equipment_usage.items():
             if used > data.equipment_units.get(equipment_id, 0):
                 errors.append(f"equipment {equipment_id} capacity exceeded")
+        expected_drop_cost = sum(item.drop_penalty for item in result.unassigned)
+        expected_travel_cost = (
+            sum(route.total_travel_min for route in result.routes)
+            * data.config.travel_cost_per_minute
+        )
+        if result.drop_cost != expected_drop_cost:
+            errors.append("invalid drop cost")
+        if result.travel_cost != expected_travel_cost:
+            errors.append("invalid travel cost")
+        if result.objective != expected_drop_cost + expected_travel_cost:
+            errors.append("invalid objective")
         return errors

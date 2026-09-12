@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Protocol
 
+from auth.domain.entities.user import User
 from auth.domain.user_role import UserRoleEnum
 
 
@@ -10,3 +11,6 @@ class IdentityProvider(Protocol):
 
     @abstractmethod
     async def get_role(self) -> UserRoleEnum: ...
+
+    @abstractmethod
+    async def get_user(self) -> User: ...

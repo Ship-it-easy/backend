@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from sqlalchemy import insert, select
@@ -24,14 +25,24 @@ class SqlaJobsRepository:
         )
         if project is None:
             raise ProjectNotFound("Project not found")
-        work_type = await self._session.scalar(
-            select(work_types.c.id).where(
-                work_types.c.id == values["work_type_id"],
-                work_types.c.project_id == project_id,
+        work_type = (
+            await self._session.execute(
+                select(
+                    work_types.c.id,
+                    work_types.c.default_service_duration_min,
+                ).where(
+                    work_types.c.id == values["work_type_id"],
+                    work_types.c.project_id == project_id,
+                    work_types.c.active.is_(True),
+                )
             )
-        )
+        ).one_or_none()
         if work_type is None:
             raise InvalidPlanningRequest("work_type_id does not belong to project")
+        values.setdefault("internal_code", f"JOB-{uuid.uuid4().hex[:12].upper()}")
+        values["service_duration_min"] = work_type.default_service_duration_min
+        if not values["service_duration_min"]:
+            raise InvalidPlanningRequest("work type has no positive service duration")
         try:
             row = (
                 (
