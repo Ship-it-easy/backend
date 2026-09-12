@@ -1,12 +1,13 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Annotated, Any
 
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from planning.application.errors import PlanningError
+from planning.application.interfaces import JobsRepository
 from planning.application.service import PlanningService
 
 planning_router = APIRouter(prefix="/api/projects", tags=["Planning"])
@@ -89,6 +90,44 @@ class PlanningRunDetailsResponse(BaseModel):
     unassigned_jobs: list[UnassignedJobResponse]
 
 
+class CreateJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    external_id: str | None = Field(default=None, max_length=255)
+    address: str = Field(min_length=1)
+    sla_date: date
+    work_type_id: int
+    service_duration_min: int | None = Field(default=None, gt=0)
+    time_window_start: time | None = None
+    time_window_end: time | None = None
+
+    @model_validator(mode="after")
+    def validate_time_window(self) -> "CreateJobRequest":
+        if self.time_window_start is not None and self.time_window_end is not None:
+            if self.time_window_start >= self.time_window_end:
+                raise ValueError(
+                    "time_window_start must be earlier than time_window_end"
+                )
+        return self
+
+
+class JobResponse(BaseModel):
+    id: int
+    project_id: int
+    external_id: str | None
+    status: str
+    address: str
+    latitude: float | None
+    longitude: float | None
+    sla_date: date
+    time_window_start: time | None
+    time_window_end: time | None
+    work_type_id: int
+    service_duration_min: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
 ERROR_RESPONSES = {
     403: {"model": ErrorResponse},
     404: {"model": ErrorResponse},
@@ -96,6 +135,40 @@ ERROR_RESPONSES = {
     422: {"model": ErrorResponse},
     503: {"model": ErrorResponse},
 }
+
+
+@planning_router.post(
+    "/{project_id}/jobs",
+    response_model=JobResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses=ERROR_RESPONSES,
+)
+@inject
+async def create_job(
+    project_id: int,
+    body: CreateJobRequest,
+    repository: FromDishka[JobsRepository],
+) -> Any:
+    try:
+        return await repository.create_job(project_id, body.model_dump())
+    except PlanningError as error:
+        return _error_response(error)
+
+
+@planning_router.get(
+    "/{project_id}/jobs",
+    response_model=list[JobResponse],
+    responses=ERROR_RESPONSES,
+)
+@inject
+async def list_jobs(
+    project_id: int,
+    repository: FromDishka[JobsRepository],
+) -> Any:
+    try:
+        return await repository.list_jobs(project_id)
+    except PlanningError as error:
+        return _error_response(error)
 
 
 @planning_router.post(

@@ -2,7 +2,11 @@ from dishka import Provider, Scope, provide
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entrypoint.config import Config, PlanningServiceConfig
-from planning.application.interfaces import Geocoder, PlanningRunRepository
+from planning.application.interfaces import (
+    Geocoder,
+    JobsRepository,
+    PlanningRunRepository,
+)
 from planning.application.normalizer import PlanningInputNormalizer
 from planning.application.service import PlanningService
 from planning.application.validator import PlanningValidator
@@ -29,6 +33,7 @@ class PlanningProvider(Provider):
         return NominatimGeocoder(session, config)
 
     repository = provide(SqlaPlanningRunRepository, provides=PlanningRunRepository)
+    jobs_repository = provide(SqlaPlanningRunRepository, provides=JobsRepository)
     normalizer = provide(PlanningInputNormalizer)
     matrix_factory = provide(TravelMatrixProviderFactory)
     validator = provide(PlanningValidator)
