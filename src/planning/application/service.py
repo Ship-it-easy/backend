@@ -138,7 +138,7 @@ class PlanningService:
         except ZoneInfoNotFoundError as error:
             raise InvalidPlanningRequest("Unknown IANA timezone") from error
         current_date = datetime.now(timezone.utc).astimezone(zone).date()
-        if planning_date != current_date:
+        if planning_date < current_date:
             raise InvalidPlanningRequest(
-                "planning_date must be the current date in the supplied timezone"
+                "planning_date cannot be in the past for the supplied timezone"
             )

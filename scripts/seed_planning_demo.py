@@ -102,7 +102,8 @@ async def seed() -> None:
         engineer_ids = []
         for name, transport, latitude, longitude in (
             ("Alexey", "CAR", 58.0105, 56.2502),
-            ("Maria", "NONE", 58.0030, 56.2320),
+            ("Maria", "NONE", 58.0650, 55.6300),
+            ("Ivan", "NONE", 58.0200, 56.2200),
         ):
             engineer_ids.append(
                 await _id(
@@ -112,7 +113,7 @@ async def seed() -> None:
                     name=name,
                     active=True,
                     transport_type=transport,
-                    start_address="Perm",
+                    start_address=("Пермь, Автозаводская, 26" if name == "Alexey" else "Пермь, Закамск" if name == "Maria" else "Пермь, улица Куйбышева"),
                     start_latitude=latitude,
                     start_longitude=longitude,
                 )
@@ -146,8 +147,12 @@ async def seed() -> None:
             (
                 ("Пермь, улица Ленина, 58", install_type_id),
                 ("Пермь, Комсомольский проспект, 27", repair_type_id),
-                ("Пермь, улица Екатерининская, 75", repair_type_id),
-                ("Пермь, улица Сибирская, 35", install_type_id),
+            ("Пермь, улица Екатерининская, 75", repair_type_id),
+            ("Пермь, улица Сибирская, 35", install_type_id),
+            ("Пермь, улица Куйбышева, 10", repair_type_id),
+            ("Пермь, улица Куйбышева, 18", install_type_id),
+            ("улица Куйбышева, Пермь", repair_type_id),
+            ("Автозаводская улица, Закамск, Кировский район, Пермь", repair_type_id),
             ),
             start=1,
         ):
@@ -159,7 +164,7 @@ async def seed() -> None:
                     "address": address,
                     "latitude": None,
                     "longitude": None,
-                    "sla_date": planning_date + timedelta(days=0 if number < 3 else 1),
+                    "sla_date": planning_date + timedelta(days=0 if number in (1, 2, 7, 8) else 1),
                     "work_type_id": work_type_id,
                     "created_at": now + timedelta(seconds=number),
                     "updated_at": now,

@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 from planning.application.interfaces import TravelMatrixProvider
-from planning.application.normalizer import current_minute_ceil, is_base_compatible
+from planning.application.normalizer import is_base_compatible
 from planning.application.reason_resolver import UnassignedReasonResolver
 from planning.domain.enums import TransportType
 from planning.domain.models import (
@@ -112,9 +112,8 @@ class OrToolsPlanningSolver:
             "Time",
         )
         time_dimension = routing.GetDimensionOrDie("Time")
-        current_minute = current_minute_ceil(data.timezone)
         for vehicle, engineer in enumerate(data.engineers):
-            earliest = max(engineer.shift_start_min, current_minute)
+            earliest = engineer.shift_start_min
             time_dimension.CumulVar(routing.Start(vehicle)).SetRange(
                 earliest, engineer.shift_end_min
             )
@@ -213,9 +212,7 @@ class OrToolsPlanningSolver:
             # Routing assignment time variables may contain a feasible interval
             # instead of one committed timetable. Build the actual timetable
             # deterministically from the selected sequence and hard constraints.
-            route_start_min = max(
-                engineer.shift_start_min, current_minute_ceil(data.timezone)
-            )
+            route_start_min = engineer.shift_start_min
             previous_node = manager.IndexToNode(index)
             route_jobs: list[RouteJob] = []
             total_travel = total_service = total_waiting = 0

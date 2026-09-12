@@ -4,6 +4,7 @@ from typing import Iterable
 
 from dishka import AsyncContainer, Provider, make_async_container
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from auth.entrypoint.config import Config
 from auth.presentation.http.base.error_handler import init_error_handlers
@@ -18,13 +19,23 @@ def create_app(lifespan) -> FastAPI:
 def create_async_ioc_container(
     providers: Iterable[Provider], config: Config
 ) -> AsyncContainer:
-    return make_async_container(
-        *providers, context={Config: config}
-    )
+    return make_async_container(*providers, context={Config: config})
 
 
 def configure_app(app: FastAPI, root_router: APIRouter) -> None:
     app.include_router(root_router)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.add_middleware(ASGIAuthMiddleware)
     init_error_handlers(app)
 
