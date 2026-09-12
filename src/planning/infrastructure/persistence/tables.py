@@ -232,7 +232,7 @@ planning_config = Table(
     Column("window_60", Integer, nullable=False, server_default="150"),
     Column("window_120", Integer, nullable=False, server_default="50"),
     Column("travel_cost_per_minute", Integer, nullable=False, server_default="1"),
-    Column("solver_time_limit_sec", Integer, nullable=False, server_default="30"),
+    Column("solver_time_limit_sec", Integer, nullable=False, server_default="60"),
     Column("max_jobs_per_run", Integer, nullable=False, server_default="1000"),
     Column(
         "travel_provider", String(32), nullable=False, server_default="VALHALLA_LOCAL"

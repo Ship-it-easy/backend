@@ -172,7 +172,7 @@ async def seed() -> None:
                 version=1,
                 active=True,
                 travel_provider=getenv("DEMO_TRAVEL_PROVIDER", "VALHALLA_LOCAL"),
-                solver_time_limit_sec=5,
+                solver_time_limit_sec=60,
                 max_jobs_per_run=100,
             )
         )

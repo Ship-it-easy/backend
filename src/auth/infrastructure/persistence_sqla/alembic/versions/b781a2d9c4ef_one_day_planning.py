@@ -289,7 +289,7 @@ def _create_planning_tables() -> None:
             "travel_cost_per_minute", sa.Integer(), server_default="1", nullable=False
         ),
         sa.Column(
-            "solver_time_limit_sec", sa.Integer(), server_default="30", nullable=False
+            "solver_time_limit_sec", sa.Integer(), server_default="60", nullable=False
         ),
         sa.Column(
             "max_jobs_per_run", sa.Integer(), server_default="1000", nullable=False
