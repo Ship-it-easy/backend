@@ -55,9 +55,49 @@ class PlanningRunRepository(Protocol):
 
 class JobsRepository(Protocol):
     @abstractmethod
+    async def create_project(self, values: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def list_projects(self) -> list[dict[str, Any]]: ...
+    @abstractmethod
     async def create_job(
         self, project_id: int, values: dict[str, Any]
     ) -> dict[str, Any]: ...
 
     @abstractmethod
     async def list_jobs(self, project_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def create_jobs(
+        self, project_id: int, values: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def create_engineer(self, project_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def list_engineers(self, project_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def create_schedule(self, engineer_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def list_schedules(self, engineer_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def set_equipment_availability(self, project_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def list_equipment_availability(self, project_id: int, availability_date: date | None = None) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def create_catalog_item(self, table: Any, project_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def list_catalog_items(self, table: Any, project_id: int) -> list[dict[str, Any]]: ...
+
+    @abstractmethod
+    async def replace_engineer_qualifications(self, engineer_id: int, qualification_ids: list[int]) -> None: ...
+
+    @abstractmethod
+    async def replace_work_type_requirements(self, work_type_id: int, qualification_ids: list[int], equipment_type_ids: list[int]) -> None: ...

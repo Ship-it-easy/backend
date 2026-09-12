@@ -41,6 +41,22 @@ class SqlaPlanningRunRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def create_project(self, values: dict[str, Any]) -> dict[str, Any]:
+        row = (await self._session.execute(insert(projects).values(**values).returning(*projects.c))).mappings().one()
+        await self._session.execute(
+            insert(planning_config).values(
+                project_id=row["id"], version=1, active=True,
+                travel_provider="VALHALLA_LOCAL", solver_time_limit_sec=60,
+                max_jobs_per_run=100, travel_cost_per_minute=1,
+            )
+        )
+        await self._session.commit()
+        return dict(row)
+
+    async def list_projects(self) -> list[dict[str, Any]]:
+        rows = (await self._session.execute(select(projects).order_by(projects.c.id))).mappings().all()
+        return [dict(row) for row in rows]
+
     async def create_job(
         self, project_id: int, values: dict[str, Any]
     ) -> dict[str, Any]:
@@ -95,6 +111,99 @@ class SqlaPlanningRunRepository:
             .all()
         )
         return [dict(row) for row in rows]
+
+    async def create_jobs(
+        self, project_id: int, values: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        created = []
+        for item in values:
+            created.append(await self.create_job(project_id, item))
+        return created
+
+    async def create_engineer(self, project_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        exists = await self._session.scalar(select(projects.c.id).where(projects.c.id == project_id))
+        if exists is None:
+            raise ProjectNotFound("Project not found")
+        row = (await self._session.execute(insert(engineers).values(project_id=project_id, **values).returning(*engineers.c))).mappings().one()
+        await self._session.commit()
+        return dict(row)
+
+    async def list_engineers(self, project_id: int) -> list[dict[str, Any]]:
+        rows = (await self._session.execute(select(engineers).where(engineers.c.project_id == project_id).order_by(engineers.c.id))).mappings().all()
+        return [dict(row) for row in rows]
+
+    async def create_schedule(self, engineer_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        exists = await self._session.scalar(select(engineers.c.id).where(engineers.c.id == engineer_id))
+        if exists is None:
+            raise InvalidPlanningRequest("engineer_id not found")
+        try:
+            row = (await self._session.execute(insert(engineer_schedules).values(engineer_id=engineer_id, **values).returning(*engineer_schedules.c))).mappings().one()
+            await self._session.commit()
+        except IntegrityError as error:
+            await self._session.rollback()
+            raise InvalidPlanningRequest("schedule already exists for this date") from error
+        return dict(row)
+
+    async def list_schedules(self, engineer_id: int) -> list[dict[str, Any]]:
+        rows = (await self._session.execute(select(engineer_schedules).where(engineer_schedules.c.engineer_id == engineer_id).order_by(engineer_schedules.c.work_date))).mappings().all()
+        return [dict(row) for row in rows]
+
+    async def set_equipment_availability(self, project_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        exists = await self._session.scalar(select(projects.c.id).where(projects.c.id == project_id))
+        if exists is None:
+            raise ProjectNotFound("Project not found")
+        existing = await self._session.scalar(select(equipment_availability.c.project_id).where(
+            equipment_availability.c.project_id == project_id,
+            equipment_availability.c.equipment_type_id == values["equipment_type_id"],
+            equipment_availability.c.availability_date == values["availability_date"],
+        ))
+        if existing is None:
+            stmt = insert(equipment_availability).values(project_id=project_id, **values)
+        else:
+            stmt = update(equipment_availability).where(
+                equipment_availability.c.project_id == project_id,
+                equipment_availability.c.equipment_type_id == values["equipment_type_id"],
+                equipment_availability.c.availability_date == values["availability_date"],
+            ).values(available_units=values["available_units"])
+        await self._session.execute(stmt)
+        row = (await self._session.execute(select(equipment_availability).where(
+            equipment_availability.c.project_id == project_id,
+            equipment_availability.c.equipment_type_id == values["equipment_type_id"],
+            equipment_availability.c.availability_date == values["availability_date"],
+        ))).mappings().one()
+        await self._session.commit()
+        return dict(row)
+
+    async def list_equipment_availability(self, project_id: int, availability_date: date | None = None) -> list[dict[str, Any]]:
+        query = select(equipment_availability).where(equipment_availability.c.project_id == project_id)
+        if availability_date is not None:
+            query = query.where(equipment_availability.c.availability_date == availability_date)
+        rows = (await self._session.execute(query.order_by(equipment_availability.c.availability_date))).mappings().all()
+        return [dict(row) for row in rows]
+
+    async def create_catalog_item(self, table, project_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        row = (await self._session.execute(insert(table).values(project_id=project_id, **values).returning(*table.c))).mappings().one()
+        await self._session.commit()
+        return dict(row)
+
+    async def list_catalog_items(self, table, project_id: int) -> list[dict[str, Any]]:
+        rows = (await self._session.execute(select(table).where(table.c.project_id == project_id).order_by(table.c.id))).mappings().all()
+        return [dict(row) for row in rows]
+
+    async def replace_engineer_qualifications(self, engineer_id: int, qualification_ids: list[int]) -> None:
+        await self._session.execute(engineer_qualifications.delete().where(engineer_qualifications.c.engineer_id == engineer_id))
+        if qualification_ids:
+            await self._session.execute(insert(engineer_qualifications), [{"engineer_id": engineer_id, "qualification_id": item} for item in qualification_ids])
+        await self._session.commit()
+
+    async def replace_work_type_requirements(self, work_type_id: int, qualification_ids: list[int], equipment_type_ids: list[int]) -> None:
+        await self._session.execute(work_type_required_qualifications.delete().where(work_type_required_qualifications.c.work_type_id == work_type_id))
+        await self._session.execute(work_type_required_equipment.delete().where(work_type_required_equipment.c.work_type_id == work_type_id))
+        if qualification_ids:
+            await self._session.execute(insert(work_type_required_qualifications), [{"work_type_id": work_type_id, "qualification_id": item} for item in qualification_ids])
+        if equipment_type_ids:
+            await self._session.execute(insert(work_type_required_equipment), [{"work_type_id": work_type_id, "equipment_type_id": item} for item in equipment_type_ids])
+        await self._session.commit()
 
     async def create_run(
         self, project_id: int, planning_date: date, timezone_name: str
