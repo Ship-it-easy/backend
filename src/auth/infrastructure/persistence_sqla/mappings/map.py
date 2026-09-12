@@ -1,5 +1,6 @@
 from auth.infrastructure.persistence_sqla.mappings.session import map_sessions_table
 from auth.infrastructure.persistence_sqla.mappings.user import map_users_table
+from planning.infrastructure.persistence import tables as planning_tables  # noqa: F401
 
 
 def map_tables() -> None:

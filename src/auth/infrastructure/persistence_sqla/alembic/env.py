@@ -4,10 +4,14 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from auth.entrypoint.config import PostgresConfig
+from auth.infrastructure.persistence_sqla.mappings.session import (
+    Session as _Session,  # noqa: F401
+)
+from auth.infrastructure.persistence_sqla.mappings.user import (
+    User as _User,  # noqa: F401
+)
 from auth.infrastructure.persistence_sqla.orm_registry import mapping_registry
-
-from auth.infrastructure.persistence_sqla.mappings.user import User
-from auth.infrastructure.persistence_sqla.mappings.session import Session
+from planning.infrastructure.persistence import tables as _planning_tables  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
