@@ -225,14 +225,22 @@ class OrToolsPlanningSolver:
                 travel = matrix[previous_node][node]
                 if travel is None:
                     raise RuntimeError("Solver selected a forbidden travel arc")
-                previous_finish = (
-                    route_start_min
-                    if not route_jobs
-                    else _minute_of(route_jobs[-1].planned_finish, data.timezone)
-                )
+                previous_finish = route_start_min
+                if route_jobs:
+                    previous_finish = _minute_of(
+                        route_jobs[-1].planned_finish, data.timezone
+                    )
                 arrival_min = previous_finish + travel
-                start_min = max(arrival_min, job.window_start_min)
+                # A Time-dimension cumul is the exact start-of-service moment
+                # chosen by OR-Tools. Reconstructing it from the route loses
+                # solver-inserted slack and may produce a different (invalid)
+                # schedule near shift boundaries or time windows.
+                start_min = assignment.Value(time_dimension.CumulVar(index))
                 waiting = start_min - arrival_min
+                if waiting < 0:
+                    raise RuntimeError(
+                        f"Solver returned an invalid arrival for job {job.id}"
+                    )
                 planned_start = _utc_at(data, start_min)
                 route_jobs.append(
                     RouteJob(
