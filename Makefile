@@ -14,7 +14,7 @@ BACKEND_SERVICE=backend
 help:
 	@echo ""
 	@echo "  Инфраструктура (Docker):"
-	@echo "    make infra-up          — Поднять инфраструктуру (PostgreSQL, RabbitMQ)"
+	@echo "    make infra-up          — Поднять PostgreSQL, Valhalla и Nominatim"
 	@echo "    make infra-down        — Остановить инфраструктуру"
 	@echo ""
 	@echo "  Приложение (локально):"
@@ -40,7 +40,7 @@ help:
 
 .PHONY: infra-up
 infra-up:
-	@$(DC) --env-file $(ENV_DOCKER_FILE) -f $(COMPOSE_FILE) up -d postgres rabbitmq
+	@$(DC) --env-file $(ENV_DOCKER_FILE) -f $(COMPOSE_FILE) up -d postgres valhalla nominatim
 
 .PHONY: infra-down
 infra-down:
@@ -69,6 +69,10 @@ migrate-create:
 		exit 1; \
 	fi
 	uv run alembic revision --autogenerate -m "$(NAME)"
+
+.PHONY: seed-planning-demo
+seed-planning-demo:
+	uv run python scripts/seed_planning_demo.py
 
 # Миграции (через контейнер)
 # Поднимает одноразовый контейнер backend,
