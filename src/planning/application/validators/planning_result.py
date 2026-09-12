@@ -2,9 +2,9 @@ from collections import Counter
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
-from planning.application.normalizer import is_base_compatible
+from planning.application.services.planning_input_normalizer import is_base_compatible
+from planning.domain.entities.planning import PlanningInput, PlanningResult
 from planning.domain.enums import TransportType
-from planning.domain.models import PlanningInput, PlanningResult
 
 
 class PlanningValidator:

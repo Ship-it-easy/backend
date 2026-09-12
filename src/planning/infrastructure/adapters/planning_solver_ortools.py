@@ -5,17 +5,21 @@ from zoneinfo import ZoneInfo
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-from planning.application.interfaces import TravelMatrixProvider
-from planning.application.normalizer import is_base_compatible
-from planning.application.reason_resolver import UnassignedReasonResolver
+from planning.application.interfaces.travel_matrix_provider import TravelMatrixProvider
+from planning.application.services.planning_input_normalizer import is_base_compatible
+from planning.application.services.unassigned_reason_resolver import (
+    UnassignedReasonResolver,
+)
 from planning.domain.enums import TransportType
-from planning.domain.models import (
-    Job,
+from planning.domain.entities.job import Job, UnassignedJob
+from planning.domain.entities.planning import (
     PlanningInput,
     PlanningResult,
     Route,
     RouteJob,
-    UnassignedJob,
+)
+from planning.infrastructure.adapters.travel_matrix_provider_factory import (
+    TravelMatrixProviderFactory,
 )
 
 BLOCKED_MINUTES = 100_000
@@ -307,6 +311,15 @@ class OrToolsPlanningSolver:
             travel_cost=travel_cost,
             solver_time_ms=0,
         )
+
+
+class OrToolsPlanningSolverFactory:
+    def __init__(self, matrix_factory: TravelMatrixProviderFactory):
+        self._matrix_factory = matrix_factory
+
+    def create(self, provider: str) -> OrToolsPlanningSolver:
+        matrix_provider = self._matrix_factory.create(provider)
+        return OrToolsPlanningSolver(matrix_provider)
 
 
 def _utc_at(data: PlanningInput, minute: int) -> datetime:

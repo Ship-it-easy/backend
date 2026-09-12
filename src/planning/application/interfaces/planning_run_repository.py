@@ -2,19 +2,7 @@ from abc import abstractmethod
 from datetime import date
 from typing import Any, Protocol
 
-from planning.domain.models import Coordinate, PlanningInput, PlanningResult
-
-
-class Geocoder(Protocol):
-    @abstractmethod
-    async def geocode(self, address: str) -> Coordinate | None: ...
-
-
-class TravelMatrixProvider(Protocol):
-    @abstractmethod
-    async def get_matrix(
-        self, coordinates: list[Coordinate], profile: str
-    ) -> list[list[int | None]]: ...
+from planning.domain.entities.planning import PlanningInput, PlanningResult
 
 
 class PlanningRunRepository(Protocol):
@@ -51,13 +39,3 @@ class PlanningRunRepository(Protocol):
         limit: int,
         offset: int,
     ) -> list[dict[str, Any]]: ...
-
-
-class JobsRepository(Protocol):
-    @abstractmethod
-    async def create_job(
-        self, project_id: int, values: dict[str, Any]
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    async def list_jobs(self, project_id: int) -> list[dict[str, Any]]: ...

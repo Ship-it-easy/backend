@@ -6,16 +6,12 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from planning.application.errors import PlanningUnavailable
-from planning.application.interfaces import Geocoder
+from planning.application.interfaces.geocoder import Geocoder
+from planning.domain.entities.coordinate import Coordinate
+from planning.domain.entities.engineer import Engineer
+from planning.domain.entities.job import Job, UnassignedJob
+from planning.domain.entities.planning import PlanningConfig, PlanningInput
 from planning.domain.enums import ReasonCode, TransportType
-from planning.domain.models import (
-    Coordinate,
-    Engineer,
-    Job,
-    PlanningConfig,
-    PlanningInput,
-    UnassignedJob,
-)
 
 
 class PlanningInputNormalizer:

@@ -1,5 +1,6 @@
+from planning.domain.entities.job import Job
+from planning.domain.entities.planning import PlanningInput
 from planning.domain.enums import ReasonCode, TransportType
-from planning.domain.models import Job, PlanningInput
 
 
 class UnassignedReasonResolver:

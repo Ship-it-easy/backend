@@ -3,7 +3,7 @@ from fastapi.responses import RedirectResponse
 
 from auth.presentation.http.auth.auth_router import auth_router
 from auth.presentation.http.hello_world.hello_world_router import hello_world_router
-from planning.presentation.http.router import planning_router
+from planning.presentation.http.root_router import planning_router
 
 root_router = APIRouter()
 

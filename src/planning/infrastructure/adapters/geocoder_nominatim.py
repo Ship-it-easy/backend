@@ -6,9 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.entrypoint.config import PlanningServiceConfig
-from planning.domain.models import Coordinate
-from planning.infrastructure.persistence.tables import geocoding_cache
+from planning.domain.entities.coordinate import Coordinate
+from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.persistence_sqla.mappings.tables import geocoding_cache
 
 
 class NominatimGeocoder:

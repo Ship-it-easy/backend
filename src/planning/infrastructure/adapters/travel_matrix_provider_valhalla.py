@@ -7,9 +7,9 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.entrypoint.config import PlanningServiceConfig
-from planning.domain.models import Coordinate
-from planning.infrastructure.persistence.tables import travel_time_cache
+from planning.domain.entities.coordinate import Coordinate
+from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.persistence_sqla.mappings.tables import travel_time_cache
 
 
 def _cache_key(origin: Coordinate, destination: Coordinate, profile: str) -> str:
@@ -18,23 +18,6 @@ def _cache_key(origin: Coordinate, destination: Coordinate, profile: str) -> str
         f"{destination.latitude:.6f}:{destination.longitude:.6f}:{profile}:osm"
     )
     return hashlib.sha256(value.encode()).hexdigest()
-
-
-class StaticTravelMatrixProvider:
-    """Deterministic offline provider useful for local development and demo fallback."""
-
-    async def get_matrix(
-        self, coordinates: list[Coordinate], profile: str
-    ) -> list[list[int | None]]:
-        speed_kmh = 25 if profile == "auto" else 5
-        result: list[list[int | None]] = []
-        for origin in coordinates:
-            row = []
-            for destination in coordinates:
-                distance_km = _haversine_km(origin, destination)
-                row.append(math.ceil(distance_km / speed_kmh * 60))
-            result.append(row)
-        return result
 
 
 class ValhallaTravelMatrixProvider:
@@ -134,13 +117,3 @@ def _location(coordinate: Coordinate) -> dict[str, float]:
     return {"lat": coordinate.latitude, "lon": coordinate.longitude}
 
 
-def _haversine_km(a: Coordinate, b: Coordinate) -> float:
-    earth_radius = 6371.0
-    lat1, lat2 = math.radians(a.latitude), math.radians(b.latitude)
-    delta_lat = lat2 - lat1
-    delta_lon = math.radians(b.longitude - a.longitude)
-    value = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1) * math.cos(lat2) * math.sin(delta_lon / 2) ** 2
-    )
-    return 2 * earth_radius * math.asin(math.sqrt(value))

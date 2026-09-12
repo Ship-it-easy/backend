@@ -10,33 +10,34 @@ from planning.application.errors import (
     PlanningError,
     PlanningUnavailable,
 )
-from planning.application.interfaces import PlanningRunRepository
-from planning.application.normalizer import PlanningInputNormalizer
-from planning.application.validator import PlanningValidator
-from planning.infrastructure.adapters.solver import OrToolsPlanningSolver
-from planning.infrastructure.adapters.travel_factory import (
-    TravelMatrixProviderFactory,
+from planning.application.interfaces.planning_run_repository import (
+    PlanningRunRepository,
 )
+from planning.application.interfaces.planning_solver import PlanningSolverFactory
+from planning.application.services.planning_input_normalizer import (
+    PlanningInputNormalizer,
+)
+from planning.application.validators.planning_result import PlanningValidator
 
 logger = logging.getLogger(__name__)
 
 
-class PlanningService:
+class StartPlanningRunInteractor:
     def __init__(
         self,
         identity_provider: IdentityProvider,
         repository: PlanningRunRepository,
         normalizer: PlanningInputNormalizer,
-        matrix_factory: TravelMatrixProviderFactory,
+        solver_factory: PlanningSolverFactory,
         validator: PlanningValidator,
     ):
         self._identity_provider = identity_provider
         self._repository = repository
         self._normalizer = normalizer
-        self._matrix_factory = matrix_factory
+        self._solver_factory = solver_factory
         self._validator = validator
 
-    async def start_run(
+    async def __call__(
         self, project_id: int, planning_date: date, timezone_name: str
     ) -> dict:
         await self._require_role(UserRoleEnum.ADMIN)
@@ -55,8 +56,8 @@ class PlanningService:
                 project_id, planning_date, timezone_name, source
             )
             await self._repository.mark_running(run_id, data)
-            matrix_provider = self._matrix_factory.create(data.config.travel_provider)
-            result = await OrToolsPlanningSolver(matrix_provider).solve(data)
+            solver = self._solver_factory.create(data.config.travel_provider)
+            result = await solver.solve(data)
             result.validation_errors = self._validator.validate(data, result)
             await self._repository.save_result(run_id, data, result)
             if result.validation_errors:
@@ -108,23 +109,6 @@ class PlanningService:
             raise PlanningUnavailable(
                 "Planning calculation failed", run_id=run_id
             ) from error
-
-    async def get_run(self, project_id: int, run_id: int) -> dict:
-        await self._require_role(UserRoleEnum.USER)
-        return await self._repository.get_run(project_id, run_id)
-
-    async def list_runs(
-        self,
-        project_id: int,
-        planning_date: date | None,
-        status: str | None,
-        limit: int,
-        offset: int,
-    ) -> list[dict]:
-        await self._require_role(UserRoleEnum.USER)
-        return await self._repository.list_runs(
-            project_id, planning_date, status, min(limit, 100), offset
-        )
 
     async def _require_role(self, required: UserRoleEnum) -> None:
         role = await self._identity_provider.get_role()
