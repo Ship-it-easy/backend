@@ -210,7 +210,12 @@ class OrToolsPlanningSolver:
         travel_cost = 0
         for vehicle, engineer in enumerate(data.engineers):
             index = routing.Start(vehicle)
-            route_start_min = assignment.Value(time_dimension.CumulVar(index))
+            # Routing assignment time variables may contain a feasible interval
+            # instead of one committed timetable. Build the actual timetable
+            # deterministically from the selected sequence and hard constraints.
+            route_start_min = max(
+                engineer.shift_start_min, current_minute_ceil(data.timezone)
+            )
             previous_node = manager.IndexToNode(index)
             route_jobs: list[RouteJob] = []
             total_travel = total_service = total_waiting = 0
@@ -231,16 +236,17 @@ class OrToolsPlanningSolver:
                         route_jobs[-1].planned_finish, data.timezone
                     )
                 arrival_min = previous_finish + travel
-                # A Time-dimension cumul is the exact start-of-service moment
-                # chosen by OR-Tools. Reconstructing it from the route loses
-                # solver-inserted slack and may produce a different (invalid)
-                # schedule near shift boundaries or time windows.
-                start_min = assignment.Value(time_dimension.CumulVar(index))
+                start_min = max(arrival_min, job.window_start_min)
                 waiting = start_min - arrival_min
-                if waiting < 0:
-                    raise RuntimeError(
-                        f"Solver returned an invalid arrival for job {job.id}"
-                    )
+                finish_min = start_min + job.duration_min
+                if (
+                    start_min > job.window_end_min
+                    or finish_min > engineer.shift_end_min
+                ):
+                    # Do not emit an invalid route even if the routing assignment
+                    # retained incompatible time bounds. The job will be added to
+                    # unassigned below, while later jobs are still considered.
+                    continue
                 planned_start = _utc_at(data, start_min)
                 route_jobs.append(
                     RouteJob(
