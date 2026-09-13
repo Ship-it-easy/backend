@@ -11,7 +11,6 @@ from auth.infrastructure.persistence_sqla.mappings.session import sessions_table
 from auth.infrastructure.persistence_sqla.mappings.user import users_table
 from planning.application.errors import (
     ConflictError,
-    InvalidJobStatusError,
     InvalidPlanningRequest,
     ObjectNotFoundError,
 )
@@ -21,6 +20,7 @@ from planning.application.interfaces.project_management_repositories import (
     ProjectCatalogRepository,
     ProjectJobsRepository,
 )
+from planning.application.management_dto import ProjectJobEditState, WorkTypeEditState
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     assignments,
     daily_plans,
@@ -40,6 +40,11 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
 
 def _code(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12].upper()}"
+
+
+def _constraint_name(error: IntegrityError) -> str | None:
+    diagnostic = getattr(error.orig, "diag", None)
+    return getattr(diagnostic, "constraint_name", None)
 
 
 def _dict(
@@ -541,6 +546,19 @@ class SqlaEngineerAccountRepository(EngineerAccountRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 
+    async def engineer_belongs_to_project(
+        self, project_id: int, engineer_id: int
+    ) -> bool:
+        return (
+            await self._session.scalar(
+                select(engineers.c.id).where(
+                    engineers.c.id == engineer_id,
+                    engineers.c.project_id == project_id,
+                )
+            )
+            is not None
+        )
+
     async def create_account(
         self,
         project_id: int,
@@ -558,27 +576,39 @@ class SqlaEngineerAccountRepository(EngineerAccountRepository):
         )
         if exists is not None:
             raise ConflictError("Login already exists", code="LOGIN_EXISTS")
-        row = (
-            (
-                await self._session.execute(
-                    insert(users_table)
-                    .values(
-                        id=uuid.uuid4(),
-                        username=login,
-                        password_hash=password_hash,
-                        is_active=True,
-                        role=UserRoleEnum.ENGINEER,
-                        is_verified=True,
-                        project_id=project_id,
-                        engineer_id=engineer_id,
+        try:
+            row = (
+                (
+                    await self._session.execute(
+                        insert(users_table)
+                        .values(
+                            id=uuid.uuid4(),
+                            username=login,
+                            password_hash=password_hash,
+                            is_active=True,
+                            role=UserRoleEnum.ENGINEER,
+                            is_verified=True,
+                            project_id=project_id,
+                            engineer_id=engineer_id,
+                        )
+                        .returning(*users_table.c)
                     )
-                    .returning(*users_table.c)
                 )
+                .mappings()
+                .one()
             )
-            .mappings()
-            .one()
-        )
-        await self._session.commit()
+        except IntegrityError as error:
+            await self._session.rollback()
+            constraint = _constraint_name(error)
+            if constraint == "uq_users_username_ci":
+                raise ConflictError(
+                    "Login already exists", code="LOGIN_EXISTS"
+                ) from error
+            if constraint in {"users_engineer_id_key", "uq_users_engineer_id"}:
+                raise ConflictError(
+                    "Engineer already has an account", code="ACCESS_EXISTS"
+                ) from error
+            raise
         return {"id": str(row.id), "login": row.username, "status": "ACTIVE"}
 
     async def reset_password(
@@ -710,46 +740,64 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             await _belongs(self._session, jobs, job_id, project_id)
         )
 
-    async def update_job(
-        self, project_id: int, job_id: int, values: dict[str, Any]
-    ) -> dict[str, Any]:
-        current = await _belongs(self._session, jobs, job_id, project_id)
-        if current.status != "NEW":
-            raise InvalidJobStatusError("Only NEW jobs may be edited")
+    async def load_job_for_update(
+        self, project_id: int, job_id: int
+    ) -> ProjectJobEditState:
+        current = (
+            (
+                await self._session.execute(
+                    select(jobs)
+                    .where(jobs.c.id == job_id, jobs.c.project_id == project_id)
+                    .with_for_update()
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if current is None:
+            raise ObjectNotFoundError("Object not found")
         published = await self._session.scalar(
             select(assignments.c.id)
             .join(plan_versions)
             .join(daily_plans, daily_plans.c.current_version_id == plan_versions.c.id)
             .where(assignments.c.job_id == job_id)
         )
-        if published is not None:
-            raise ConflictError("Published job cannot be edited", code="JOB_PUBLISHED")
-        work_type = await self._work_type(
-            values.get("work_type_id", current.work_type_id), project_id
+        return ProjectJobEditState(
+            id=int(current.id),
+            project_id=int(current.project_id),
+            status=current.status,
+            published=published is not None,
+            work_type_id=int(current.work_type_id),
+            service_duration_min=current.service_duration_min,
+            address=current.address,
+            latitude=current.latitude,
+            longitude=current.longitude,
+            time_window_start=current.time_window_start,
+            time_window_end=current.time_window_end,
         )
-        values["service_duration_min"] = work_type.default_service_duration_min
-        if "address" in values and (
-            "latitude" not in values or "longitude" not in values
-        ):
-            values.update(
-                latitude=None, longitude=None, address_hash=None, geocoded_at=None
+
+    async def get_work_type_for_edit(
+        self, work_type_id: int
+    ) -> WorkTypeEditState | None:
+        row = (
+            (
+                await self._session.execute(
+                    select(work_types).where(work_types.c.id == work_type_id)
+                )
             )
-        final_start = values.get("time_window_start", current.time_window_start)
-        final_end = values.get("time_window_end", current.time_window_end)
-        if (
-            final_start is not None
-            and final_end is not None
-            and final_start > final_end
-        ):
-            raise InvalidPlanningRequest(
-                "Time window cannot cross midnight", code="INVALID_TIME_WINDOW"
-            )
-        final_latitude = values.get("latitude", current.latitude)
-        final_longitude = values.get("longitude", current.longitude)
-        if (final_latitude is None) != (final_longitude is None):
-            raise InvalidPlanningRequest(
-                "Coordinates must be provided together", code="INVALID_COORDINATES"
-            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            return None
+        return WorkTypeEditState(
+            id=int(row.id),
+            project_id=int(row.project_id),
+            active=bool(row.active),
+            default_service_duration_min=row.default_service_duration_min,
+        )
+
+    async def save_job(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]:
         row = (
             (
                 await self._session.execute(
@@ -762,7 +810,6 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             .mappings()
             .one()
         )
-        await self._session.commit()
         return await self._result(row)
 
     async def _work_type(self, work_type_id: int, project_id: int) -> Any:

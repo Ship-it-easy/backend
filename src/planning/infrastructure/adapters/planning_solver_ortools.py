@@ -10,7 +10,6 @@ from planning.application.services.planning_input_normalizer import is_base_comp
 from planning.application.services.unassigned_reason_resolver import (
     UnassignedReasonResolver,
 )
-from planning.domain.enums import TransportType
 from planning.domain.entities.job import Job, UnassignedJob
 from planning.domain.entities.planning import (
     PlanningInput,
@@ -18,6 +17,7 @@ from planning.domain.entities.planning import (
     Route,
     RouteJob,
 )
+from planning.domain.enums import TransportType
 from planning.infrastructure.adapters.travel_matrix_provider_factory import (
     TravelMatrixProviderFactory,
 )
@@ -161,9 +161,7 @@ class OrToolsPlanningSolver:
         parameters.time_limit.FromSeconds(data.config.solver_time_limit_sec)
         solve_started = monotonic_time.perf_counter()
         assignment = routing.SolveWithParameters(parameters)
-        solver_time_ms = int(
-            (monotonic_time.perf_counter() - solve_started) * 1000
-        )
+        solver_time_ms = int((monotonic_time.perf_counter() - solve_started) * 1000)
         if assignment is None:
             raise RuntimeError("OR-Tools did not return a feasible solution")
         result = self._extract(
@@ -199,7 +197,9 @@ class OrToolsPlanningSolver:
         solver = routing.solver()
         job_count = len(data.jobs)
         for vehicle, engineer in enumerate(data.engineers):
-            profile = "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+            profile = (
+                "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+            )
             matrix = matrices[profile]
             start_index = routing.Start(vehicle)
             start_node = job_count + vehicle
@@ -346,9 +346,7 @@ class OrToolsPlanningSolver:
                         equipment_type_ids=equipment,
                     )
                 )
-                travel_cost += (
-                    total_travel * data.config.travel_cost_per_minute
-                )
+                travel_cost += total_travel * data.config.travel_cost_per_minute
 
         unassigned = list(data.pre_unassigned)
         for job in data.jobs:

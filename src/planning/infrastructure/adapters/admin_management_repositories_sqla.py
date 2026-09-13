@@ -12,13 +12,16 @@ from auth.infrastructure.persistence_sqla.mappings.session import sessions_table
 from auth.infrastructure.persistence_sqla.mappings.user import users_table
 from planning.application.errors import (
     ConflictError,
-    InvalidPlanningRequest,
     ObjectNotFoundError,
-    ProjectBlockedError,
 )
 from planning.application.interfaces.admin_management_repositories import (
     AdminProjectRepository,
     AdminUserRepository,
+)
+from planning.application.management_dto import (
+    AdminProjectUpdateState,
+    ProjectUserValidationState,
+    UserActivationState,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineers,
@@ -52,6 +55,11 @@ def _user(row: Any) -> dict[str, Any]:
         "engineer_id": row.engineer_id,
         "status": "ACTIVE" if row.is_active else "BLOCKED",
     }
+
+
+def _constraint_name(error: IntegrityError) -> str | None:
+    diagnostic = getattr(error.orig, "diag", None)
+    return getattr(diagnostic, "constraint_name", None)
 
 
 class SqlaAdminProjectRepository(AdminProjectRepository):
@@ -117,20 +125,30 @@ class SqlaAdminProjectRepository(AdminProjectRepository):
             raise ObjectNotFoundError("Project not found")
         return _project(row)
 
-    async def update_project(
+    async def load_update_state(self, project_id: int) -> AdminProjectUpdateState:
+        exists = (
+            await self._session.scalar(
+                select(projects.c.id)
+                .where(projects.c.id == project_id)
+                .with_for_update()
+            )
+            is not None
+        )
+        has_runs = False
+        if exists:
+            has_runs = (
+                await self._session.scalar(
+                    select(planning_runs.c.id)
+                    .where(planning_runs.c.project_id == project_id)
+                    .limit(1)
+                )
+                is not None
+            )
+        return AdminProjectUpdateState(exists=exists, has_planning_runs=has_runs)
+
+    async def save_project(
         self, project_id: int, values: dict[str, Any]
     ) -> dict[str, Any]:
-        if "planning_timezone" in values:
-            has_runs = await self._session.scalar(
-                select(planning_runs.c.id)
-                .where(planning_runs.c.project_id == project_id)
-                .limit(1)
-            )
-            if has_runs is not None:
-                raise ConflictError(
-                    "Timezone cannot be changed after the first planning run",
-                    code="TIMEZONE_LOCKED",
-                )
         try:
             row = (
                 (
@@ -144,7 +162,6 @@ class SqlaAdminProjectRepository(AdminProjectRepository):
                 .mappings()
                 .one_or_none()
             )
-            await self._session.commit()
         except IntegrityError as error:
             await self._session.rollback()
             raise ConflictError(
@@ -236,35 +253,41 @@ class SqlaAdminUserRepository(AdminUserRepository):
         )
         if exists is not None:
             raise ConflictError("Login already exists", code="LOGIN_EXISTS")
-        row = (
-            (
-                await self._session.execute(
-                    insert(users_table)
-                    .values(
-                        id=uuid.uuid4(),
-                        username=login,
-                        password_hash=password_hash,
-                        is_active=True,
-                        role=role,
-                        is_verified=True,
-                        project_id=project_id,
-                        engineer_id=engineer_id,
+        try:
+            row = (
+                (
+                    await self._session.execute(
+                        insert(users_table)
+                        .values(
+                            id=uuid.uuid4(),
+                            username=login,
+                            password_hash=password_hash,
+                            is_active=True,
+                            role=role,
+                            is_verified=True,
+                            project_id=project_id,
+                            engineer_id=engineer_id,
+                        )
+                        .returning(*users_table.c)
                     )
-                    .returning(*users_table.c)
                 )
+                .mappings()
+                .one()
             )
-            .mappings()
-            .one()
-        )
-        await self._session.commit()
+        except IntegrityError as error:
+            await self._session.rollback()
+            if _constraint_name(error) == "uq_users_username_ci":
+                raise ConflictError(
+                    "Login already exists", code="LOGIN_EXISTS"
+                ) from error
+            raise
         return _user(row)
 
-    async def validate_project_user(
+    async def get_project_user_validation(
         self,
         project_id: int,
-        role: UserRoleEnum,
         engineer_id: int | None,
-    ) -> None:
+    ) -> ProjectUserValidationState:
         project = (
             await self._session.execute(
                 select(projects.c.id, projects.c.status).where(
@@ -273,29 +296,23 @@ class SqlaAdminUserRepository(AdminUserRepository):
             )
         ).one_or_none()
         if project is None:
-            raise ObjectNotFoundError("Project not found")
-        if project.status != "ACTIVE":
-            raise ProjectBlockedError("Project is blocked")
-        if role not in {UserRoleEnum.DISPATCHER, UserRoleEnum.ENGINEER}:
-            raise InvalidPlanningRequest(
-                "Project user must be DISPATCHER or ENGINEER", code="INVALID_ROLE"
+            return ProjectUserValidationState(False, False)
+        engineer_belongs: bool | None = None
+        if engineer_id is not None:
+            engineer_belongs = (
+                await self._session.scalar(
+                    select(engineers.c.id).where(
+                        engineers.c.id == engineer_id,
+                        engineers.c.project_id == project_id,
+                    )
+                )
+                is not None
             )
-        if role is UserRoleEnum.ENGINEER:
-            if engineer_id is None:
-                raise InvalidPlanningRequest(
-                    "engineer_id is required", code="ENGINEER_REQUIRED"
-                )
-            engineer = await self._session.scalar(
-                select(engineers.c.id).where(
-                    engineers.c.id == engineer_id,
-                    engineers.c.project_id == project_id,
-                )
-            )
-            if engineer is None:
-                raise InvalidPlanningRequest(
-                    "Engineer does not belong to project",
-                    code="CROSS_PROJECT_REFERENCE",
-                )
+        return ProjectUserValidationState(
+            project_exists=True,
+            project_active=project.status == "ACTIVE",
+            engineer_belongs_to_project=engineer_belongs,
+        )
 
     async def reset_password(self, user_id: UUID, password_hash: str) -> dict[str, str]:
         await self._target(user_id)
@@ -310,22 +327,36 @@ class SqlaAdminUserRepository(AdminUserRepository):
         await self._session.commit()
         return {"status": "PASSWORD_RESET"}
 
-    async def set_active(self, user_id: UUID, active: bool) -> dict[str, Any]:
-        target = await self._target(user_id)
-        if not active and target.role in {UserRoleEnum.OWNER, UserRoleEnum.ADMIN}:
-            count = await self._session.scalar(
-                select(func.count())
-                .select_from(users_table)
-                .where(
-                    users_table.c.role.in_([UserRoleEnum.OWNER, UserRoleEnum.ADMIN]),
-                    users_table.c.is_active.is_(True),
+    async def lock_activation(self, user_id: UUID) -> UserActivationState:
+        active_owners = (
+            (
+                await self._session.execute(
+                    select(users_table.c.id)
+                    .where(
+                        users_table.c.role.in_(
+                            [UserRoleEnum.OWNER, UserRoleEnum.ADMIN]
+                        ),
+                        users_table.c.is_active.is_(True),
+                    )
+                    .order_by(users_table.c.id)
+                    .with_for_update()
                 )
             )
-            if int(count or 0) <= 1:
-                raise ConflictError(
-                    "The last active owner cannot be blocked",
-                    code="LAST_ACTIVE_OWNER",
-                )
+            .scalars()
+            .all()
+        )
+        target = await self._target(user_id, for_update=True)
+        return UserActivationState(
+            id=target.id,
+            login=target.username,
+            role=target.role,
+            project_id=target.project_id,
+            engineer_id=target.engineer_id,
+            active=target.is_active,
+            active_owner_count=len(active_owners),
+        )
+
+    async def save_active(self, user_id: UUID, active: bool) -> dict[str, Any]:
         row = (
             (
                 await self._session.execute(
@@ -342,19 +373,13 @@ class SqlaAdminUserRepository(AdminUserRepository):
             await self._session.execute(
                 delete(sessions_table).where(sessions_table.c.user_id == user_id)
             )
-        await self._session.commit()
         return _user(row)
 
-    async def _target(self, user_id: UUID) -> Any:
-        row = (
-            (
-                await self._session.execute(
-                    select(users_table).where(users_table.c.id == user_id)
-                )
-            )
-            .mappings()
-            .one_or_none()
-        )
+    async def _target(self, user_id: UUID, *, for_update: bool = False) -> Any:
+        query = select(users_table).where(users_table.c.id == user_id)
+        if for_update:
+            query = query.with_for_update()
+        row = (await self._session.execute(query)).mappings().one_or_none()
         if row is None:
             raise ObjectNotFoundError("User not found")
         return row

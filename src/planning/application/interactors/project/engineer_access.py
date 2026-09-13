@@ -3,9 +3,11 @@ from typing import Any
 from auth.application.interfaces.password_hasher import PasswordHasher
 from auth.domain.entities.user import RawPassword
 from planning.application.access import ProjectAccess
+from planning.application.errors import ObjectNotFoundError
 from planning.application.interfaces.project_management_repositories import (
     EngineerAccountRepository,
 )
+from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
 
 
 class _EngineerAccessInteractor:
@@ -24,19 +26,36 @@ class _EngineerAccessInteractor:
 
 
 class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: EngineerAccountRepository,
+        password_hasher: PasswordHasher,
+        uow: PlanningUnitOfWork,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._uow = uow
+
     async def __call__(
         self,
         engineer_id: int,
         login: str,
         password: str,
     ) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
-        return await self._repository.create_account(
-            project_id,
-            engineer_id,
-            login.strip(),
-            self._hash(password),
-        )
+        async with self._uow:
+            _, project_id = await self._access.dispatcher()
+            if not await self._repository.engineer_belongs_to_project(
+                project_id, engineer_id
+            ):
+                raise ObjectNotFoundError("Object not found")
+            result = await self._repository.create_account(
+                project_id,
+                engineer_id,
+                login.strip(),
+                self._hash(password),
+            )
+            await self._uow.commit()
+            return result
 
 
 class ResetEngineerPasswordInteractor(_EngineerAccessInteractor):

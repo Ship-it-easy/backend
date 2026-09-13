@@ -29,8 +29,18 @@ projects = Table(
     Column("planning_timezone", String(64), nullable=False),
     Column("planning_one_day_enabled", Boolean, nullable=False, server_default="true"),
     Column("status", String(16), nullable=False, server_default="ACTIVE"),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
-    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column(
+        "updated_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
 )
 
 work_types = Table(
@@ -400,10 +410,22 @@ daily_plans = Table(
     Column(
         "current_version_id",
         BigInteger,
-        ForeignKey("plan_versions.id", use_alter=True, name="fk_daily_plans_current_version"),
+        ForeignKey(
+            "plan_versions.id", use_alter=True, name="fk_daily_plans_current_version"
+        ),
     ),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
-    Column("updated_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column(
+        "updated_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
     UniqueConstraint("project_id", "planning_date"),
 )
 
@@ -411,12 +433,23 @@ plan_versions = Table(
     "plan_versions",
     metadata_obj,
     Column("id", BigInteger, primary_key=True),
-    Column("daily_plan_id", ForeignKey("daily_plans.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "daily_plan_id",
+        ForeignKey("daily_plans.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
     Column("version_number", Integer, nullable=False),
-    Column("planning_run_id", ForeignKey("planning_runs.id"), nullable=False, unique=True),
+    Column(
+        "planning_run_id", ForeignKey("planning_runs.id"), nullable=False, unique=True
+    ),
     Column("status", String(32), nullable=False, server_default="PUBLISHED"),
     Column("published_by", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),
-    Column("published_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column(
+        "published_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
     Column("superseded_at", DateTime(timezone=True)),
     UniqueConstraint("daily_plan_id", "version_number"),
 )
@@ -425,7 +458,11 @@ assignments = Table(
     "assignments",
     metadata_obj,
     Column("id", BigInteger, primary_key=True),
-    Column("plan_version_id", ForeignKey("plan_versions.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "plan_version_id",
+        ForeignKey("plan_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
     Column("job_id", ForeignKey("jobs.id"), nullable=False),
     Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
     Column("sequence", Integer, nullable=False),
@@ -448,7 +485,12 @@ job_status_history = Table(
     Column("new_status", String(32), nullable=False),
     Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),
     Column("reason", Text),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=text("now()")),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
 )
 
 geocoding_cache = Table(

@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from auth.application.errors import AlreadyExists, InvalidPassword, SignUpError
 from auth.application.interactors.sign_up import (
@@ -11,7 +12,6 @@ from auth.domain.entities.user import User
 
 
 class TestSignUpInteractor:
-
     @pytest.fixture
     def interactor(
         self,
@@ -20,7 +20,6 @@ class TestSignUpInteractor:
         mock_transaction_manager: AsyncMock,
         mock_password_hasher: MagicMock,
         mock_user_id_generator: MagicMock,
-
     ) -> SignUpInteractor:
         return SignUpInteractor(
             identity_provider=mock_identity_provider,
@@ -28,7 +27,6 @@ class TestSignUpInteractor:
             transaction_manager=mock_transaction_manager,
             password_hasher=mock_password_hasher,
             user_id_generator=mock_user_id_generator,
-  
         )
 
     async def test_successful_sign_up(
@@ -36,7 +34,6 @@ class TestSignUpInteractor:
         interactor: SignUpInteractor,
         mock_user_data_gateway: AsyncMock,
         mock_transaction_manager: AsyncMock,
-
         user_id,
     ):
         request = SignUpRequest(username="newuser", raw_password="ValidPass1")

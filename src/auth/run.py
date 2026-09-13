@@ -19,7 +19,7 @@ from auth.presentation.http.base.root_router import root_router
 def make_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # RabbitMQ удален, lifespan теперь пустой, но оставляем для совместимости с create_app
+        # RabbitMQ удален; пустой lifespan оставлен для совместимости с create_app.
         yield
 
     config = create_config()

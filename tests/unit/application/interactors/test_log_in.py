@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from auth.application.errors import AuthenticationError, DoesNotExists, LogInError
 from auth.application.interactors.log_in import LogInInteractor, LogInRequest
@@ -7,7 +8,6 @@ from auth.domain.entities.user import User
 
 
 class TestLogInInteractor:
-
     @pytest.fixture
     def interactor(
         self,

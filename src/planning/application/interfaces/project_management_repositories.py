@@ -1,6 +1,14 @@
 from datetime import date
 from typing import Any, Protocol
-from uuid import UUID
+
+from planning.application.management_dto import (
+    PlanningPublicationState,
+    PlanningReadinessState,
+    ProjectJobEditState,
+    PublishedPlan,
+    PublishPlanCommand,
+    WorkTypeEditState,
+)
 
 
 class ProjectCatalogRepository(Protocol):
@@ -55,6 +63,9 @@ class EngineerManagementRepository(Protocol):
 
 
 class EngineerAccountRepository(Protocol):
+    async def engineer_belongs_to_project(
+        self, project_id: int, engineer_id: int
+    ) -> bool: ...
     async def create_account(
         self, project_id: int, engineer_id: int, login: str, password_hash: str
     ) -> dict[str, Any]: ...
@@ -74,9 +85,13 @@ class ProjectJobsRepository(Protocol):
         self, project_id: int, values: dict[str, Any]
     ) -> dict[str, Any]: ...
     async def get_job(self, project_id: int, job_id: int) -> dict[str, Any]: ...
-    async def update_job(
-        self, project_id: int, job_id: int, values: dict[str, Any]
-    ) -> dict[str, Any]: ...
+    async def load_job_for_update(
+        self, project_id: int, job_id: int
+    ) -> ProjectJobEditState: ...
+    async def get_work_type_for_edit(
+        self, work_type_id: int
+    ) -> WorkTypeEditState | None: ...
+    async def save_job(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class PlanningManagementRepository(Protocol):
@@ -84,12 +99,13 @@ class PlanningManagementRepository(Protocol):
     async def update_config(
         self, project_id: int, values: dict[str, Any]
     ) -> dict[str, Any]: ...
-    async def readiness(
+    async def get_readiness_state(
         self, project_id: int, planning_date: date
-    ) -> dict[str, Any]: ...
-    async def publish_run(
-        self, project_id: int, run_id: int, user_id: UUID, confirm_unassigned: bool
-    ) -> dict[str, Any]: ...
+    ) -> PlanningReadinessState: ...
+    async def load_publication_state(
+        self, project_id: int, run_id: int
+    ) -> PlanningPublicationState | None: ...
+    async def save_publication(self, command: PublishPlanCommand) -> PublishedPlan: ...
     async def get_daily_plan(
         self, project_id: int, planning_date: date
     ) -> dict[str, Any]: ...

@@ -25,14 +25,19 @@ class ApiLoginRequest(BaseModel):
 
 @api_auth_router.post("/login", status_code=status.HTTP_200_OK)
 @inject
-async def api_login(body: ApiLoginRequest, interactor: FromDishka[LogInInteractor]) -> None:
-    return await interactor(LogInRequest(username=body.login, raw_password=body.password))
+async def api_login(
+    body: ApiLoginRequest, interactor: FromDishka[LogInInteractor]
+) -> None:
+    return await interactor(
+        LogInRequest(username=body.login, raw_password=body.password)
+    )
 
 
 @api_auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 @inject
 async def api_logout(interactor: FromDishka[LogOutInteractor]) -> None:
     return await interactor()
+
 
 auth_sub_routers = (sign_up_router, log_in_router, log_out_router)
 

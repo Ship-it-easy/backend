@@ -5,9 +5,16 @@ from auth.application.interfaces.password_hasher import PasswordHasher
 from auth.domain.entities.user import RawPassword
 from auth.domain.user_role import UserRoleEnum
 from planning.application.access import ProjectAccess
+from planning.application.errors import (
+    ConflictError,
+    InvalidPlanningRequest,
+    ObjectNotFoundError,
+    ProjectBlockedError,
+)
 from planning.application.interfaces.admin_management_repositories import (
     AdminUserRepository,
 )
+from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
 
 
 class _AdminUserInteractor:
@@ -32,13 +39,26 @@ class ListOwnersInteractor(_AdminUserInteractor):
 
 
 class CreateOwnerInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        uow: PlanningUnitOfWork,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._uow = uow
+
     async def __call__(self, login: str, password: str) -> dict[str, Any]:
-        await self._access.owner()
-        return await self._repository.create_user(
-            login.strip(),
-            self._hash(password),
-            UserRoleEnum.OWNER,
-        )
+        async with self._uow:
+            await self._access.owner()
+            result = await self._repository.create_user(
+                login.strip(),
+                self._hash(password),
+                UserRoleEnum.OWNER,
+            )
+            await self._uow.commit()
+            return result
 
 
 class ListProjectUsersInteractor(_AdminUserInteractor):
@@ -48,6 +68,16 @@ class ListProjectUsersInteractor(_AdminUserInteractor):
 
 
 class CreateProjectUserInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        uow: PlanningUnitOfWork,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._uow = uow
+
     async def __call__(
         self,
         project_id: int,
@@ -56,23 +86,45 @@ class CreateProjectUserInteractor(_AdminUserInteractor):
         role: UserRoleEnum | None,
         engineer_id: int | None,
     ) -> dict[str, Any]:
-        await self._access.owner()
-        selected_role = role or UserRoleEnum.DISPATCHER
-        selected_engineer_id = (
-            engineer_id if selected_role is UserRoleEnum.ENGINEER else None
-        )
-        await self._repository.validate_project_user(
-            project_id,
-            selected_role,
-            selected_engineer_id,
-        )
-        return await self._repository.create_user(
-            login.strip(),
-            self._hash(password),
-            selected_role,
-            project_id,
-            selected_engineer_id,
-        )
+        async with self._uow:
+            await self._access.owner()
+            selected_role = role or UserRoleEnum.DISPATCHER
+            if selected_role not in {
+                UserRoleEnum.DISPATCHER,
+                UserRoleEnum.ENGINEER,
+            }:
+                raise InvalidPlanningRequest(
+                    "Project user must be DISPATCHER or ENGINEER",
+                    code="INVALID_ROLE",
+                )
+            selected_engineer_id = (
+                engineer_id if selected_role is UserRoleEnum.ENGINEER else None
+            )
+            if selected_role is UserRoleEnum.ENGINEER and selected_engineer_id is None:
+                raise InvalidPlanningRequest(
+                    "engineer_id is required", code="ENGINEER_REQUIRED"
+                )
+            state = await self._repository.get_project_user_validation(
+                project_id, selected_engineer_id
+            )
+            if not state.project_exists:
+                raise ObjectNotFoundError("Project not found")
+            if not state.project_active:
+                raise ProjectBlockedError("Project is blocked")
+            if state.engineer_belongs_to_project is False:
+                raise InvalidPlanningRequest(
+                    "Engineer does not belong to project",
+                    code="CROSS_PROJECT_REFERENCE",
+                )
+            result = await self._repository.create_user(
+                login.strip(),
+                self._hash(password),
+                selected_role,
+                project_id,
+                selected_engineer_id,
+            )
+            await self._uow.commit()
+            return result
 
 
 class ResetUserPasswordInteractor(_AdminUserInteractor):
@@ -85,12 +137,54 @@ class ResetUserPasswordInteractor(_AdminUserInteractor):
 
 
 class BlockUserInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        uow: PlanningUnitOfWork,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._uow = uow
+
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        await self._access.owner()
-        return await self._repository.set_active(user_id, False)
+        async with self._uow:
+            await self._access.owner()
+            state = await self._repository.lock_activation(user_id)
+            if not state.active:
+                await self._uow.commit()
+                return state.response()
+            if (
+                state.role in {UserRoleEnum.OWNER, UserRoleEnum.ADMIN}
+                and state.active_owner_count <= 1
+            ):
+                raise ConflictError(
+                    "The last active owner cannot be blocked",
+                    code="LAST_ACTIVE_OWNER",
+                )
+            result = await self._repository.save_active(user_id, False)
+            await self._uow.commit()
+            return result
 
 
 class UnblockUserInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        uow: PlanningUnitOfWork,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._uow = uow
+
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        await self._access.owner()
-        return await self._repository.set_active(user_id, True)
+        async with self._uow:
+            await self._access.owner()
+            state = await self._repository.lock_activation(user_id)
+            if state.active:
+                await self._uow.commit()
+                return state.response()
+            result = await self._repository.save_active(user_id, True)
+            await self._uow.commit()
+            return result

@@ -17,8 +17,8 @@ from planning.application.errors import (
     PlanningUnavailable,
     ProjectNotFound,
 )
-from planning.domain.enums import PlanningRunStatus
 from planning.domain.entities.planning import PlanningInput, PlanningResult
+from planning.domain.enums import PlanningRunStatus
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineer_qualifications,
     engineer_schedules,
@@ -212,8 +212,7 @@ class SqlaPlanningRunRepository:
             "required_equipment": required_equipment,
             "engineer_qualifications": engineer_quals,
             "equipment_units": {
-                int(row.id): int(row.available_units)
-                for row in equipment_rows
+                int(row.id): int(row.available_units) for row in equipment_rows
             },
         }
         await self._session.commit()
