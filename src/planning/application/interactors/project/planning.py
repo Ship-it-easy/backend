@@ -6,7 +6,7 @@ from planning.application.errors import ConflictError, ObjectNotFoundError
 from planning.application.interfaces.project_management_repositories import (
     PlanningManagementRepository,
 )
-from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
+from planning.application.interfaces.transaction_manager import TransactionManager
 from planning.application.management_dto import PublishPlanCommand
 
 
@@ -71,61 +71,60 @@ class PublishPlanningRunInteractor(_PlanningManagementInteractor):
         self,
         access: ProjectAccess,
         repository: PlanningManagementRepository,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self,
         run_id: int,
         confirm_unassigned: bool,
     ) -> dict[str, Any]:
-        async with self._uow:
-            user, project_id = await self._access.dispatcher()
-            state = await self._repository.load_publication_state(project_id, run_id)
-            if state is None:
-                raise ObjectNotFoundError("Planning run not found")
-            if state.status != "SUCCESS" or state.validation_errors:
-                raise ConflictError(
-                    "Only a validated successful run can be published",
-                    code="PLANNING_RUN_NOT_PUBLISHABLE",
-                )
-            if state.unassigned_jobs_count and not confirm_unassigned:
-                raise ConflictError(
-                    "Confirm publication with unassigned jobs",
-                    code="UNASSIGNED_CONFIRMATION_REQUIRED",
-                )
-            if state.already_published:
-                raise ConflictError(
-                    "Planning run is already published", code="ALREADY_PUBLISHED"
-                )
-            if state.current_plan_started:
-                raise ConflictError(
-                    "Published plan cannot be replaced after work started",
-                    code="PLAN_ALREADY_STARTED",
-                )
-            assigned_job_ids = {item.job_id for item in state.routes}
-            if assigned_job_ids != set(state.publishable_job_ids):
-                raise ConflictError(
-                    "Assigned jobs changed after the calculation",
-                    code="CONCURRENT_MODIFICATION",
-                )
-
-            command = PublishPlanCommand(
-                project_id=project_id,
-                run_id=run_id,
-                planning_date=state.planning_date,
-                published_by=user.id,
-                daily_plan_id=state.daily_plan_id,
-                previous_version_id=state.current_version_id,
-                version_number=state.max_version_number + 1,
-                assignments=state.routes,
-                snapshots=state.snapshots,
+        user, project_id = await self._access.dispatcher()
+        state = await self._repository.load_publication_state(project_id, run_id)
+        if state is None:
+            raise ObjectNotFoundError("Planning run not found")
+        if state.status != "SUCCESS" or state.validation_errors:
+            raise ConflictError(
+                "Only a validated successful run can be published",
+                code="PLANNING_RUN_NOT_PUBLISHABLE",
             )
-            published = await self._repository.save_publication(command)
-            await self._uow.commit()
-            return published.response()
+        if state.unassigned_jobs_count and not confirm_unassigned:
+            raise ConflictError(
+                "Confirm publication with unassigned jobs",
+                code="UNASSIGNED_CONFIRMATION_REQUIRED",
+            )
+        if state.already_published:
+            raise ConflictError(
+                "Planning run is already published", code="ALREADY_PUBLISHED"
+            )
+        if state.current_plan_started:
+            raise ConflictError(
+                "Published plan cannot be replaced after work started",
+                code="PLAN_ALREADY_STARTED",
+            )
+        assigned_job_ids = {item.job_id for item in state.routes}
+        if assigned_job_ids != set(state.publishable_job_ids):
+            raise ConflictError(
+                "Assigned jobs changed after the calculation",
+                code="CONCURRENT_MODIFICATION",
+            )
+
+        command = PublishPlanCommand(
+            project_id=project_id,
+            run_id=run_id,
+            planning_date=state.planning_date,
+            published_by=user.id,
+            daily_plan_id=state.daily_plan_id,
+            previous_version_id=state.current_version_id,
+            version_number=state.max_version_number + 1,
+            assignments=state.routes,
+            snapshots=state.snapshots,
+        )
+        published = await self._repository.save_publication(command)
+        await self._transaction_manager.commit()
+        return published.response()
 
 
 class GetDailyPlanInteractor(_PlanningManagementInteractor):

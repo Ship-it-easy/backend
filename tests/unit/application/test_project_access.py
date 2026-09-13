@@ -22,7 +22,9 @@ def _user(
 
 async def test_owner_rejects_dispatcher() -> None:
     identity = AsyncMock()
-    identity.get_user.return_value = _user(UserRoleEnum.DISPATCHER, project_id=1)
+    identity.get_current_user.return_value = _user(
+        UserRoleEnum.DISPATCHER, project_id=1
+    )
     access = ProjectAccess(identity, AsyncMock())
 
     with pytest.raises(AccessDeniedError, match="Owner role is required"):
@@ -31,7 +33,9 @@ async def test_owner_rejects_dispatcher() -> None:
 
 async def test_dispatcher_requires_active_project() -> None:
     identity = AsyncMock()
-    identity.get_user.return_value = _user(UserRoleEnum.DISPATCHER, project_id=7)
+    identity.get_current_user.return_value = _user(
+        UserRoleEnum.DISPATCHER, project_id=7
+    )
     repository = AsyncMock()
     repository.get_project_status.return_value = "BLOCKED"
     access = ProjectAccess(identity, repository)
@@ -42,7 +46,9 @@ async def test_dispatcher_requires_active_project() -> None:
 
 async def test_project_hides_other_tenant() -> None:
     identity = AsyncMock()
-    identity.get_user.return_value = _user(UserRoleEnum.DISPATCHER, project_id=7)
+    identity.get_current_user.return_value = _user(
+        UserRoleEnum.DISPATCHER, project_id=7
+    )
     access = ProjectAccess(identity, AsyncMock())
 
     with pytest.raises(ObjectNotFoundError, match="Object not found"):
@@ -52,7 +58,7 @@ async def test_project_hides_other_tenant() -> None:
 async def test_engineer_returns_identity_scope() -> None:
     user = _user(UserRoleEnum.ENGINEER, project_id=7, engineer_id=11)
     identity = AsyncMock()
-    identity.get_user.return_value = user
+    identity.get_current_user.return_value = user
     repository = AsyncMock()
     repository.get_project_status.return_value = "ACTIVE"
     access = ProjectAccess(identity, repository)

@@ -25,7 +25,9 @@ from planning.infrastructure.adapters.planning_management_repository_sqla import
 from planning.infrastructure.adapters.project_management_repositories_sqla import (
     SqlaEngineerAccountRepository,
 )
-from planning.infrastructure.adapters.unit_of_work_sqla import SqlaPlanningUnitOfWork
+from planning.infrastructure.adapters.transaction_manager_sqla import (
+    SqlAlchemyTransactionManager,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     assignments,
     daily_plans,
@@ -119,7 +121,7 @@ async def test_concurrent_owner_block_keeps_one_active(pg_engine: AsyncEngine) -
                 access,
                 SqlaAdminUserRepository(session),
                 MagicMock(),
-                SqlaPlanningUnitOfWork(session),
+                SqlAlchemyTransactionManager(session),
             )
             async with ready_lock:
                 ready += 1
@@ -315,7 +317,7 @@ async def publish_with(
     access = AsyncMock()
     access.dispatcher.return_value = (MagicMock(id=user_id), project_id)
     return await PublishPlanningRunInteractor(
-        access, repository, SqlaPlanningUnitOfWork(session)
+        access, repository, SqlAlchemyTransactionManager(session)
     )(run_id, True)
 
 

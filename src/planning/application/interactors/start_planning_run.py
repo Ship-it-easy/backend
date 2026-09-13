@@ -118,8 +118,8 @@ class StartPlanningRunInteractor:
             ) from error
 
     async def _require_project(self, project_id: int):
-        user = await self._identity_provider.get_user()
-        if user.role is UserRoleEnum.ADMIN:
+        user = await self._identity_provider.get_current_user()
+        if user.role is UserRoleEnum.OWNER:
             return user
         if not is_dispatcher(user.role):
             raise AccessControlError("You do not have access to this project.")

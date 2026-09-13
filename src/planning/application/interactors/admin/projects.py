@@ -5,7 +5,7 @@ from planning.application.errors import ConflictError, ObjectNotFoundError
 from planning.application.interfaces.admin_management_repositories import (
     AdminProjectRepository,
 )
-from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
+from planning.application.interfaces.transaction_manager import TransactionManager
 
 
 class _AdminProjectInteractor:
@@ -42,29 +42,28 @@ class UpdateAdminProjectInteractor(_AdminProjectInteractor):
         self,
         access: ProjectAccess,
         repository: AdminProjectRepository,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self,
         project_id: int,
         values: dict[str, Any],
     ) -> dict[str, Any]:
-        async with self._uow:
-            await self._access.owner()
-            state = await self._repository.load_update_state(project_id)
-            if not state.exists:
-                raise ObjectNotFoundError("Project not found")
-            if "planning_timezone" in values and state.has_planning_runs:
-                raise ConflictError(
-                    "Timezone cannot be changed after the first planning run",
-                    code="TIMEZONE_LOCKED",
-                )
-            result = await self._repository.save_project(project_id, values)
-            await self._uow.commit()
-            return result
+        await self._access.owner()
+        state = await self._repository.load_update_state(project_id)
+        if not state.exists:
+            raise ObjectNotFoundError("Project not found")
+        if "planning_timezone" in values and state.has_planning_runs:
+            raise ConflictError(
+                "Timezone cannot be changed after the first planning run",
+                code="TIMEZONE_LOCKED",
+            )
+        result = await self._repository.save_project(project_id, values)
+        await self._transaction_manager.commit()
+        return result
 
 
 class BlockProjectInteractor(_AdminProjectInteractor):

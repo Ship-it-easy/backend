@@ -19,7 +19,7 @@ class ProjectAccess:
     repository: ProjectAccessRepository
 
     async def user(self) -> User:
-        return await self.identity_provider.get_user()
+        return await self.identity_provider.get_current_user()
 
     async def owner(self) -> User:
         user = await self.user()
@@ -36,7 +36,7 @@ class ProjectAccess:
 
     async def project(self, project_id: int, *, write: bool = False) -> User:
         user = await self.user()
-        if user.role is UserRoleEnum.ADMIN:
+        if user.role is UserRoleEnum.OWNER:
             if write:
                 await self._active_project(project_id)
             return user

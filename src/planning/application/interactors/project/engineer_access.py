@@ -7,7 +7,7 @@ from planning.application.errors import ObjectNotFoundError
 from planning.application.interfaces.project_management_repositories import (
     EngineerAccountRepository,
 )
-from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
+from planning.application.interfaces.transaction_manager import TransactionManager
 
 
 class _EngineerAccessInteractor:
@@ -31,10 +31,10 @@ class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
         access: ProjectAccess,
         repository: EngineerAccountRepository,
         password_hasher: PasswordHasher,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository, password_hasher)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self,
@@ -42,20 +42,19 @@ class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
         login: str,
         password: str,
     ) -> dict[str, Any]:
-        async with self._uow:
-            _, project_id = await self._access.dispatcher()
-            if not await self._repository.engineer_belongs_to_project(
-                project_id, engineer_id
-            ):
-                raise ObjectNotFoundError("Object not found")
-            result = await self._repository.create_account(
-                project_id,
-                engineer_id,
-                login.strip(),
-                self._hash(password),
-            )
-            await self._uow.commit()
-            return result
+        _, project_id = await self._access.dispatcher()
+        if not await self._repository.engineer_belongs_to_project(
+            project_id, engineer_id
+        ):
+            raise ObjectNotFoundError("Object not found")
+        result = await self._repository.create_account(
+            project_id,
+            engineer_id,
+            login.strip(),
+            self._hash(password),
+        )
+        await self._transaction_manager.commit()
+        return result
 
 
 class ResetEngineerPasswordInteractor(_EngineerAccessInteractor):

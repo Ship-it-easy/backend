@@ -14,7 +14,7 @@ from planning.application.errors import (
 from planning.application.interfaces.admin_management_repositories import (
     AdminUserRepository,
 )
-from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
+from planning.application.interfaces.transaction_manager import TransactionManager
 
 
 class _AdminUserInteractor:
@@ -44,21 +44,20 @@ class CreateOwnerInteractor(_AdminUserInteractor):
         access: ProjectAccess,
         repository: AdminUserRepository,
         password_hasher: PasswordHasher,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository, password_hasher)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(self, login: str, password: str) -> dict[str, Any]:
-        async with self._uow:
-            await self._access.owner()
-            result = await self._repository.create_user(
-                login.strip(),
-                self._hash(password),
-                UserRoleEnum.OWNER,
-            )
-            await self._uow.commit()
-            return result
+        await self._access.owner()
+        result = await self._repository.create_user(
+            login.strip(),
+            self._hash(password),
+            UserRoleEnum.OWNER,
+        )
+        await self._transaction_manager.commit()
+        return result
 
 
 class ListProjectUsersInteractor(_AdminUserInteractor):
@@ -73,10 +72,10 @@ class CreateProjectUserInteractor(_AdminUserInteractor):
         access: ProjectAccess,
         repository: AdminUserRepository,
         password_hasher: PasswordHasher,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository, password_hasher)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self,
@@ -86,45 +85,44 @@ class CreateProjectUserInteractor(_AdminUserInteractor):
         role: UserRoleEnum | None,
         engineer_id: int | None,
     ) -> dict[str, Any]:
-        async with self._uow:
-            await self._access.owner()
-            selected_role = role or UserRoleEnum.DISPATCHER
-            if selected_role not in {
-                UserRoleEnum.DISPATCHER,
-                UserRoleEnum.ENGINEER,
-            }:
-                raise InvalidPlanningRequest(
-                    "Project user must be DISPATCHER or ENGINEER",
-                    code="INVALID_ROLE",
-                )
-            selected_engineer_id = (
-                engineer_id if selected_role is UserRoleEnum.ENGINEER else None
+        await self._access.owner()
+        selected_role = role or UserRoleEnum.DISPATCHER
+        if selected_role not in {
+            UserRoleEnum.DISPATCHER,
+            UserRoleEnum.ENGINEER,
+        }:
+            raise InvalidPlanningRequest(
+                "Project user must be DISPATCHER or ENGINEER",
+                code="INVALID_ROLE",
             )
-            if selected_role is UserRoleEnum.ENGINEER and selected_engineer_id is None:
-                raise InvalidPlanningRequest(
-                    "engineer_id is required", code="ENGINEER_REQUIRED"
-                )
-            state = await self._repository.get_project_user_validation(
-                project_id, selected_engineer_id
+        selected_engineer_id = (
+            engineer_id if selected_role is UserRoleEnum.ENGINEER else None
+        )
+        if selected_role is UserRoleEnum.ENGINEER and selected_engineer_id is None:
+            raise InvalidPlanningRequest(
+                "engineer_id is required", code="ENGINEER_REQUIRED"
             )
-            if not state.project_exists:
-                raise ObjectNotFoundError("Project not found")
-            if not state.project_active:
-                raise ProjectBlockedError("Project is blocked")
-            if state.engineer_belongs_to_project is False:
-                raise InvalidPlanningRequest(
-                    "Engineer does not belong to project",
-                    code="CROSS_PROJECT_REFERENCE",
-                )
-            result = await self._repository.create_user(
-                login.strip(),
-                self._hash(password),
-                selected_role,
-                project_id,
-                selected_engineer_id,
+        state = await self._repository.get_project_user_validation(
+            project_id, selected_engineer_id
+        )
+        if not state.project_exists:
+            raise ObjectNotFoundError("Project not found")
+        if not state.project_active:
+            raise ProjectBlockedError("Project is blocked")
+        if state.engineer_belongs_to_project is False:
+            raise InvalidPlanningRequest(
+                "Engineer does not belong to project",
+                code="CROSS_PROJECT_REFERENCE",
             )
-            await self._uow.commit()
-            return result
+        result = await self._repository.create_user(
+            login.strip(),
+            self._hash(password),
+            selected_role,
+            project_id,
+            selected_engineer_id,
+        )
+        await self._transaction_manager.commit()
+        return result
 
 
 class ResetUserPasswordInteractor(_AdminUserInteractor):
@@ -142,29 +140,25 @@ class BlockUserInteractor(_AdminUserInteractor):
         access: ProjectAccess,
         repository: AdminUserRepository,
         password_hasher: PasswordHasher,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository, password_hasher)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        async with self._uow:
-            await self._access.owner()
-            state = await self._repository.lock_activation(user_id)
-            if not state.active:
-                await self._uow.commit()
-                return state.response()
-            if (
-                state.role in {UserRoleEnum.OWNER, UserRoleEnum.ADMIN}
-                and state.active_owner_count <= 1
-            ):
-                raise ConflictError(
-                    "The last active owner cannot be blocked",
-                    code="LAST_ACTIVE_OWNER",
-                )
-            result = await self._repository.save_active(user_id, False)
-            await self._uow.commit()
-            return result
+        await self._access.owner()
+        state = await self._repository.lock_activation(user_id)
+        if not state.active:
+            await self._transaction_manager.commit()
+            return state.response()
+        if state.role is UserRoleEnum.OWNER and state.active_owner_count <= 1:
+            raise ConflictError(
+                "The last active owner cannot be blocked",
+                code="LAST_ACTIVE_OWNER",
+            )
+        result = await self._repository.save_active(user_id, False)
+        await self._transaction_manager.commit()
+        return result
 
 
 class UnblockUserInteractor(_AdminUserInteractor):
@@ -173,18 +167,17 @@ class UnblockUserInteractor(_AdminUserInteractor):
         access: ProjectAccess,
         repository: AdminUserRepository,
         password_hasher: PasswordHasher,
-        uow: PlanningUnitOfWork,
+        transaction_manager: TransactionManager,
     ):
         super().__init__(access, repository, password_hasher)
-        self._uow = uow
+        self._transaction_manager = transaction_manager
 
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        async with self._uow:
-            await self._access.owner()
-            state = await self._repository.lock_activation(user_id)
-            if state.active:
-                await self._uow.commit()
-                return state.response()
-            result = await self._repository.save_active(user_id, True)
-            await self._uow.commit()
-            return result
+        await self._access.owner()
+        state = await self._repository.lock_activation(user_id)
+        if state.active:
+            await self._transaction_manager.commit()
+            return state.response()
+        result = await self._repository.save_active(user_id, True)
+        await self._transaction_manager.commit()
+        return result

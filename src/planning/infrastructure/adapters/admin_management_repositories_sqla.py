@@ -214,7 +214,7 @@ class SqlaAdminUserRepository(AdminUserRepository):
                 await self._session.execute(
                     select(users_table)
                     .where(
-                        users_table.c.role.in_([UserRoleEnum.OWNER, UserRoleEnum.ADMIN])
+                        users_table.c.role == UserRoleEnum.OWNER
                     )
                     .order_by(users_table.c.username)
                 )
@@ -334,7 +334,7 @@ class SqlaAdminUserRepository(AdminUserRepository):
                     select(users_table.c.id)
                     .where(
                         users_table.c.role.in_(
-                            [UserRoleEnum.OWNER, UserRoleEnum.ADMIN]
+                            [UserRoleEnum.OWNER]
                         ),
                         users_table.c.is_active.is_(True),
                     )

@@ -25,7 +25,7 @@ from planning.application.interfaces.project_management_repositories import (
     ProjectCatalogRepository,
     ProjectJobsRepository,
 )
-from planning.application.interfaces.unit_of_work import PlanningUnitOfWork
+from planning.application.interfaces.transaction_manager import TransactionManager
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.adapters.address_search_nominatim import (
     NominatimAddressSearchProvider,
@@ -71,7 +71,9 @@ from planning.infrastructure.adapters.travel_matrix_provider_static import (
 from planning.infrastructure.adapters.travel_matrix_provider_valhalla import (
     ValhallaTravelMatrixProvider,
 )
-from planning.infrastructure.adapters.unit_of_work_sqla import SqlaPlanningUnitOfWork
+from planning.infrastructure.adapters.transaction_manager_sqla import (
+    SqlAlchemyTransactionManager,
+)
 
 
 class PlanningAdaptersProvider(Provider):
@@ -83,9 +85,9 @@ class PlanningAdaptersProvider(Provider):
 
     geocoder = provide(NominatimGeocoder, provides=Geocoder)
     project_access = provide(ProjectAccess)
-    unit_of_work = provide(
-        SqlaPlanningUnitOfWork,
-        provides=PlanningUnitOfWork,
+    transaction_manager = provide(
+        SqlAlchemyTransactionManager,
+        provides=TransactionManager,
     )
     project_access_repository = provide(
         SqlaProjectAccessRepository,
