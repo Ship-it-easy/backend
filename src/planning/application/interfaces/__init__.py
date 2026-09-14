@@ -9,6 +9,10 @@ from planning.application.interfaces.job_status_repository import (
     JobStatusRepository,
 )
 from planning.application.interfaces.jobs_repository import JobsRepository
+from planning.application.interfaces.planning_batch_repository import (
+    PlanningBatchExecutor,
+    PlanningBatchRepository,
+)
 from planning.application.interfaces.planning_run_repository import (
     PlanningRunRepository,
 )
@@ -40,6 +44,8 @@ __all__ = [
     "JobsRepository",
     "JobStatusContext",
     "JobStatusRepository",
+    "PlanningBatchExecutor",
+    "PlanningBatchRepository",
     "PlanningRunRepository",
     "PlanningManagementRepository",
     "PlanningSolver",

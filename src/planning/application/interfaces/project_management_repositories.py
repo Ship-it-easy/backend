@@ -105,6 +105,9 @@ class PlanningManagementRepository(Protocol):
     async def load_publication_state(
         self, project_id: int, run_id: int
     ) -> PlanningPublicationState | None: ...
+    async def validate_batch_for_publication(
+        self, project_id: int, batch_id: int
+    ) -> bool: ...
     async def save_publication(self, command: PublishPlanCommand) -> PublishedPlan: ...
     async def get_daily_plan(
         self, project_id: int, planning_date: date

@@ -10,6 +10,10 @@ from planning.application.interfaces.assignment_repository import AssignmentRepo
 from planning.application.interfaces.geocoder import Geocoder
 from planning.application.interfaces.job_status_repository import JobStatusRepository
 from planning.application.interfaces.jobs_repository import JobsRepository
+from planning.application.interfaces.planning_batch_repository import (
+    PlanningBatchExecutor,
+    PlanningBatchRepository,
+)
 from planning.application.interfaces.planning_run_repository import (
     PlanningRunRepository,
 )
@@ -44,6 +48,12 @@ from planning.infrastructure.adapters.job_status_repository_sqla import (
 from planning.infrastructure.adapters.jobs_repository_sqla import (
     SqlaJobsRepository,
 )
+from planning.infrastructure.adapters.planning_batch_executor import (
+    InProcessPlanningBatchExecutor,
+)
+from planning.infrastructure.adapters.planning_batch_repository_sqla import (
+    SqlaPlanningBatchRepository,
+)
 from planning.infrastructure.adapters.planning_management_repository_sqla import (
     SqlaPlanningManagementRepository,
 )
@@ -62,6 +72,9 @@ from planning.infrastructure.adapters.project_management_repositories_sqla impor
     SqlaProjectCatalogRepository,
     SqlaProjectJobsRepository,
 )
+from planning.infrastructure.adapters.transaction_manager_sqla import (
+    SqlAlchemyTransactionManager,
+)
 from planning.infrastructure.adapters.travel_matrix_provider_factory import (
     TravelMatrixProviderFactory,
 )
@@ -71,15 +84,12 @@ from planning.infrastructure.adapters.travel_matrix_provider_static import (
 from planning.infrastructure.adapters.travel_matrix_provider_valhalla import (
     ValhallaTravelMatrixProvider,
 )
-from planning.infrastructure.adapters.transaction_manager_sqla import (
-    SqlAlchemyTransactionManager,
-)
 
 
 class PlanningAdaptersProvider(Provider):
     scope = Scope.REQUEST
 
-    @provide
+    @provide(scope=Scope.APP)
     def planning_config(self, config: Config) -> PlanningServiceConfig:
         return config.planning_service_config
 
@@ -137,6 +147,15 @@ class PlanningAdaptersProvider(Provider):
     planning_run_repository = provide(
         SqlaPlanningRunRepository,
         provides=PlanningRunRepository,
+    )
+    planning_batch_repository = provide(
+        SqlaPlanningBatchRepository,
+        provides=PlanningBatchRepository,
+    )
+    planning_batch_executor = provide(
+        InProcessPlanningBatchExecutor,
+        scope=Scope.APP,
+        provides=PlanningBatchExecutor,
     )
     static_matrix_provider = provide(StaticTravelMatrixProvider)
     valhalla_matrix_provider = provide(ValhallaTravelMatrixProvider)

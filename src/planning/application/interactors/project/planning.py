@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from planning.application.access import ProjectAccess
 from planning.application.errors import ConflictError, ObjectNotFoundError
@@ -80,8 +81,14 @@ class PublishPlanningRunInteractor(_PlanningManagementInteractor):
         self,
         run_id: int,
         confirm_unassigned: bool,
+        confirm_partial_batch: bool = False,
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+        if scoped_project_id is None:
+            user, project_id = await self._access.dispatcher()
+        else:
+            user = await self._access.project(scoped_project_id, write=True)
+            project_id = scoped_project_id
         state = await self._repository.load_publication_state(project_id, run_id)
         if state is None:
             raise ObjectNotFoundError("Planning run not found")
@@ -90,6 +97,39 @@ class PublishPlanningRunInteractor(_PlanningManagementInteractor):
                 "Only a validated successful run can be published",
                 code="PLANNING_RUN_NOT_PUBLISHABLE",
             )
+        if state.batch_status is not None:
+            local_today = (
+                datetime.now(timezone.utc).astimezone(ZoneInfo(state.timezone)).date()
+            )
+            if state.planning_date != local_today:
+                raise ConflictError(
+                    "Only the current project day can be published",
+                    code="FUTURE_DRAFT_NOT_PUBLISHABLE",
+                )
+            if not state.batch_current or state.batch_status not in {
+                "SUCCESS",
+                "PARTIAL",
+            }:
+                raise ConflictError(
+                    "Only a terminal current batch can be published",
+                    code="PLANNING_BATCH_NOT_PUBLISHABLE",
+                )
+            is_fresh = (
+                state.batch_id is not None
+                and await self._repository.validate_batch_for_publication(
+                    project_id, state.batch_id
+                )
+            )
+            if state.batch_stale_for_publication or not is_fresh:
+                raise ConflictError(
+                    "Batch inputs changed after calculation",
+                    code="STALE_FOR_PUBLICATION",
+                )
+            if state.batch_status == "PARTIAL" and not confirm_partial_batch:
+                raise ConflictError(
+                    "Confirm publication of the partial multi-day result",
+                    code="PARTIAL_BATCH_CONFIRMATION_REQUIRED",
+                )
         if state.unassigned_jobs_count and not confirm_unassigned:
             raise ConflictError(
                 "Confirm publication with unassigned jobs",

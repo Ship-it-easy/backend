@@ -27,6 +27,14 @@ class PlanningConfig:
     solver_time_limit_sec: int
     max_jobs_per_run: int
     travel_provider: str
+    future_opportunity_critical: int = 750
+    future_opportunity_high: int = 500
+    future_opportunity_limited: int = 250
+    batch_initial_horizon_days: int = 7
+    batch_maximum_horizon_days: int = 30
+    batch_total_time_limit_sec: int = 900
+    max_jobs_per_batch: int = 5000
+    solver_seed: int = 1
 
 
 @dataclass

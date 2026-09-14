@@ -64,7 +64,11 @@ async def publish_run(
     body: PublishRequest,
     interactor: FromDishka[PublishPlanningRunInteractor],
 ) -> dict[str, Any]:
-    return await interactor(run_id, body.confirm_unassigned)
+    return await interactor(
+        run_id,
+        body.confirm_unassigned,
+        body.confirm_partial_batch,
+    )
 
 
 @router.get("/daily-plans/{planning_date}")

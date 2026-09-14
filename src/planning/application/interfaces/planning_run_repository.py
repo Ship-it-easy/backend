@@ -28,7 +28,12 @@ class PlanningRunRepository(Protocol):
 
     @abstractmethod
     async def save_result(
-        self, run_id: int, data: PlanningInput, result: PlanningResult
+        self,
+        run_id: int,
+        data: PlanningInput,
+        result: PlanningResult,
+        *,
+        commit: bool = True,
     ) -> None: ...
 
     @abstractmethod

@@ -17,6 +17,9 @@ from planning.application.management_dto import (
     PublishedPlan,
     PublishPlanCommand,
 )
+from planning.infrastructure.adapters.planning_batch_repository_sqla import (
+    SqlaPlanningBatchRepository,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     assignments,
     daily_plans,
@@ -24,6 +27,7 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineers,
     jobs,
     plan_versions,
+    planning_batches,
     planning_config,
     planning_route_jobs,
     planning_routes,
@@ -50,6 +54,16 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
         }
         next_values.update(values)
         next_values.update(version=current.version + 1, active=True)
+        if not (
+            int(next_values["future_opportunity_critical"])
+            >= int(next_values["future_opportunity_high"])
+            >= int(next_values["future_opportunity_limited"])
+        ):
+            raise ConflictError(
+                "Future opportunity bonuses must be ordered "
+                "critical >= high >= limited",
+                code="PLANNING_CONFIGURATION_INVALID",
+            )
         await self._session.execute(
             update(planning_config)
             .where(planning_config.c.id == current.id)
@@ -131,6 +145,20 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
         )
         if run is None:
             return None
+        batch = None
+        if run.planning_batch_id is not None:
+            batch = (
+                (
+                    await self._session.execute(
+                        select(planning_batches).where(
+                            planning_batches.c.id == run.planning_batch_id,
+                            planning_batches.c.project_id == project_id,
+                        )
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         already_published = (
             await self._session.scalar(
                 select(plan_versions.c.id).where(
@@ -257,7 +285,22 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
             routes=routes,
             publishable_job_ids=publishable_ids,
             snapshots=snapshots,
+            batch_status=batch.status if batch is not None else None,
+            batch_stale_for_publication=(
+                bool(batch.stale_for_publication) if batch is not None else False
+            ),
+            batch_current=bool(batch.current_flag) if batch is not None else False,
+            timezone=str(run.timezone),
+            batch_id=int(run.planning_batch_id) if run.planning_batch_id else None,
         )
+
+    async def validate_batch_for_publication(
+        self, project_id: int, batch_id: int
+    ) -> bool:
+        result = await SqlaPlanningBatchRepository(
+            self._session
+        ).validate_current_day(project_id, batch_id, commit=False)
+        return bool(result["valid_for_publication"])
 
     async def save_publication(self, command: PublishPlanCommand) -> PublishedPlan:
         try:

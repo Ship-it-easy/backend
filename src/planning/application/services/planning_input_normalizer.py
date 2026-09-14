@@ -146,8 +146,11 @@ class PlanningInputNormalizer:
     ) -> list[Engineer]:
         result = []
         for row in rows:
+            shift_start_min = _time_to_start_minute(row["shift_start"])
             shift_end_min = _time_to_end_minute(row["shift_end"])
-            if current_minute is not None and current_minute > shift_end_min:
+            if current_minute is not None:
+                shift_start_min = max(shift_start_min, current_minute)
+            if shift_start_min >= shift_end_min:
                 continue
             coordinate = await self._coordinate(
                 row["start_latitude"],
@@ -163,7 +166,7 @@ class PlanningInputNormalizer:
                     id=int(row["engineer_id"]),
                     transport_type=TransportType(row["transport_type"]),
                     coordinate=coordinate,
-                    shift_start_min=_time_to_start_minute(row["shift_start"]),
+                    shift_start_min=shift_start_min,
                     shift_end_min=shift_end_min,
                     qualifications=frozenset(
                         source["engineer_qualifications"].get(

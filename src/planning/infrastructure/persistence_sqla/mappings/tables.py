@@ -6,6 +6,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     Numeric,
@@ -261,6 +262,16 @@ planning_config = Table(
     ),
     Column("travel_cache_ttl_days", Integer),
     Column(
+        "future_opportunity_critical", Integer, nullable=False, server_default="750"
+    ),
+    Column("future_opportunity_high", Integer, nullable=False, server_default="500"),
+    Column("future_opportunity_limited", Integer, nullable=False, server_default="250"),
+    Column("batch_initial_horizon_days", Integer, nullable=False, server_default="7"),
+    Column("batch_maximum_horizon_days", Integer, nullable=False, server_default="30"),
+    Column("batch_total_time_limit_sec", Integer, nullable=False, server_default="900"),
+    Column("max_jobs_per_batch", Integer, nullable=False, server_default="5000"),
+    Column("solver_seed", Integer, nullable=False, server_default="1"),
+    Column(
         "created_at",
         DateTime(timezone=True),
         nullable=False,
@@ -286,6 +297,7 @@ planning_runs = Table(
     metadata_obj,
     Column("id", BigInteger, primary_key=True),
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("planning_batch_id", BigInteger),
     Column("planning_date", Date, nullable=False),
     Column("timezone", String(64), nullable=False),
     Column("initiated_by_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
@@ -325,6 +337,122 @@ Index(
     planning_runs.c.planning_date,
     unique=True,
     postgresql_where=planning_runs.c.status.in_(("CREATED", "PREPARING", "RUNNING")),
+)
+
+planning_batches = Table(
+    "planning_batches",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("requested_start_date", Date, nullable=False),
+    Column("effective_start_date", Date, nullable=False),
+    Column("initial_horizon_end", Date, nullable=False),
+    Column("maximum_horizon_end", Date, nullable=False),
+    Column("processed_through_date", Date),
+    Column("status", String(32), nullable=False),
+    Column("completion_reason", String(64)),
+    Column(
+        "initiated_by_user_id",
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+    ),
+    Column("idempotency_key", String(255), nullable=False),
+    Column("input_hash", String(64), nullable=False),
+    Column("configuration_version", String(64), nullable=False),
+    Column("input_snapshot", JSONB, nullable=False),
+    Column("stop_requested_at", DateTime(timezone=True)),
+    Column("current_flag", Boolean, nullable=False, server_default="false"),
+    Column("stale_for_publication", Boolean, nullable=False, server_default="false"),
+    Column("metrics", JSONB, nullable=False, server_default="{}"),
+    Column("error_code", String(64)),
+    Column("error_message", Text),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    UniqueConstraint("project_id", "idempotency_key"),
+)
+Index(
+    "uq_active_planning_batch_project",
+    planning_batches.c.project_id,
+    unique=True,
+    postgresql_where=planning_batches.c.status.in_(
+        ("CREATED", "PREPARING", "RUNNING", "STOP_REQUESTED")
+    ),
+)
+Index(
+    "uq_current_planning_batch_project",
+    planning_batches.c.project_id,
+    unique=True,
+    postgresql_where=planning_batches.c.current_flag.is_(True),
+)
+
+planning_batch_days = Table(
+    "planning_batch_days",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "planning_batch_id",
+        ForeignKey("planning_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("planning_date", Date, nullable=False),
+    Column("block_number", Integer, nullable=False),
+    Column("status", String(32), nullable=False),
+    Column("planning_run_id", ForeignKey("planning_runs.id")),
+    Column("input_jobs_count", Integer, nullable=False, server_default="0"),
+    Column("solver_candidates_count", Integer, nullable=False, server_default="0"),
+    Column("assigned_count", Integer, nullable=False, server_default="0"),
+    Column("unassigned_count", Integer, nullable=False, server_default="0"),
+    Column("deferred_count", Integer, nullable=False, server_default="0"),
+    Column("dropped_count", Integer, nullable=False, server_default="0"),
+    Column("input_job_ids_hash", String(64)),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("error_code", String(64)),
+    UniqueConstraint("planning_batch_id", "planning_date"),
+)
+
+planning_batch_jobs = Table(
+    "planning_batch_jobs",
+    metadata_obj,
+    Column(
+        "planning_batch_id",
+        ForeignKey("planning_batches.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("job_id", ForeignKey("jobs.id"), primary_key=True),
+    Column("snapshot_sla_date", Date, nullable=False),
+    Column("eligibility_status", String(32), nullable=False),
+    Column("priority_group", String(64)),
+    Column("future_opportunity_count", Integer),
+    Column("future_opportunity_rank", Integer),
+    Column("future_opportunity_bonus", Integer),
+    Column("daily_drop_penalty", BigInteger),
+    Column("cascade_drop_penalty", BigInteger),
+    Column("processing_status", String(40), nullable=False),
+    Column("assigned_date", Date),
+    Column("planning_run_id", ForeignKey("planning_runs.id")),
+    Column("primary_reason_code", String(64)),
+    Column("diagnostic_flags", JSONB, nullable=False, server_default="{}"),
+    Column("last_considered_date", Date),
+    Column("last_planning_run_id", ForeignKey("planning_runs.id")),
+    Column("attempt_count", Integer, nullable=False, server_default="0"),
+)
+
+# The circular reference is declared after both tables exist in metadata.
+planning_runs.append_constraint(
+    ForeignKeyConstraint(
+        [planning_runs.c.planning_batch_id],
+        [planning_batches.c.id],
+        ondelete="CASCADE",
+        name="fk_planning_runs_planning_batch_id_planning_batches",
+    )
 )
 
 planning_routes = Table(

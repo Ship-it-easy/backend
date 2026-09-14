@@ -106,6 +106,11 @@ class PlanningPublicationState:
     routes: tuple[PlanningRouteAssignment, ...]
     publishable_job_ids: frozenset[int]
     snapshots: dict[int, AssignmentSnapshot] = field(default_factory=dict)
+    batch_status: str | None = None
+    batch_stale_for_publication: bool = False
+    batch_current: bool = False
+    timezone: str = "UTC"
+    batch_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

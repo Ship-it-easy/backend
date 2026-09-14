@@ -18,13 +18,14 @@ from planning.application.errors import (
     ProjectNotFound,
 )
 from planning.domain.entities.planning import PlanningInput, PlanningResult
-from planning.domain.enums import PlanningRunStatus
+from planning.domain.enums import ACTIVE_BATCH_STATUSES, PlanningRunStatus
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineer_qualifications,
     engineer_schedules,
     engineers,
     equipment_types,
     jobs,
+    planning_batches,
     planning_config,
     planning_equipment_assignments,
     planning_route_jobs,
@@ -82,6 +83,19 @@ class SqlaPlanningRunRepository:
             raise PlanningUnavailable("One-day planning is not enabled for project")
         if project.status != "ACTIVE":
             raise PlanningUnavailable("Project is blocked")
+        active_batch = await self._session.scalar(
+            select(planning_batches.c.id).where(
+                planning_batches.c.project_id == project_id,
+                planning_batches.c.status.in_(ACTIVE_BATCH_STATUSES),
+                planning_batches.c.effective_start_date <= planning_date,
+                planning_batches.c.maximum_horizon_end >= planning_date,
+            )
+        )
+        if active_batch is not None:
+            raise PlanningRunInProgress(
+                "Planning date is locked by an active batch",
+                code="PLANNING_DATE_LOCKED_BY_BATCH",
+            )
         try:
             run_id = await self._session.scalar(
                 insert(planning_runs)
@@ -257,7 +271,12 @@ class SqlaPlanningRunRepository:
         await self._session.commit()
 
     async def save_result(
-        self, run_id: int, data: PlanningInput, result: PlanningResult
+        self,
+        run_id: int,
+        data: PlanningInput,
+        result: PlanningResult,
+        *,
+        commit: bool = True,
     ) -> None:
         status = (
             PlanningRunStatus.FAILED_VALIDATION.value
@@ -356,7 +375,8 @@ class SqlaPlanningRunRepository:
                 validation_errors=result.validation_errors,
             )
         )
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
 
     async def fail_run(self, run_id: int, code: str, message: str) -> None:
         await self._session.rollback()

@@ -14,6 +14,14 @@ from planning.application.interactors.list_jobs import ListJobsInteractor
 from planning.application.interactors.list_planning_runs import (
     ListPlanningRunsInteractor,
 )
+from planning.application.interactors.planning_batches import (
+    GetPlanningBatchContextInteractor,
+    GetPlanningBatchInteractor,
+    ListPlanningBatchesInteractor,
+    StartPlanningBatchInteractor,
+    StopPlanningBatchInteractor,
+    ValidateCurrentBatchDayInteractor,
+)
 from planning.application.interactors.project import address_search, engineer_access
 from planning.application.interactors.project import catalogs as project_catalogs
 from planning.application.interactors.project import engineers as project_engineers
@@ -25,6 +33,7 @@ from planning.application.interactors.start_planning_run import (
 from planning.application.services.planning_input_normalizer import (
     PlanningInputNormalizer,
 )
+from planning.application.validators.planning_batch import PlanningBatchValidator
 from planning.application.validators.planning_result import PlanningValidator
 
 
@@ -33,12 +42,19 @@ class PlanningInteractorProvider(Provider):
 
     normalizer = provide(PlanningInputNormalizer)
     validator = provide(PlanningValidator)
+    batch_validator = provide(PlanningBatchValidator)
     create_job = provide(CreateJobInteractor)
     list_jobs = provide(ListJobsInteractor)
     start_planning_run = provide(StartPlanningRunInteractor)
     get_planning_run = provide(GetPlanningRunInteractor)
     list_planning_runs = provide(ListPlanningRunsInteractor)
     change_job_status = provide(ChangeJobStatusInteractor)
+    start_planning_batch = provide(StartPlanningBatchInteractor)
+    get_planning_batch_context = provide(GetPlanningBatchContextInteractor)
+    get_planning_batch = provide(GetPlanningBatchInteractor)
+    list_planning_batches = provide(ListPlanningBatchesInteractor)
+    stop_planning_batch = provide(StopPlanningBatchInteractor)
+    validate_current_batch_day = provide(ValidateCurrentBatchDayInteractor)
 
     list_admin_projects = provide(admin_projects.ListAdminProjectsInteractor)
     create_admin_project = provide(admin_projects.CreateAdminProjectInteractor)

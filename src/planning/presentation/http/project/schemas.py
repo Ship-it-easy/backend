@@ -137,6 +137,7 @@ class JobStatusChange(BaseModel):
 
 class PublishRequest(BaseModel):
     confirm_unassigned: bool = False
+    confirm_partial_batch: bool = False
 
 
 class PlanningConfigPatch(BaseModel):
@@ -157,4 +158,10 @@ class PlanningConfigPatch(BaseModel):
     travel_cost_per_minute: int | None = Field(default=None, ge=0)
     solver_time_limit_sec: int | None = Field(default=None, ge=1, le=600)
     max_jobs_per_run: int | None = Field(default=None, ge=1, le=1000)
+    future_opportunity_critical: int | None = Field(default=None, ge=0, le=1_000_000)
+    future_opportunity_high: int | None = Field(default=None, ge=0, le=1_000_000)
+    future_opportunity_limited: int | None = Field(default=None, ge=0, le=1_000_000)
+    batch_total_time_limit_sec: int | None = Field(default=None, ge=1, le=900)
+    max_jobs_per_batch: int | None = Field(default=None, ge=1, le=5000)
+    solver_seed: int | None = Field(default=None, ge=0, le=2_147_483_647)
     travel_provider: Literal["VALHALLA_LOCAL"] | None = None
