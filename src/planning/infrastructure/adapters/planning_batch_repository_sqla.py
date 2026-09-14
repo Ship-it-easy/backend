@@ -842,6 +842,8 @@ class SqlaPlanningBatchRepository:
                     select(
                         planning_batch_jobs,
                         jobs.c.address,
+                        jobs.c.latitude,
+                        jobs.c.longitude,
                     )
                     .join(jobs, jobs.c.id == planning_batch_jobs.c.job_id)
                     .where(planning_batch_jobs.c.planning_batch_id == batch_id)
@@ -854,14 +856,18 @@ class SqlaPlanningBatchRepository:
             .mappings()
             .all()
         )
-        engineer_names = {
-            int(row.id): str(row.name)
+        engineer_details = {
+            int(row.id): row
             for row in (
                 (
                     await self._session.execute(
-                        select(engineers.c.id, engineers.c.name).where(
-                            engineers.c.project_id == project_id
-                        )
+                        select(
+                            engineers.c.id,
+                            engineers.c.name,
+                            engineers.c.transport_type,
+                            engineers.c.start_latitude,
+                            engineers.c.start_longitude,
+                        ).where(engineers.c.project_id == project_id)
                     )
                 )
                 .mappings()
@@ -869,6 +875,14 @@ class SqlaPlanningBatchRepository:
             )
         }
         job_addresses = {int(row.job_id): str(row.address) for row in job_rows}
+        job_coordinates = {
+            int(row.job_id): {
+                "latitude": row.latitude,
+                "longitude": row.longitude,
+            }
+            for row in job_rows
+            if row.latitude is not None and row.longitude is not None
+        }
         day_values = []
         for day in days:
             value = dict(day)
@@ -877,13 +891,28 @@ class SqlaPlanningBatchRepository:
                 value["routes"] = run["routes"]
                 value["unassigned_jobs"] = run["unassigned_jobs"]
                 for route in value["routes"]:
-                    route["engineer_name"] = engineer_names.get(
-                        int(route["engineer_id"]), "Инженер"
+                    engineer = engineer_details.get(int(route["engineer_id"]))
+                    route["engineer_name"] = (
+                        str(engineer.name) if engineer is not None else "Инженер"
+                    )
+                    route["transport_type"] = (
+                        str(engineer.transport_type) if engineer is not None else "NONE"
+                    )
+                    route["start_coordinate"] = (
+                        {
+                            "latitude": engineer.start_latitude,
+                            "longitude": engineer.start_longitude,
+                        }
+                        if engineer is not None
+                        and engineer.start_latitude is not None
+                        and engineer.start_longitude is not None
+                        else None
                     )
                     for job in route["jobs"]:
                         job["address"] = job_addresses.get(
                             int(job["job_id"]), "Адрес не указан"
                         )
+                        job["coordinate"] = job_coordinates.get(int(job["job_id"]))
             else:
                 value["routes"] = []
                 value["unassigned_jobs"] = []
