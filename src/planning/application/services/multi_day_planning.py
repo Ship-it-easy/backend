@@ -55,9 +55,11 @@ class MultiDayPlanningService:
         maximum_end = _date(batch["maximum_horizon_end"])
         config = PlanningConfig(**snapshot["config"])
         all_jobs = {int(item["id"]): item for item in snapshot["jobs"]}
-        opportunity_calendar = FutureOpportunityCalendar(
-            list(all_jobs.values()), snapshot, maximum_end
-        )
+        invalid_sla_issues = {
+            job_id: ("INVALID_INPUT", {"field": "sla_date"})
+            for job_id, job in all_jobs.items()
+            if job.get("sla_date") is None
+        }
         states = batch.get("execution_job_states", [])
         remaining = {
             int(item["job_id"])
@@ -120,9 +122,21 @@ class MultiDayPlanningService:
             if (issue := permanent_issue(job, snapshot, effective_start, maximum_end))
             is not None
         }
+        issues.update(
+            {
+                job_id: issue
+                for job_id, issue in invalid_sla_issues.items()
+                if job_id in remaining
+            }
+        )
         if issues:
             await self._repository.set_permanent_issues(batch_id, issues)
             remaining.difference_update(issues)
+        opportunity_calendar = FutureOpportunityCalendar(
+            [job for job_id, job in all_jobs.items() if job_id not in invalid_sla_issues],
+            snapshot,
+            maximum_end,
+        )
         if not all_jobs:
             await self._finish(
                 batch_id,
@@ -709,6 +723,7 @@ def _schedules_for(
         item
         for item in snapshot["schedules"]
         if _date(item["work_date"]) == planning_date
+        and _time(item["shift_start"]) < _time(item["shift_end"])
     ]
 
 

@@ -82,6 +82,7 @@ class PlanningValidator:
                 finish_min = local_finish.hour * 60 + local_finish.minute
                 if (
                     start_min < engineer.shift_start_min
+                    or finish_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
                     errors.append(f"job {item.job_id} is outside engineer shift")

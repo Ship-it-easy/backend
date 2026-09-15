@@ -143,7 +143,10 @@ class OrToolsPlanningSolver:
                 )
                 routing.solver().Add(
                     time_dimension.CumulVar(index)
-                    <= data.engineers[vehicle].shift_end_min
+                    <= min(
+                        data.engineers[vehicle].shift_end_min,
+                        job.window_end_min,
+                    )
                     - job.duration_min
                     + 2880 * (1 - assigned_to_vehicle)
                 )
@@ -305,6 +308,7 @@ class OrToolsPlanningSolver:
                 finish_min = start_min + job.duration_min
                 if (
                     start_min > job.window_end_min
+                    or finish_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
                     raise RuntimeError(
