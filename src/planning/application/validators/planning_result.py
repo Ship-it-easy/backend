@@ -12,10 +12,10 @@ class PlanningValidator:
         self,
         data: PlanningInput,
         result: PlanningResult,
-        project_id: int | None = None,
+        project_id: int,
     ) -> list[str]:
         errors: list[str] = []
-        expected_project_id = data.project_id if project_id is None else project_id
+        expected_project_id = project_id
         if data.project_id != expected_project_id:
             errors.append("planning input belongs to another project")
         if data.snapshot.get("project_id") != expected_project_id:
