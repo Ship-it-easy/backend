@@ -11,11 +11,20 @@ load_dotenv()
 @dataclass
 class SessionConfig:
     expiration_minutes: int
+    cookie_secure: bool = False
 
     @staticmethod
     def from_env() -> "SessionConfig":
         expiration_minutes = getenv("SESSION_EXPIRATION_MINUTES")
-        return SessionConfig(expiration_minutes=int(expiration_minutes))
+        cookie_secure = getenv("SESSION_COOKIE_SECURE", "false").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+        return SessionConfig(
+            expiration_minutes=int(expiration_minutes),
+            cookie_secure=cookie_secure,
+        )
 
 
 @dataclass
