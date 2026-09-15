@@ -19,6 +19,7 @@ class Job:
     required_equipment: frozenset[int]
     created_at: datetime
     drop_penalty: int = 0
+    project_id: int | None = None
 
 
 @dataclass

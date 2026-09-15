@@ -420,7 +420,9 @@ class MultiDayPlanningService:
                         travel_cost=0,
                         solver_time_ms=0,
                     )
-                result.validation_errors = self._daily_validator.validate(data, result)
+                result.validation_errors = self._daily_validator.validate(
+                    data, result, int(batch["project_id"])
+                )
                 if result.validation_errors:
                     raise RuntimeError("; ".join(result.validation_errors))
                 day_assigned = {
