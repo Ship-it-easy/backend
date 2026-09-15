@@ -81,16 +81,17 @@ class IdGeneratorsProvider(Provider):
 
 class AuthProvider(Provider):
     @provide(scope=Scope.APP)
-    def provide_cookie_params(self) -> CookieParams:
-        is_cookie_secure: bool = True
-        if is_cookie_secure:
-            return CookieParams(secure=True, samesite="strict")
-        return CookieParams(secure=False)
+    def provide_cookie_params(self, config: Config) -> CookieParams:
+        return CookieParams(
+            secure=config.session_config.cookie_secure,
+            samesite="strict",
+        )
 
     @provide(scope=Scope.APP)
     def provide_session_config(self, config: Config) -> SessionConfig:
         return SessionConfig(
             expiration_minutes=config.session_config.expiration_minutes,
+            cookie_secure=config.session_config.cookie_secure,
         )
 
     request = from_context(provides=Request, scope=Scope.REQUEST)
