@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from planning.application.errors import PlanningUnavailable
+from planning.application.errors import InvalidPlanningRequest, PlanningUnavailable
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.persistence_sqla.mappings.tables import travel_time_cache
@@ -100,9 +100,23 @@ class ValhallaTravelMatrixProvider:
                         response.raise_for_status()
                         matrix = response.json().get("sources_to_targets", [])
                     except httpx.HTTPStatusError as error:
-                        raise _provider_unavailable(error) from error
+                        status_code = error.response.status_code
+                        if status_code in (429, 500, 502, 503, 504):
+                            raise PlanningUnavailable(
+                                "Travel provider temporarily unavailable",
+                                code="SOLVER_OR_TRAVEL_PROVIDER_UNAVAILABLE",
+                            ) from error
+                        else:
+                            # Client errors (400, 404, 422, etc.) indicate invalid request
+                            raise InvalidPlanningRequest(
+                                f"Travel provider returned {status_code}: invalid request"
+                            ) from error
                     except (httpx.TimeoutException, httpx.RequestError, ValueError) as error:
-                        raise _provider_unavailable(error) from error
+                        # Network errors, timeouts, and JSON parsing errors
+                        raise PlanningUnavailable(
+                            "Travel provider is unavailable; retry the planning run",
+                            code="SOLVER_OR_TRAVEL_PROVIDER_UNAVAILABLE",
+                        ) from error
                     for local_i, row in enumerate(matrix):
                         for local_j, item in enumerate(row):
                             i, j = source_ids[local_i], target_ids[local_j]
@@ -143,12 +157,4 @@ class ValhallaTravelMatrixProvider:
 
 def _location(coordinate: Coordinate) -> dict[str, float]:
     return {"lat": coordinate.latitude, "lon": coordinate.longitude}
-
-
-def _provider_unavailable(error: Exception) -> PlanningUnavailable:
-    return PlanningUnavailable(
-        "Travel provider is unavailable; retry the planning run",
-        code="SOLVER_OR_TRAVEL_PROVIDER_UNAVAILABLE",
-    )
-
 

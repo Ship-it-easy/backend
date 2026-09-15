@@ -136,6 +136,9 @@ class OrToolsPlanningSolver:
             ]
             compatible_vehicles[job.id] = compatible
             routing.VehicleVar(index).SetValues(compatible + [-1])
+            # job.drop_penalty contains the final penalty:
+            # - For one-day mode: DailyDropPenalty
+            # - For multi-day mode: CascadeDropPenalty (daily + FutureOpportunityBonus + SLA hierarchy)
             routing.AddDisjunction([index], job.drop_penalty)
             for vehicle in compatible:
                 assigned_to_vehicle = routing.solver().IsEqualCstVar(

@@ -247,9 +247,23 @@ class PlanningInputNormalizer:
                         )
                     )
                     continue
-                coordinate = await self._coordinate(
-                    latitude, longitude, row["address"]
-                )
+                try:
+                    coordinate = await self._coordinate(
+                        latitude, longitude, row["address"]
+                    )
+                except Exception as geocoding_error:
+                    # Geocoder or coordinate conversion failed
+                    invalid.append(
+                        UnassignedJob(
+                            job_id=job_id,
+                            drop_penalty=_sla_penalty(
+                                sla_date, planning_date, config
+                            ),
+                            reason_code=ReasonCode.GEOCODING_FAILED,
+                            diagnostic_flags={"error": str(geocoding_error)},
+                        )
+                    )
+                    continue
                 if coordinate is None and reason is None:
                     reason = ReasonCode.GEOCODING_FAILED
                 if reason is not None:
@@ -289,12 +303,14 @@ class PlanningInputNormalizer:
                         project_id=source["project"]["id"],
                     )
                 )
-            except (KeyError, TypeError, ValueError):
+            except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+                # Catch data access and conversion errors to prevent one bad job from failing the entire run
                 invalid.append(
                     UnassignedJob(
                         job_id=job_id,
                         drop_penalty=_sla_penalty(sla_date, planning_date, config),
                         reason_code=ReasonCode.INVALID_INPUT,
+                        diagnostic_flags={"error": str(error)},
                     )
                 )
         return jobs, invalid

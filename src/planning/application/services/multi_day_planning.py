@@ -349,6 +349,8 @@ class MultiDayPlanningService:
                 }
             penalized = []
             for job in data.jobs:
+                # Replace drop_penalty with cascade_drop_penalty (daily + FutureOpportunityBonus)
+                # _enforce_sla_hierarchy will further adjust this to separate SLA groups
                 penalized.append(
                     replace(
                         job,
