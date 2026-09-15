@@ -12,3 +12,4 @@ class Engineer:
     shift_start_min: int
     shift_end_min: int
     qualifications: frozenset[int]
+    project_id: int | None = None

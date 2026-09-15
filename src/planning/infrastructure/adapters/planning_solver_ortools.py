@@ -136,6 +136,9 @@ class OrToolsPlanningSolver:
             ]
             compatible_vehicles[job.id] = compatible
             routing.VehicleVar(index).SetValues(compatible + [-1])
+            # job.drop_penalty contains the final penalty:
+            # - For one-day mode: DailyDropPenalty
+            # - For multi-day mode: CascadeDropPenalty (daily + FutureOpportunityBonus + SLA hierarchy)
             routing.AddDisjunction([index], job.drop_penalty)
             for vehicle in compatible:
                 assigned_to_vehicle = routing.solver().IsEqualCstVar(
@@ -143,7 +146,10 @@ class OrToolsPlanningSolver:
                 )
                 routing.solver().Add(
                     time_dimension.CumulVar(index)
-                    <= data.engineers[vehicle].shift_end_min
+                    <= min(
+                        data.engineers[vehicle].shift_end_min,
+                        job.window_end_min,
+                    )
                     - job.duration_min
                     + 2880 * (1 - assigned_to_vehicle)
                 )
@@ -305,6 +311,7 @@ class OrToolsPlanningSolver:
                 finish_min = start_min + job.duration_min
                 if (
                     start_min > job.window_end_min
+                    or finish_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
                     raise RuntimeError(

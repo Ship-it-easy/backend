@@ -64,6 +64,13 @@ class SqlaPlanningRunRepository:
         timezone_name: str,
         initiated_by_user_id: Any | None = None,
     ) -> int:
+        # Keep run creation and snapshot preparation in one repeatable-read
+        # transaction. The existing request transaction may contain only the
+        # preceding access checks, so close it before starting this unit.
+        await self._session.commit()
+        await self._session.connection(
+            execution_options={"isolation_level": "REPEATABLE READ"}
+        )
         project = (
             (
                 await self._session.execute(
@@ -109,7 +116,6 @@ class SqlaPlanningRunRepository:
                 )
                 .returning(planning_runs.c.id)
             )
-            await self._session.commit()
         except IntegrityError as error:
             await self._session.rollback()
             raise PlanningRunInProgress(
@@ -118,9 +124,6 @@ class SqlaPlanningRunRepository:
         return int(run_id)
 
     async def load_source(self, project_id: int, planning_date: date) -> dict[str, Any]:
-        await self._session.connection(
-            execution_options={"isolation_level": "REPEATABLE READ"}
-        )
         project = (
             (
                 await self._session.execute(
@@ -148,11 +151,14 @@ class SqlaPlanningRunRepository:
         job_rows = (
             (
                 await self._session.execute(
-                    select(jobs, work_types)
-                    .join(work_types, jobs.c.work_type_id == work_types.c.id)
+                    select(
+                        jobs,
+                        work_types,
+                        work_types.c.project_id.label("work_type_project_id"),
+                    )
+                    .outerjoin(work_types, jobs.c.work_type_id == work_types.c.id)
                     .where(
                         jobs.c.project_id == project_id,
-                        work_types.c.project_id == project_id,
                         jobs.c.status == "NEW",
                     )
                     .order_by(jobs.c.id)
@@ -182,7 +188,9 @@ class SqlaPlanningRunRepository:
             .mappings()
             .all()
         )
-        work_type_ids = {row.work_type_id for row in job_rows}
+        work_type_ids = {
+            row.work_type_id for row in job_rows if row.work_type_id is not None
+        }
         engineer_ids = {row.engineer_id for row in engineer_rows}
         required_qualifications = await self._pairs_by_left(
             work_type_required_qualifications,
@@ -229,7 +237,6 @@ class SqlaPlanningRunRepository:
                 int(row.id): int(row.available_units) for row in equipment_rows
             },
         }
-        await self._session.commit()
         return result
 
     async def _pairs_by_left(

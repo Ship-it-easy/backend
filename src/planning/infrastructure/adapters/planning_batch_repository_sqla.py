@@ -5,7 +5,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import and_, bindparam, exists, func, insert, select, update
+from sqlalchemy import and_, bindparam, exists, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1008,13 +1008,13 @@ class SqlaPlanningBatchRepository:
             .where(planning_batches.c.id == batch_id)
             .values(
                 status=(
-                    "FAILED"
-                    if validation_failed or not successful_days
-                    else "PARTIAL"
+                    "PARTIAL" if successful_days else "FAILED"
                 ),
                 completion_reason=(
-                    "SYSTEM_ERROR"
-                    if validation_failed or not successful_days
+                    "BATCH_VALIDATION_FAILED"
+                    if validation_failed and successful_days
+                    else "SYSTEM_ERROR"
+                    if not successful_days
                     else "DAY_RUN_FAILED"
                 ),
                 error_code=code,
@@ -1410,13 +1410,13 @@ class SqlaPlanningBatchRepository:
                         jobs.c.updated_at,
                         work_types.c.default_service_duration_min,
                         work_types.c.required_transport,
+                        work_types.c.project_id.label("work_type_project_id"),
                     )
-                    .join(work_types, jobs.c.work_type_id == work_types.c.id)
+                    .outerjoin(work_types, jobs.c.work_type_id == work_types.c.id)
                     .where(
                         jobs.c.project_id == project_id,
-                        work_types.c.project_id == project_id,
                         jobs.c.status == "NEW",
-                        jobs.c.sla_date <= maximum_end,
+                        or_(jobs.c.sla_date <= maximum_end, jobs.c.sla_date.is_(None)),
                         ~active_assignment,
                     )
                     .order_by(jobs.c.sla_date, jobs.c.created_at, jobs.c.id)

@@ -173,6 +173,7 @@ class PlanningInputNormalizer:
                             int(row["engineer_id"]), set()
                         )
                     ),
+                    project_id=source["project"]["id"],
                 )
             )
         return result
@@ -188,59 +189,130 @@ class PlanningInputNormalizer:
         invalid: list[UnassignedJob] = []
         for row in rows:
             job_id = int(row["jobs_id"] if "jobs_id" in row else row["id"])
-            duration = (
-                row["service_duration_min"] or row["default_service_duration_min"]
-            )
-            reason: ReasonCode | None = None
-            if not duration or duration <= 0:
-                reason = ReasonCode.MISSING_SERVICE_DURATION
-            start = row["time_window_start"]
-            end = row["time_window_end"]
-            if start is not None and end is not None and start > end:
-                reason = ReasonCode.INVALID_TIME_WINDOW
-            window_start_min = 0 if start is None else _time_to_start_minute(start)
-            window_end_min = 1439 if end is None else _time_to_end_minute(end)
-            if window_start_min > window_end_min:
-                reason = ReasonCode.INVALID_TIME_WINDOW
-            coordinate = await self._coordinate(
-                row["latitude"], row["longitude"], row["address"]
-            )
-            if coordinate is None and reason is None:
-                reason = ReasonCode.GEOCODING_FAILED
-            if reason is not None:
+            sla_date = row.get("sla_date")
+            if not isinstance(sla_date, date) or isinstance(sla_date, datetime):
                 invalid.append(
                     UnassignedJob(
                         job_id=job_id,
-                        drop_penalty=_sla_penalty(
-                            row["sla_date"], planning_date, config
-                        ),
-                        reason_code=reason,
+                        drop_penalty=0,
+                        reason_code=ReasonCode.INVALID_INPUT,
                     )
                 )
                 continue
-            work_type_id = int(row["work_type_id"])
-            jobs.append(
-                Job(
-                    id=job_id,
-                    sla_date=row["sla_date"],
-                    duration_min=int(duration),
-                    coordinate=coordinate,
-                    window_start_min=window_start_min,
-                    window_end_min=window_end_min,
-                    required_transport=(
-                        TransportType(row["required_transport"])
-                        if row["required_transport"]
-                        else None
-                    ),
-                    required_qualifications=frozenset(
-                        source["required_qualifications"].get(work_type_id, set())
-                    ),
-                    required_equipment=frozenset(
-                        source["required_equipment"].get(work_type_id, set())
-                    ),
-                    created_at=row["created_at"],
+            try:
+                if (
+                    row.get("work_type_id") is None
+                    or row.get("work_type_project_id")
+                    != source["project"]["id"]
+                ):
+                    invalid.append(
+                        UnassignedJob(
+                            job_id=job_id,
+                            drop_penalty=_sla_penalty(
+                                sla_date, planning_date, config
+                            ),
+                            reason_code=ReasonCode.INVALID_INPUT,
+                        )
+                    )
+                    continue
+                duration = (
+                    row["service_duration_min"]
+                    or row["default_service_duration_min"]
                 )
-            )
+                reason: ReasonCode | None = None
+                if not duration or duration <= 0:
+                    reason = ReasonCode.MISSING_SERVICE_DURATION
+                start = row["time_window_start"]
+                end = row["time_window_end"]
+                if start is not None and end is not None and start > end:
+                    reason = ReasonCode.INVALID_TIME_WINDOW
+                window_start_min = (
+                    0 if start is None else _time_to_start_minute(start)
+                )
+                window_end_min = (
+                    1439 if end is None else _time_to_end_minute(end)
+                )
+                if window_start_min > window_end_min:
+                    reason = ReasonCode.INVALID_TIME_WINDOW
+                latitude = row["latitude"]
+                longitude = row["longitude"]
+                if (latitude is None) != (longitude is None):
+                    invalid.append(
+                        UnassignedJob(
+                            job_id=job_id,
+                            drop_penalty=_sla_penalty(
+                                sla_date, planning_date, config
+                            ),
+                            reason_code=ReasonCode.INVALID_INPUT,
+                        )
+                    )
+                    continue
+                try:
+                    coordinate = await self._coordinate(
+                        latitude, longitude, row["address"]
+                    )
+                except Exception as geocoding_error:
+                    # Geocoder or coordinate conversion failed
+                    invalid.append(
+                        UnassignedJob(
+                            job_id=job_id,
+                            drop_penalty=_sla_penalty(
+                                sla_date, planning_date, config
+                            ),
+                            reason_code=ReasonCode.GEOCODING_FAILED,
+                            diagnostic_flags={"error": str(geocoding_error)},
+                        )
+                    )
+                    continue
+                if coordinate is None and reason is None:
+                    reason = ReasonCode.GEOCODING_FAILED
+                if reason is not None:
+                    invalid.append(
+                        UnassignedJob(
+                            job_id=job_id,
+                            drop_penalty=_sla_penalty(
+                                sla_date, planning_date, config
+                            ),
+                            reason_code=reason,
+                        )
+                    )
+                    continue
+                work_type_id = int(row["work_type_id"])
+                jobs.append(
+                    Job(
+                        id=job_id,
+                        sla_date=sla_date,
+                        duration_min=int(duration),
+                        coordinate=coordinate,
+                        window_start_min=window_start_min,
+                        window_end_min=window_end_min,
+                        required_transport=(
+                            TransportType(row["required_transport"])
+                            if row["required_transport"]
+                            else None
+                        ),
+                        required_qualifications=frozenset(
+                            source["required_qualifications"].get(
+                                work_type_id, set()
+                            )
+                        ),
+                        required_equipment=frozenset(
+                            source["required_equipment"].get(work_type_id, set())
+                        ),
+                        created_at=row["created_at"],
+                        project_id=source["project"]["id"],
+                    )
+                )
+            except (KeyError, TypeError, ValueError, AttributeError, IndexError) as error:
+                # Catch data access and conversion errors to prevent one bad job from failing the entire run
+                invalid.append(
+                    UnassignedJob(
+                        job_id=job_id,
+                        drop_penalty=_sla_penalty(sla_date, planning_date, config),
+                        reason_code=ReasonCode.INVALID_INPUT,
+                        diagnostic_flags={"error": str(error)},
+                    )
+                )
         return jobs, invalid
 
     async def _coordinate(

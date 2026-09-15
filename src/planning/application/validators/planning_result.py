@@ -8,8 +8,24 @@ from planning.domain.enums import TransportType
 
 
 class PlanningValidator:
-    def validate(self, data: PlanningInput, result: PlanningResult) -> list[str]:
+    def validate(
+        self,
+        data: PlanningInput,
+        result: PlanningResult,
+        project_id: int,
+    ) -> list[str]:
         errors: list[str] = []
+        expected_project_id = project_id
+        if data.project_id != expected_project_id:
+            errors.append("planning input belongs to another project")
+        if data.snapshot.get("project_id") != expected_project_id:
+            errors.append("planning snapshot belongs to another project")
+        for job in data.jobs:
+            if job.project_id != expected_project_id:
+                errors.append(f"job {job.id} belongs to another project")
+        for engineer in data.engineers:
+            if engineer.project_id != expected_project_id:
+                errors.append(f"engineer {engineer.id} belongs to another project")
         jobs = {job.id: job for job in data.jobs}
         engineers = {engineer.id: engineer for engineer in data.engineers}
         assigned = [item.job_id for route in result.routes for item in route.jobs]
@@ -66,6 +82,7 @@ class PlanningValidator:
                 finish_min = local_finish.hour * 60 + local_finish.minute
                 if (
                     start_min < engineer.shift_start_min
+                    or finish_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
                     errors.append(f"job {item.job_id} is outside engineer shift")
@@ -116,6 +133,8 @@ class PlanningValidator:
                 )
             equipment_usage.update(used_equipment)
         for equipment_id, used in equipment_usage.items():
+            if equipment_id not in data.equipment_units:
+                errors.append(f"equipment {equipment_id} belongs to another project")
             if used > data.equipment_units.get(equipment_id, 0):
                 errors.append(f"equipment {equipment_id} capacity exceeded")
         expected_drop_cost = sum(item.drop_penalty for item in result.unassigned)

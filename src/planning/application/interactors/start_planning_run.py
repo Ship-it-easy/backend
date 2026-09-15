@@ -65,7 +65,9 @@ class StartPlanningRunInteractor:
             await self._repository.mark_running(run_id, data)
             solver = self._solver_factory.create(data.config.travel_provider)
             result = await solver.solve(data)
-            result.validation_errors = self._validator.validate(data, result)
+            result.validation_errors = self._validator.validate(
+                data, result, project_id
+            )
             await self._repository.save_result(run_id, data, result)
             if result.validation_errors:
                 raise PlanningUnavailable(
