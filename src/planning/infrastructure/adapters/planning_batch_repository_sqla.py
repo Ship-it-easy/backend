@@ -38,8 +38,11 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     planning_batches,
     planning_config,
     planning_route_jobs,
+    planning_routes,
     planning_runs,
+    planning_unassigned_jobs,
     projects,
+    qualifications,
     work_type_required_equipment,
     work_type_required_qualifications,
     work_types,
@@ -61,6 +64,14 @@ class SqlaPlanningBatchRepository:
         initiated_by_user_id: Any,
         idempotency_key: str,
     ) -> tuple[dict[str, Any], bool]:
+        # Authentication/access checks use this request-scoped session first.
+        # Close that read transaction and make the complete batch snapshot in a
+        # fresh REPEATABLE READ transaction so all source queries see one DB view.
+        await self._session.commit()
+        await self._session.connection(
+            execution_options={"isolation_level": "REPEATABLE READ"}
+        )
+        snapshot_started_at = datetime.now(timezone.utc)
         project = (
             (
                 await self._session.execute(
@@ -199,6 +210,7 @@ class SqlaPlanningBatchRepository:
                             input_hash=input_hash,
                             configuration_version=str(config.version),
                             input_snapshot=snapshot,
+                            started_at=snapshot_started_at,
                         )
                         .returning(*planning_batches.c)
                     )
@@ -584,6 +596,7 @@ class SqlaPlanningBatchRepository:
                     planning_batches.c.project_id,
                     planning_batches.c.effective_start_date,
                     planning_batches.c.maximum_horizon_end,
+                    planning_batches.c.input_snapshot,
                 ).where(planning_batches.c.id == batch_id)
             )
         ).one()
@@ -594,6 +607,9 @@ class SqlaPlanningBatchRepository:
                         planning_batch_jobs.c.job_id,
                         planning_batch_jobs.c.processing_status,
                         planning_batch_jobs.c.assigned_date,
+                        planning_batch_jobs.c.priority_group,
+                        planning_batch_jobs.c.future_opportunity_count,
+                        planning_batch_jobs.c.cascade_drop_penalty,
                     ).where(planning_batch_jobs.c.planning_batch_id == batch_id)
                 )
             )
@@ -605,6 +621,7 @@ class SqlaPlanningBatchRepository:
                 await self._session.execute(
                     select(
                         planning_route_jobs.c.job_id,
+                        planning_route_jobs.c.planning_run_id,
                         planning_runs.c.planning_date,
                         planning_runs.c.status,
                         planning_runs.c.validation_errors,
@@ -641,6 +658,10 @@ class SqlaPlanningBatchRepository:
                             planning_runs.c.planning_date,
                             planning_runs.c.status,
                             planning_runs.c.validation_errors,
+                            planning_runs.c.input_jobs_count,
+                            planning_runs.c.eligible_jobs_count,
+                            planning_runs.c.assigned_jobs_count,
+                            planning_runs.c.unassigned_jobs_count,
                         ).where(planning_runs.c.planning_batch_id == batch_id)
                     )
                 )
@@ -649,6 +670,13 @@ class SqlaPlanningBatchRepository:
             )
         }
         errors: list[str] = []
+        snapshot = batch.input_snapshot or {}
+        if int((snapshot.get("project") or {}).get("id", -1)) != batch.project_id:
+            errors.append("snapshot belongs to another project")
+        snapshot_job_ids = {int(item["id"]) for item in snapshot.get("jobs", [])}
+        state_job_ids = {int(item.job_id) for item in job_states}
+        if snapshot_job_ids != state_job_ids:
+            errors.append("batch job states do not match the immutable snapshot")
         assignment_counts = Counter(int(item.job_id) for item in route_assignments)
         duplicate_ids = sorted(
             job_id for job_id, count in assignment_counts.items() if count > 1
@@ -678,6 +706,49 @@ class SqlaPlanningBatchRepository:
                 errors.append(f"job {item.job_id} draft assignment is missing")
             if item.processing_status != "DRAFT_ASSIGNED" and route_count:
                 errors.append(f"job {item.job_id} has conflicting terminal states")
+            if item.future_opportunity_count is not None and (
+                item.future_opportunity_count < 0
+            ):
+                errors.append(f"job {item.job_id} has an invalid opportunity count")
+            if item.cascade_drop_penalty is not None and (
+                item.cascade_drop_penalty < 0
+            ):
+                errors.append(f"job {item.job_id} has an invalid cascade penalty")
+        unassigned_counts = Counter(
+            int(item.planning_run_id)
+            for item in (
+                (
+                    await self._session.execute(
+                        select(planning_unassigned_jobs.c.planning_run_id)
+                        .join(
+                            planning_runs,
+                            planning_runs.c.id
+                            == planning_unassigned_jobs.c.planning_run_id,
+                        )
+                        .where(planning_runs.c.planning_batch_id == batch_id)
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        )
+        route_counts = Counter(
+            int(item.planning_run_id) for item in route_assignments
+        )
+        ordinary_days = [
+            day for day in day_states if day.status != "PINNED_PUBLISHED"
+        ]
+        ordinary_dates = {day.planning_date for day in ordinary_days}
+        if ordinary_dates:
+            last_opened_date = max(ordinary_dates)
+            expected_dates = {
+                batch.effective_start_date + timedelta(days=offset)
+                for offset in range(
+                    (last_opened_date - batch.effective_start_date).days + 1
+                )
+            }
+            if ordinary_dates != expected_dates:
+                errors.append("opened planning days are not contiguous")
         for day in day_states:
             if day.status == "PINNED_PUBLISHED":
                 continue
@@ -702,6 +773,35 @@ class SqlaPlanningBatchRepository:
                     or run.validation_errors
                 ):
                     errors.append(f"day {day.planning_date} has no valid daily run")
+                    continue
+                run_id = int(day.planning_run_id)
+                if route_counts[run_id] != day.assigned_count:
+                    errors.append(f"day {day.planning_date} assigned counter disagrees")
+                if unassigned_counts[run_id] != day.unassigned_count:
+                    errors.append(
+                        f"day {day.planning_date} unassigned counter disagrees"
+                    )
+                if day.assigned_count + day.unassigned_count != day.input_jobs_count:
+                    errors.append(f"day {day.planning_date} input counter disagrees")
+                if day.solver_candidates_count > day.input_jobs_count:
+                    errors.append(
+                        f"day {day.planning_date} solver counter exceeds input"
+                    )
+                if day.dropped_count > day.solver_candidates_count:
+                    errors.append(f"day {day.planning_date} dropped counter disagrees")
+                if day.deferred_count != day.unassigned_count:
+                    errors.append(f"day {day.planning_date} deferred counter disagrees")
+                if (
+                    run.input_jobs_count != day.input_jobs_count
+                    or run.eligible_jobs_count != day.solver_candidates_count
+                    or run.assigned_jobs_count != day.assigned_count
+                    or run.unassigned_jobs_count != day.unassigned_count
+                ):
+                    errors.append(f"day {day.planning_date} run counters disagree")
+                if not day.input_job_ids_hash:
+                    errors.append(
+                        f"day {day.planning_date} has no input membership hash"
+                    )
         if status == "SUCCESS" and any(
             item.processing_status != "DRAFT_ASSIGNED" for item in job_states
         ):
@@ -719,6 +819,57 @@ class SqlaPlanningBatchRepository:
         )
         if foreign_jobs is not None:
             errors.append("batch contains a job from another project")
+        foreign_engineer = await self._session.scalar(
+            select(planning_routes.c.engineer_id)
+            .join(
+                planning_runs,
+                planning_runs.c.id == planning_routes.c.planning_run_id,
+            )
+            .join(engineers, engineers.c.id == planning_routes.c.engineer_id)
+            .where(
+                planning_runs.c.planning_batch_id == batch_id,
+                engineers.c.project_id != batch.project_id,
+            )
+            .limit(1)
+        )
+        if foreign_engineer is not None:
+            errors.append("batch contains an engineer from another project")
+        work_type_ids = {
+            int(item["work_type_id"])
+            for item in snapshot.get("jobs", [])
+            if item.get("work_type_id") is not None
+        }
+        qualification_ids = {
+            int(value)
+            for values in snapshot.get("required_qualifications", {}).values()
+            for value in values
+        } | {
+            int(value)
+            for values in snapshot.get("engineer_qualifications", {}).values()
+            for value in values
+        }
+        equipment_ids = {
+            int(value)
+            for values in snapshot.get("required_equipment", {}).values()
+            for value in values
+        } | {int(value) for value in snapshot.get("equipment_units", {})}
+        for catalog, catalog_ids, label in (
+            (work_types, work_type_ids, "work type"),
+            (qualifications, qualification_ids, "qualification"),
+            (equipment_types, equipment_ids, "equipment type"),
+        ):
+            if not catalog_ids:
+                continue
+            foreign_catalog_id = await self._session.scalar(
+                select(catalog.c.id)
+                .where(
+                    catalog.c.id.in_(catalog_ids),
+                    catalog.c.project_id != batch.project_id,
+                )
+                .limit(1)
+            )
+            if foreign_catalog_id is not None:
+                errors.append(f"snapshot contains a foreign {label}")
         return errors
 
     async def finish_batch(
@@ -745,7 +896,72 @@ class SqlaPlanningBatchRepository:
                     primary_reason_code="NOT_ASSIGNED_WITHIN_HORIZON",
                 )
             )
-        if status in {"SUCCESS", "PARTIAL"}:
+        day_summary = (
+            await self._session.execute(
+                select(
+                    func.count(planning_batch_days.c.id).filter(
+                        planning_batch_days.c.status != "PINNED_PUBLISHED"
+                    ),
+                    func.count(planning_batch_days.c.id).filter(
+                        planning_batch_days.c.status == "FAILED"
+                    ),
+                    func.max(planning_batch_days.c.block_number).filter(
+                        planning_batch_days.c.status != "PINNED_PUBLISHED"
+                    ),
+                ).where(planning_batch_days.c.planning_batch_id == batch_id)
+            )
+        ).one()
+        job_rows = (
+            await self._session.execute(
+                select(
+                    planning_batch_jobs.c.processing_status,
+                    planning_batch_jobs.c.snapshot_sla_date,
+                    planning_batches.c.effective_start_date,
+                )
+                .join(
+                    planning_batches,
+                    planning_batches.c.id == planning_batch_jobs.c.planning_batch_id,
+                )
+                .where(planning_batch_jobs.c.planning_batch_id == batch_id)
+            )
+        ).all()
+        state_counts = Counter(item.processing_status for item in job_rows)
+        metrics = {
+            **metrics,
+            "eligible_total": len(job_rows),
+            "assigned": state_counts["DRAFT_ASSIGNED"],
+            "permanent_issues": state_counts["PERMANENT_ISSUE"],
+            "remaining": sum(
+                count
+                for state, count in state_counts.items()
+                if state not in {"DRAFT_ASSIGNED", "PERMANENT_ISSUE"}
+            ),
+            "unassigned_within_horizon": state_counts[
+                "UNASSIGNED_WITHIN_HORIZON"
+            ],
+            "opened_days": int(day_summary[0] or 0),
+            "failed_days": int(day_summary[1] or 0),
+            "number_of_blocks": int(day_summary[2] or 0),
+            "overdue": sum(
+                item.snapshot_sla_date < item.effective_start_date
+                for item in job_rows
+            ),
+        }
+        successful_day_exists = (
+            await self._session.scalar(
+                select(planning_batch_days.c.id)
+                .where(
+                    planning_batch_days.c.planning_batch_id == batch_id,
+                    planning_batch_days.c.status == "SUCCESS",
+                )
+                .limit(1)
+            )
+            is not None
+        )
+        make_current = status in {"SUCCESS", "PARTIAL"} and not (
+            completion_reason == "STOPPED_BY_USER" and not successful_day_exists
+        )
+        if make_current:
             project_id = await self._session.scalar(
                 select(planning_batches.c.project_id).where(
                     planning_batches.c.id == batch_id
@@ -766,7 +982,7 @@ class SqlaPlanningBatchRepository:
             .values(
                 status=status,
                 completion_reason=completion_reason,
-                current_flag=status in {"SUCCESS", "PARTIAL"},
+                current_flag=make_current,
                 metrics=metrics,
                 finished_at=datetime.now(timezone.utc),
             )
@@ -874,6 +1090,20 @@ class SqlaPlanningBatchRepository:
                 .all()
             )
         }
+        equipment_names = {
+            int(row.id): str(row.name)
+            for row in (
+                (
+                    await self._session.execute(
+                        select(equipment_types.c.id, equipment_types.c.name).where(
+                            equipment_types.c.project_id == project_id
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        }
         job_addresses = {int(row.job_id): str(row.address) for row in job_rows}
         job_coordinates = {
             int(row.job_id): {
@@ -908,6 +1138,11 @@ class SqlaPlanningBatchRepository:
                         and engineer.start_longitude is not None
                         else None
                     )
+                    route["equipment"] = [
+                        equipment_names[equipment_id]
+                        for equipment_id in route["equipment_type_ids"]
+                        if equipment_id in equipment_names
+                    ]
                     for job in route["jobs"]:
                         job["address"] = job_addresses.get(
                             int(job["job_id"]), "Адрес не указан"
@@ -928,6 +1163,11 @@ class SqlaPlanningBatchRepository:
         processed = sum(
             1 for item in days if item.status in {"SUCCESS", "SKIPPED_NO_SHIFT"}
         )
+        ordinary_days = [item for item in days if item.status != "PINNED_PUBLISHED"]
+        active_day = next(
+            (item for item in ordinary_days if item.status == "RUNNING"),
+            next((item for item in ordinary_days if item.status == "PENDING"), None),
+        )
         payload = dict(batch)
         payload.pop("input_snapshot", None)
         payload.update(
@@ -935,9 +1175,21 @@ class SqlaPlanningBatchRepository:
             backlog=backlog,
             progress={
                 "processed_days": processed,
-                "opened_days": len(days),
+                "opened_days": len(ordinary_days),
+                "failed_days": sum(1 for item in days if item.status == "FAILED"),
                 "assigned": assigned,
-                "remaining": len(backlog),
+                "remaining": sum(
+                    1
+                    for item in job_rows
+                    if item.processing_status
+                    not in {"DRAFT_ASSIGNED", "PERMANENT_ISSUE"}
+                ),
+                "current_planning_date": (
+                    active_day.planning_date if active_day is not None else None
+                ),
+                "current_block": (
+                    active_day.block_number if active_day is not None else None
+                ),
             },
         )
         return _jsonable(payload)

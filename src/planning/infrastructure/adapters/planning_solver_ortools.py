@@ -159,6 +159,7 @@ class OrToolsPlanningSolver:
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
         parameters.time_limit.FromSeconds(data.config.solver_time_limit_sec)
+        routing.solver().ReSeed(data.config.solver_seed)
         solve_started = monotonic_time.perf_counter()
         assignment = routing.SolveWithParameters(parameters)
         solver_time_ms = int((monotonic_time.perf_counter() - solve_started) * 1000)

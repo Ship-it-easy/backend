@@ -423,9 +423,44 @@ class MultiDayPlanningService:
                 result.validation_errors = self._daily_validator.validate(data, result)
                 if result.validation_errors:
                     raise RuntimeError("; ".join(result.validation_errors))
+                day_assigned = {
+                    item.job_id for route in result.routes for item in route.jobs
+                }
+                prospective_dates = {
+                    **assignment_dates,
+                    **{job_id: current for job_id in day_assigned},
+                }
+                batch_validation_errors = self._batch_validator.validate_day(
+                    data,
+                    result,
+                    remaining,
+                    assigned_sequence,
+                    effective_start,
+                    maximum_end,
+                    decisions,
+                ) + self._batch_validator.validate(
+                    [*assigned_sequence, *sorted(day_assigned)],
+                    effective_start,
+                    maximum_end,
+                    prospective_dates,
+                )
+                if batch_validation_errors:
+                    raise _BatchValidationError("; ".join(batch_validation_errors))
                 assigned = await self._repository.save_day_result(
                     batch_id, run_id, data, result, decisions
                 )
+            except _BatchValidationError as error:
+                await self._repository.fail_day(
+                    batch_id,
+                    current,
+                    run_id,
+                    "BATCH_VALIDATION_FAILED",
+                    str(error),
+                )
+                await self._repository.fail_batch(
+                    batch_id, "BATCH_VALIDATION_FAILED", str(error)
+                )
+                return
             except Exception as error:
                 await self._repository.fail_day(
                     batch_id,
@@ -453,14 +488,6 @@ class MultiDayPlanningService:
             remaining.difference_update(assigned)
             processed += 1
             successful += 1
-            validation_errors = self._batch_validator.validate(
-                assigned_sequence, effective_start, maximum_end, assignment_dates
-            )
-            if validation_errors:
-                await self._repository.fail_batch(
-                    batch_id, "BATCH_VALIDATION_FAILED", "; ".join(validation_errors)
-                )
-                return
             current += timedelta(days=1)
 
         if not remaining:
@@ -545,6 +572,7 @@ def _order_for_daily_limit(
         jobs,
         key=lambda item: (
             _group_order(decisions[item.id]["priority_group"]),
+            decisions[item.id].get("future_opportunity_count", 0),
             -item.drop_penalty,
             item.sla_date,
             item.created_at,
@@ -581,7 +609,12 @@ def _enforce_sla_hierarchy(
             for item in jobs
             if decisions[item.id]["priority_group"] == group
         ]
-        floor = lower_priority_total + 1
+        # The common cardinality component dominates every possible secondary
+        # penalty difference in this group and all less urgent groups. Thus the
+        # solver first minimizes the number of dropped jobs in the SLA group;
+        # only then do daily/future penalties break ties inside that group.
+        secondary_total = sum(max(0, item.drop_penalty) for item in group_jobs)
+        floor = lower_priority_total + secondary_total + 1
         for item in group_jobs:
             penalty = floor + item.drop_penalty
             if penalty >= 2**62:
@@ -605,6 +638,10 @@ def _group_order(group: str) -> int:
         "DUE_LATER_IN_CURRENT_BLOCK": 4,
         "RESERVE": 5,
     }[group]
+
+
+class _BatchValidationError(RuntimeError):
+    pass
 
 
 def _daily_source(
