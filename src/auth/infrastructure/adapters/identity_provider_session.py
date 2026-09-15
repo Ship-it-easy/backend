@@ -67,10 +67,10 @@ class IdentityProviderSession(IdentityProvider):
         return True
 
     async def get_role(self) -> UserRoleEnum:
-        user = await self.get_user()
+        user = await self.get_current_user()
         return user.role
 
-    async def get_user(self) -> User:
+    async def get_current_user(self) -> User:
         session_id: SessionId = self._request_manager.get_session_id_from_request()
 
         if session_id is None:

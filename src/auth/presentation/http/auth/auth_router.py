@@ -7,7 +7,6 @@ from auth.application.interactors.log_out import LogOutInteractor
 from auth.application.interfaces.identity_provider import IdentityProvider
 from auth.presentation.http.auth.log_in import log_in_router
 from auth.presentation.http.auth.log_out import log_out_router
-from auth.presentation.http.auth.sign_up import sign_up_router
 
 auth_router = APIRouter(
     prefix="/auth",
@@ -25,8 +24,12 @@ class ApiLoginRequest(BaseModel):
 
 @api_auth_router.post("/login", status_code=status.HTTP_200_OK)
 @inject
-async def api_login(body: ApiLoginRequest, interactor: FromDishka[LogInInteractor]) -> None:
-    return await interactor(LogInRequest(username=body.login, raw_password=body.password))
+async def api_login(
+    body: ApiLoginRequest, interactor: FromDishka[LogInInteractor]
+) -> None:
+    return await interactor(
+        LogInRequest(username=body.login, raw_password=body.password)
+    )
 
 
 @api_auth_router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -34,7 +37,8 @@ async def api_login(body: ApiLoginRequest, interactor: FromDishka[LogInInteracto
 async def api_logout(interactor: FromDishka[LogOutInteractor]) -> None:
     return await interactor()
 
-auth_sub_routers = (sign_up_router, log_in_router, log_out_router)
+
+auth_sub_routers = (log_in_router, log_out_router)
 
 for router in auth_sub_routers:
     auth_router.include_router(router)
@@ -44,7 +48,7 @@ for router in auth_sub_routers:
 @api_auth_router.get("/me")
 @inject
 async def me(identity_provider: FromDishka[IdentityProvider]) -> dict:
-    user = await identity_provider.get_user()
+    user = await identity_provider.get_current_user()
     return {
         "id": str(user.id),
         "login": str(user.username),

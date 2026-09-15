@@ -11,7 +11,9 @@ from auth.infrastructure.persistence_sqla.mappings.user import (
     User as _User,  # noqa: F401
 )
 from auth.infrastructure.persistence_sqla.orm_registry import mapping_registry
-from planning.infrastructure.persistence import tables as _planning_tables  # noqa: F401
+from planning.infrastructure.persistence_sqla.mappings import (  # noqa: F401
+    tables as _planning_tables,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

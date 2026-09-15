@@ -14,12 +14,17 @@ from auth.entrypoint.setup import (
 )
 from auth.infrastructure.persistence_sqla.mappings.map import map_tables
 from auth.presentation.http.base.root_router import root_router
+from planning.application.interfaces.planning_batch_repository import (
+    PlanningBatchExecutor,
+)
 
 
 def make_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # RabbitMQ удален, lifespan теперь пустой, но оставляем для совместимости с create_app
+        # Recover database-backed cascade work that was interrupted with a worker.
+        executor = await async_ioc_container.get(PlanningBatchExecutor)
+        await executor.recover()
         yield
 
     config = create_config()

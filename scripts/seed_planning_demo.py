@@ -9,7 +9,7 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from auth.entrypoint.config import PostgresConfig
-from planning.infrastructure.persistence.tables import (
+from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineer_qualifications,
     engineer_schedules,
     engineers,

@@ -2,11 +2,10 @@ from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
 from auth.presentation.http.auth.auth_router import api_auth_router, auth_router
-from auth.presentation.http.hello_world.hello_world_router import hello_world_router
-from planning.presentation.http.admin_router import admin_router
-from planning.presentation.http.engineer_router import engineer_router
-from planning.presentation.http.project_router import project_router
-from planning.presentation.http.router import planning_runs_router
+from planning.presentation.http.admin.router import admin_router
+from planning.presentation.http.engineer.router import engineer_router
+from planning.presentation.http.project.router import project_router
+from planning.presentation.http.root_router import planning_router
 
 root_router = APIRouter()
 
@@ -18,8 +17,7 @@ async def redirect_to_docs() -> RedirectResponse:
 
 root_sub_routers = (
     auth_router,
-    hello_world_router,
-    planning_runs_router,
+    planning_router,
     admin_router,
     project_router,
     engineer_router,

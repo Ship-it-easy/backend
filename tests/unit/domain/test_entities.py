@@ -1,15 +1,13 @@
 from datetime import datetime, timezone
 
-from tests.conftest import ADMIN_UUID, HASHED_PASSWORD, SESSION_ID_VALUE, USER_UUID
-
 from auth.domain.entities.session import SessionId, create_session
 from auth.domain.entities.user import (
-    PasswordHash,
     UserId,
     UserName,
     create_user,
 )
 from auth.domain.user_role import UserRoleEnum
+from tests.conftest import ADMIN_UUID, HASHED_PASSWORD, SESSION_ID_VALUE, USER_UUID
 
 
 def test_create_user():

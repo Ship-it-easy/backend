@@ -5,8 +5,10 @@ from sqlalchemy import (
     Column,
     Enum,
     ForeignKey,
+    Index,
     String,
     Table,
+    func,
 )
 
 from auth.domain.entities.user import User
@@ -25,6 +27,7 @@ users_table = Table(
     Column("project_id", BigInteger, ForeignKey("projects.id")),
     Column("engineer_id", BigInteger, ForeignKey("engineers.id"), unique=True),
 )
+Index("uq_users_username_ci", func.lower(users_table.c.username), unique=True)
 
 
 def map_users_table() -> None:

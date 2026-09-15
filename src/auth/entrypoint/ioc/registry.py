@@ -9,7 +9,7 @@ from auth.entrypoint.ioc.adapters import (
     SqlaProvider,
 )
 from auth.entrypoint.ioc.interactors import InteractorProvider
-from planning.entrypoint.provider import PlanningProvider
+from planning.entrypoint.ioc.registry import get_planning_providers
 
 
 def get_providers() -> Iterable[Provider]:
@@ -19,5 +19,5 @@ def get_providers() -> Iterable[Provider]:
         IdGeneratorsProvider(),
         AuthProvider(),
         ConfigProvider(),
-        PlanningProvider(),
+        *get_planning_providers(),
     )

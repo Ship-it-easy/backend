@@ -12,7 +12,6 @@ from auth.application.errors import (
     InvalidPassword,
     LogInError,
     LogOutError,
-    SignUpError,
 )
 from auth.domain.errors import AccessControlError, Error
 
@@ -41,9 +40,6 @@ def init_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(
         DoesNotExists,
         partial(validate, status=code.HTTP_404_NOT_FOUND),
-    )
-    app.add_exception_handler(
-        SignUpError, partial(validate, status=code.HTTP_409_CONFLICT)
     )
     app.add_exception_handler(
         LogInError, partial(validate, status=code.HTTP_409_CONFLICT)

@@ -1,4 +1,4 @@
-from planning.domain.models import (
+from planning.domain.entities import (
     Engineer,
     Job,
     PlanningInput,

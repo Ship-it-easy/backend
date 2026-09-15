@@ -47,7 +47,11 @@ class SqlaProvider(Provider):
         self, sessionmaker: async_sessionmaker[AsyncSession]
     ) -> AsyncIterable[AsyncSession]:
         async with sessionmaker() as session:
-            yield session
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
 
     transaction_manager = provide(
         TransactionManagerImpl, scope=Scope.REQUEST, provides=TransactionManager

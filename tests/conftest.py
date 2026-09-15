@@ -147,11 +147,7 @@ def mock_request_manager(session_id: SessionId) -> MagicMock:
     return mock
 
 
-@pytest.fixture
-def mock_sender_letter() -> AsyncMock:
-    mock = AsyncMock()
-    mock.send_letter.return_value = None
-    return mock
+
 
 
 @pytest.fixture
