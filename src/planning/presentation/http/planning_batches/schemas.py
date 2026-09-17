@@ -9,7 +9,8 @@ class StartPlanningBatchRequest(BaseModel):
 
 
 class StartPlanningBatchResponse(BaseModel):
-    planning_batch_id: int
+    planning_event_id: int
+    planning_batch_id: int | None = None
     status: str
     status_url: str
     reuse: bool = False

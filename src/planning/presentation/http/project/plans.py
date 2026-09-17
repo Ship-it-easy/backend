@@ -2,8 +2,15 @@ from datetime import date
 from typing import Any
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query, status
 
+from planning.application.interactors.dynamic_planning import (
+    GetCurrentProjectPlanInteractor,
+    GetPlanningEventInteractor,
+    GetProjectPlanVersionInteractor,
+    ListProjectPlanVersionsInteractor,
+    StartDynamicPlanningInteractor,
+)
 from planning.application.interactors.project.address_search import (
     SearchAddressesInteractor,
 )
@@ -20,6 +27,53 @@ from planning.presentation.http.project.schemas import (
 )
 
 router = APIRouter()
+
+
+@router.post("/planning/events/manual", status_code=status.HTTP_202_ACCEPTED)
+@inject
+async def dynamic_planning_start(
+    interactor: FromDishka[StartDynamicPlanningInteractor],
+    idempotency_key: str = Header(
+        alias="Idempotency-Key", min_length=1, max_length=255
+    ),
+) -> dict[str, Any]:
+    return await interactor(idempotency_key)
+
+
+@router.get("/planning/events/{event_id}")
+@inject
+async def dynamic_planning_event(
+    event_id: int,
+    interactor: FromDishka[GetPlanningEventInteractor],
+) -> dict[str, Any]:
+    return await interactor(event_id)
+
+
+@router.get("/planning/current")
+@inject
+async def current_project_plan(
+    interactor: FromDishka[GetCurrentProjectPlanInteractor],
+) -> dict[str, Any]:
+    return await interactor()
+
+
+@router.get("/planning/versions")
+@inject
+async def project_plan_versions(
+    interactor: FromDishka[ListProjectPlanVersionsInteractor],
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    return await interactor(limit=limit, offset=offset)
+
+
+@router.get("/planning/versions/{version_id}")
+@inject
+async def project_plan_version(
+    version_id: int,
+    interactor: FromDishka[GetProjectPlanVersionInteractor],
+) -> dict[str, Any]:
+    return await interactor(version_id)
 
 
 @router.get("/address-suggestions")

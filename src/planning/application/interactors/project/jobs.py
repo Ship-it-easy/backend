@@ -10,6 +10,9 @@ from planning.application.errors import (
 from planning.application.interactors.job_status.change_job_status import (
     ChangeJobStatusInteractor,
 )
+from planning.application.interfaces.planning_batch_repository import (
+    PlanningBatchExecutor,
+)
 from planning.application.interfaces.project_management_repositories import (
     ProjectJobsRepository,
 )
@@ -50,9 +53,23 @@ class ListProjectJobsInteractor(_ProjectJobsInteractor):
 
 
 class CreateProjectJobInteractor(_ProjectJobsInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: ProjectJobsRepository,
+        executor: PlanningBatchExecutor,
+        transaction_manager: TransactionManager,
+    ):
+        super().__init__(access, repository)
+        self._executor = executor
+        self._transaction_manager = transaction_manager
+
     async def __call__(self, values: dict[str, Any]) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
-        return await self._repository.create_job(project_id, values)
+        user, project_id = await self._access.dispatcher()
+        result = await self._repository.create_job(project_id, values, user.id)
+        await self._transaction_manager.commit()
+        self._executor.schedule_project(project_id)
+        return result
 
 
 class GetProjectJobInteractor(_ProjectJobsInteractor):

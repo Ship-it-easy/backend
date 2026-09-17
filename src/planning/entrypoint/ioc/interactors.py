@@ -3,10 +3,18 @@ from dishka import Provider, Scope, provide
 from planning.application.interactors.admin import projects as admin_projects
 from planning.application.interactors.admin import users as admin_users
 from planning.application.interactors.create_job import CreateJobInteractor
+from planning.application.interactors.dynamic_planning import (
+    GetCurrentProjectPlanInteractor,
+    GetPlanningEventInteractor,
+    GetProjectPlanVersionInteractor,
+    ListProjectPlanVersionsInteractor,
+    StartDynamicPlanningInteractor,
+)
 from planning.application.interactors.engineer import (
     assignments as engineer_assignments,
 )
 from planning.application.interactors.get_planning_run import GetPlanningRunInteractor
+from planning.application.interactors.job_import import ProjectJobImportInteractor
 from planning.application.interactors.job_status.change_job_status import (
     ChangeJobStatusInteractor,
 )
@@ -44,6 +52,12 @@ class PlanningInteractorProvider(Provider):
     validator = provide(PlanningValidator)
     batch_validator = provide(PlanningBatchValidator)
     create_job = provide(CreateJobInteractor)
+    project_job_import = provide(ProjectJobImportInteractor)
+    start_dynamic_planning = provide(StartDynamicPlanningInteractor)
+    get_planning_event = provide(GetPlanningEventInteractor)
+    get_current_project_plan = provide(GetCurrentProjectPlanInteractor)
+    list_project_plan_versions = provide(ListProjectPlanVersionsInteractor)
+    get_project_plan_version = provide(GetProjectPlanVersionInteractor)
     list_jobs = provide(ListJobsInteractor)
     start_planning_run = provide(StartPlanningRunInteractor)
     get_planning_run = provide(GetPlanningRunInteractor)
@@ -72,6 +86,7 @@ class PlanningInteractorProvider(Provider):
     unblock_user = provide(admin_users.UnblockUserInteractor)
 
     list_assignments = provide(engineer_assignments.ListAssignmentsInteractor)
+    get_route_state = provide(engineer_assignments.GetRouteStateInteractor)
     get_assignment = provide(engineer_assignments.GetAssignmentInteractor)
     start_assignment = provide(engineer_assignments.StartAssignmentInteractor)
     complete_assignment = provide(engineer_assignments.CompleteAssignmentInteractor)

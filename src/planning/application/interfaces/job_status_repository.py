@@ -13,6 +13,7 @@ class JobStatusContext:
     another_job_in_progress: bool
     previous_job_unfinished: bool
     later_job_started: bool
+    project_assignment_id: int | None = None
 
 
 class JobStatusRepository(Protocol):

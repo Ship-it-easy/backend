@@ -19,6 +19,8 @@ class Job:
     required_equipment: frozenset[int]
     created_at: datetime
     drop_penalty: int = 0
+    allowed_engineer_ids: frozenset[int] | None = None
+    mandatory: bool = False
 
 
 @dataclass

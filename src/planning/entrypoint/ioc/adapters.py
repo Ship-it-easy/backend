@@ -7,6 +7,9 @@ from planning.application.interfaces.admin_management_repositories import (
     AdminUserRepository,
 )
 from planning.application.interfaces.assignment_repository import AssignmentRepository
+from planning.application.interfaces.dynamic_planning_repository import (
+    DynamicPlanningRepository,
+)
 from planning.application.interfaces.geocoder import Geocoder
 from planning.application.interfaces.job_status_repository import JobStatusRepository
 from planning.application.interfaces.jobs_repository import JobsRepository
@@ -40,6 +43,9 @@ from planning.infrastructure.adapters.admin_management_repositories_sqla import 
 )
 from planning.infrastructure.adapters.assignment_repository_sqla import (
     SqlaAssignmentRepository,
+)
+from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
+    SqlaDynamicPlanningRepository,
 )
 from planning.infrastructure.adapters.geocoder_nominatim import NominatimGeocoder
 from planning.infrastructure.adapters.job_status_repository_sqla import (
@@ -94,6 +100,10 @@ class PlanningAdaptersProvider(Provider):
         return config.planning_service_config
 
     geocoder = provide(NominatimGeocoder, provides=Geocoder)
+    dynamic_planning_repository = provide(
+        SqlaDynamicPlanningRepository,
+        provides=DynamicPlanningRepository,
+    )
     project_access = provide(ProjectAccess)
     transaction_manager = provide(
         SqlAlchemyTransactionManager,

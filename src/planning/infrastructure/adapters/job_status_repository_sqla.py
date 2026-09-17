@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,8 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     job_status_history,
     jobs,
     plan_versions,
+    project_plan_assignments,
+    project_plan_versions,
 )
 
 
@@ -33,21 +36,29 @@ class SqlaJobStatusRepository(JobStatusRepository):
     ) -> JobStatusContext:
         assignment = await self._current_assignment(job_id)
         if assignment is not None:
-            daily_plan_id = await self._session.scalar(
-                select(plan_versions.c.daily_plan_id).where(
-                    plan_versions.c.id == assignment.plan_version_id
+            if assignment.dynamic:
+                await self._session.scalar(
+                    select(project_plan_versions.c.id)
+                    .where(project_plan_versions.c.id == assignment.plan_version_id)
+                    .with_for_update()
                 )
-            )
-            await self._session.scalar(
-                select(daily_plans.c.id)
-                .where(daily_plans.c.id == daily_plan_id)
-                .with_for_update()
-            )
+            else:
+                daily_plan_id = await self._session.scalar(
+                    select(plan_versions.c.daily_plan_id).where(
+                        plan_versions.c.id == assignment.plan_version_id
+                    )
+                )
+                await self._session.scalar(
+                    select(daily_plans.c.id)
+                    .where(daily_plans.c.id == daily_plan_id)
+                    .with_for_update()
+                )
             assignment = await self._current_assignment(job_id)
             if assignment is not None:
+                table = project_plan_assignments if assignment.dynamic else assignments
                 await self._session.scalar(
-                    select(assignments.c.id)
-                    .where(assignments.c.id == assignment.id)
+                    select(table.c.id)
+                    .where(table.c.id == assignment.id)
                     .with_for_update()
                 )
 
@@ -80,13 +91,23 @@ class SqlaJobStatusRepository(JobStatusRepository):
                 .where(engineers.c.id == assignment.engineer_id)
                 .with_for_update()
             )
+            assignment_table = (
+                project_plan_assignments if assignment.dynamic else assignments
+            )
             another_job_in_progress = (
                 await self._session.scalar(
                     select(jobs.c.id)
-                    .join(assignments, assignments.c.job_id == jobs.c.id)
+                    .join(assignment_table, assignment_table.c.job_id == jobs.c.id)
                     .where(
-                        assignments.c.engineer_id == assignment.engineer_id,
-                        assignments.c.active.is_(True),
+                        assignment_table.c.engineer_id == assignment.engineer_id,
+                        *(
+                            [
+                                assignment_table.c.plan_version_id
+                                == assignment.plan_version_id
+                            ]
+                            if assignment.dynamic
+                            else [assignment_table.c.active.is_(True)]
+                        ),
                         jobs.c.status == "IN_PROGRESS",
                         jobs.c.id != job_id,
                     )
@@ -97,12 +118,17 @@ class SqlaJobStatusRepository(JobStatusRepository):
             previous_job_unfinished = (
                 await self._session.scalar(
                     select(jobs.c.id)
-                    .join(assignments, assignments.c.job_id == jobs.c.id)
+                    .join(assignment_table, assignment_table.c.job_id == jobs.c.id)
                     .where(
-                        assignments.c.plan_version_id == assignment.plan_version_id,
-                        assignments.c.engineer_id == assignment.engineer_id,
-                        assignments.c.active.is_(True),
-                        assignments.c.sequence < assignment.sequence,
+                        assignment_table.c.plan_version_id
+                        == assignment.plan_version_id,
+                        assignment_table.c.engineer_id == assignment.engineer_id,
+                        assignment_table.c.sequence < assignment.sequence,
+                        *(
+                            []
+                            if assignment.dynamic
+                            else [assignment_table.c.active.is_(True)]
+                        ),
                         jobs.c.status.not_in(["COMPLETED", "CANCELLED"]),
                     )
                     .limit(1)
@@ -115,15 +141,23 @@ class SqlaJobStatusRepository(JobStatusRepository):
             and job.status in {"IN_PROGRESS", "COMPLETED"}
             and new_status in {"NEW", "IN_PROGRESS"}
         ):
+            assignment_table = (
+                project_plan_assignments if assignment.dynamic else assignments
+            )
             later_job_started = (
                 await self._session.scalar(
                     select(jobs.c.id)
-                    .join(assignments, assignments.c.job_id == jobs.c.id)
+                    .join(assignment_table, assignment_table.c.job_id == jobs.c.id)
                     .where(
-                        assignments.c.plan_version_id == assignment.plan_version_id,
-                        assignments.c.engineer_id == assignment.engineer_id,
-                        assignments.c.active.is_(True),
-                        assignments.c.sequence > assignment.sequence,
+                        assignment_table.c.plan_version_id
+                        == assignment.plan_version_id,
+                        assignment_table.c.engineer_id == assignment.engineer_id,
+                        assignment_table.c.sequence > assignment.sequence,
+                        *(
+                            []
+                            if assignment.dynamic
+                            else [assignment_table.c.active.is_(True)]
+                        ),
                         jobs.c.status.in_(["IN_PROGRESS", "COMPLETED"]),
                     )
                     .limit(1)
@@ -134,7 +168,16 @@ class SqlaJobStatusRepository(JobStatusRepository):
         return JobStatusContext(
             job_id=job_id,
             old_status=str(job.status),
-            assignment_id=int(assignment.id) if assignment is not None else None,
+            assignment_id=(
+                int(assignment.id)
+                if assignment is not None and not assignment.dynamic
+                else None
+            ),
+            project_assignment_id=(
+                int(assignment.id)
+                if assignment is not None and assignment.dynamic
+                else None
+            ),
             assignment_engineer_id=(
                 int(assignment.engineer_id) if assignment is not None else None
             ),
@@ -168,13 +211,13 @@ class SqlaJobStatusRepository(JobStatusRepository):
             insert(job_status_history).values(
                 job_id=context.job_id,
                 assignment_id=context.assignment_id,
+                project_plan_assignment_id=context.project_assignment_id,
                 old_status=context.old_status,
                 new_status=new_status,
                 actor_user_id=actor_user_id,
                 reason=reason,
             )
         )
-        await self._session.commit()
         return {
             "job_id": context.job_id,
             "old_status": context.old_status,
@@ -182,6 +225,29 @@ class SqlaJobStatusRepository(JobStatusRepository):
         }
 
     async def _current_assignment(self, job_id: int):
+        dynamic = (
+            (
+                await self._session.execute(
+                    select(
+                        project_plan_assignments,
+                        project_plan_versions.c.is_current,
+                    )
+                    .join(
+                        project_plan_versions,
+                        project_plan_versions.c.id
+                        == project_plan_assignments.c.plan_version_id,
+                    )
+                    .where(
+                        project_plan_assignments.c.job_id == job_id,
+                        project_plan_versions.c.is_current.is_(True),
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if dynamic is not None:
+            return SimpleNamespace(**dict(dynamic), dynamic=True)
         query = (
             select(assignments)
             .join(
@@ -197,4 +263,9 @@ class SqlaJobStatusRepository(JobStatusRepository):
                 assignments.c.active.is_(True),
             )
         )
-        return (await self._session.execute(query)).mappings().one_or_none()
+        legacy = (await self._session.execute(query)).mappings().one_or_none()
+        return (
+            SimpleNamespace(**dict(legacy), dynamic=False)
+            if legacy is not None
+            else None
+        )

@@ -64,6 +64,13 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
                 "critical >= high >= limited",
                 code="PLANNING_CONFIGURATION_INVALID",
             )
+        if int(next_values["event_coalesce_window_sec"]) > int(
+            next_values["event_coalesce_max_wait_sec"]
+        ):
+            raise ConflictError(
+                "Event coalescing window cannot exceed maximum wait",
+                code="PLANNING_CONFIGURATION_INVALID",
+            )
         await self._session.execute(
             update(planning_config)
             .where(planning_config.c.id == current.id)
@@ -80,7 +87,6 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
             .mappings()
             .one()
         )
-        await self._session.commit()
         return dict(row)
 
     async def get_readiness_state(

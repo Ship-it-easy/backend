@@ -63,6 +63,11 @@ class SqlaPlanningBatchRepository:
         requested_start_date: date,
         initiated_by_user_id: Any,
         idempotency_key: str,
+        *,
+        effective_start_override: date | None = None,
+        excluded_job_ids: set[int] | None = None,
+        include_published_jobs: bool = False,
+        total_time_limit_override: int | None = None,
     ) -> tuple[dict[str, Any], bool]:
         # Authentication/access checks use this request-scoped session first.
         # Close that read transaction and make the complete batch snapshot in a
@@ -138,6 +143,14 @@ class SqlaPlanningBatchRepository:
             or int(config.batch_maximum_horizon_days) != 30
             or not 1 <= int(config.batch_total_time_limit_sec) <= 900
             or not 1 <= int(config.solver_time_limit_sec) <= 600
+            or not 1 <= int(config.candidate_solver_time_limit_sec) <= 600
+            or not 1 <= int(config.single_cascade_time_limit_sec) <= 3600
+            or not 1 <= int(config.event_time_limit_sec) <= 3600
+            or not 0 <= int(config.event_coalesce_window_sec) <= 120
+            or not 1 <= int(config.event_coalesce_max_wait_sec) <= 600
+            or int(config.event_coalesce_window_sec)
+            > int(config.event_coalesce_max_wait_sec)
+            or not 1 <= int(config.max_parallel_candidate_models) <= 32
             or not 1 <= int(config.max_jobs_per_run) <= 1000
             or not 1 <= int(config.max_jobs_per_batch) <= 5000
             or int(config.travel_cost_per_minute) < 0
@@ -157,13 +170,31 @@ class SqlaPlanningBatchRepository:
                 "Multi-day planning configuration is invalid",
                 code="PLANNING_CONFIGURATION_INVALID",
             )
-        effective_start = await self._effective_start(project_id, requested_start_date)
-        maximum_end = effective_start + timedelta(
+        effective_start = effective_start_override or await self._effective_start(
+            project_id, requested_start_date
+        )
+        horizon_anchor = (
+            requested_start_date
+            if effective_start_override is not None
+            else effective_start
+        )
+        maximum_end = horizon_anchor + timedelta(
             days=int(config.batch_maximum_horizon_days) - 1
         )
         snapshot = await self._build_snapshot(
-            project_id, effective_start, maximum_end, project, config
+            project_id,
+            effective_start,
+            maximum_end,
+            project,
+            config,
+            excluded_job_ids=excluded_job_ids,
+            include_published_jobs=include_published_jobs,
         )
+        if total_time_limit_override is not None:
+            snapshot["config"]["batch_total_time_limit_sec"] = min(
+                int(snapshot["config"]["batch_total_time_limit_sec"]),
+                max(1, int(total_time_limit_override)),
+            )
         max_jobs = int(config.max_jobs_per_batch)
         if len(snapshot["jobs"]) > max_jobs:
             raise InvalidPlanningRequest(
@@ -412,8 +443,7 @@ class SqlaPlanningBatchRepository:
             await self._session.execute(
                 update(planning_batch_jobs)
                 .where(
-                    planning_batch_jobs.c.planning_batch_id
-                    == bindparam("batch_key"),
+                    planning_batch_jobs.c.planning_batch_id == bindparam("batch_key"),
                     planning_batch_jobs.c.job_id == bindparam("job_key"),
                 )
                 .values(
@@ -470,8 +500,7 @@ class SqlaPlanningBatchRepository:
             await self._session.execute(
                 update(planning_batch_jobs)
                 .where(
-                    planning_batch_jobs.c.planning_batch_id
-                    == bindparam("batch_key"),
+                    planning_batch_jobs.c.planning_batch_id == bindparam("batch_key"),
                     planning_batch_jobs.c.job_id == bindparam("job_key"),
                 )
                 .values(
@@ -562,8 +591,7 @@ class SqlaPlanningBatchRepository:
             await self._session.execute(
                 update(planning_batch_jobs)
                 .where(
-                    planning_batch_jobs.c.planning_batch_id
-                    == bindparam("batch_key"),
+                    planning_batch_jobs.c.planning_batch_id == bindparam("batch_key"),
                     planning_batch_jobs.c.job_id == bindparam("job_key"),
                 )
                 .values(
@@ -732,12 +760,8 @@ class SqlaPlanningBatchRepository:
                 .all()
             )
         )
-        route_counts = Counter(
-            int(item.planning_run_id) for item in route_assignments
-        )
-        ordinary_days = [
-            day for day in day_states if day.status != "PINNED_PUBLISHED"
-        ]
+        route_counts = Counter(int(item.planning_run_id) for item in route_assignments)
+        ordinary_days = [day for day in day_states if day.status != "PINNED_PUBLISHED"]
         ordinary_dates = {day.planning_date for day in ordinary_days}
         if ordinary_dates:
             last_opened_date = max(ordinary_dates)
@@ -936,15 +960,12 @@ class SqlaPlanningBatchRepository:
                 for state, count in state_counts.items()
                 if state not in {"DRAFT_ASSIGNED", "PERMANENT_ISSUE"}
             ),
-            "unassigned_within_horizon": state_counts[
-                "UNASSIGNED_WITHIN_HORIZON"
-            ],
+            "unassigned_within_horizon": state_counts["UNASSIGNED_WITHIN_HORIZON"],
             "opened_days": int(day_summary[0] or 0),
             "failed_days": int(day_summary[1] or 0),
             "number_of_blocks": int(day_summary[2] or 0),
             "overdue": sum(
-                item.snapshot_sla_date < item.effective_start_date
-                for item in job_rows
+                item.snapshot_sla_date < item.effective_start_date for item in job_rows
             ),
         }
         successful_day_exists = (
@@ -1008,9 +1029,7 @@ class SqlaPlanningBatchRepository:
             .where(planning_batches.c.id == batch_id)
             .values(
                 status=(
-                    "FAILED"
-                    if validation_failed or not successful_days
-                    else "PARTIAL"
+                    "FAILED" if validation_failed or not successful_days else "PARTIAL"
                 ),
                 completion_reason=(
                     "SYSTEM_ERROR"
@@ -1373,6 +1392,9 @@ class SqlaPlanningBatchRepository:
         maximum_end: date,
         project: Any,
         config: Any,
+        *,
+        excluded_job_ids: set[int] | None = None,
+        include_published_jobs: bool = False,
     ) -> dict[str, Any]:
         active_assignment = exists(
             select(assignments.c.id)
@@ -1393,6 +1415,16 @@ class SqlaPlanningBatchRepository:
                 assignments.c.active.is_(True),
             )
         )
+        job_filters = [
+            jobs.c.project_id == project_id,
+            work_types.c.project_id == project_id,
+            jobs.c.status == "NEW",
+            jobs.c.sla_date <= maximum_end,
+        ]
+        if not include_published_jobs:
+            job_filters.append(~active_assignment)
+        if excluded_job_ids:
+            job_filters.append(jobs.c.id.not_in(excluded_job_ids))
         job_rows = (
             (
                 await self._session.execute(
@@ -1412,13 +1444,7 @@ class SqlaPlanningBatchRepository:
                         work_types.c.required_transport,
                     )
                     .join(work_types, jobs.c.work_type_id == work_types.c.id)
-                    .where(
-                        jobs.c.project_id == project_id,
-                        work_types.c.project_id == project_id,
-                        jobs.c.status == "NEW",
-                        jobs.c.sla_date <= maximum_end,
-                        ~active_assignment,
-                    )
+                    .where(*job_filters)
                     .order_by(jobs.c.sla_date, jobs.c.created_at, jobs.c.id)
                 )
             )

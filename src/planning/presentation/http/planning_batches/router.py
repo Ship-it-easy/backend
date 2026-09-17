@@ -4,6 +4,13 @@ from typing import Annotated, Any
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Header, Query, status
 
+from planning.application.interactors.dynamic_planning import (
+    GetCurrentProjectPlanInteractor,
+    GetPlanningEventInteractor,
+    GetProjectPlanVersionInteractor,
+    ListProjectPlanVersionsInteractor,
+    StartDynamicPlanningInteractor,
+)
 from planning.application.interactors.planning_batches import (
     GetPlanningBatchContextInteractor,
     GetPlanningBatchInteractor,
@@ -22,6 +29,62 @@ from planning.presentation.http.planning_batches.schemas import (
 from planning.presentation.http.project.schemas import PublishRequest
 
 planning_batches_router = APIRouter()
+
+
+@planning_batches_router.post(
+    "/{project_id}/planning/events/manual", status_code=status.HTTP_202_ACCEPTED
+)
+@inject
+async def start_dynamic_planning(
+    project_id: int,
+    interactor: FromDishka[StartDynamicPlanningInteractor],
+    idempotency_key: Annotated[
+        str, Header(alias="Idempotency-Key", min_length=1, max_length=255)
+    ],
+) -> dict[str, Any]:
+    return await interactor(idempotency_key, project_id)
+
+
+@planning_batches_router.get("/{project_id}/planning/events/{event_id}")
+@inject
+async def get_dynamic_planning_event(
+    project_id: int,
+    event_id: int,
+    interactor: FromDishka[GetPlanningEventInteractor],
+) -> dict[str, Any]:
+    return await interactor(event_id, project_id)
+
+
+@planning_batches_router.get("/{project_id}/planning/current")
+@inject
+async def get_current_dynamic_plan(
+    project_id: int,
+    interactor: FromDishka[GetCurrentProjectPlanInteractor],
+) -> dict[str, Any]:
+    return await interactor(project_id)
+
+
+@planning_batches_router.get("/{project_id}/planning/versions")
+@inject
+async def list_dynamic_plan_versions(
+    project_id: int,
+    interactor: FromDishka[ListProjectPlanVersionsInteractor],
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict[str, Any]:
+    return await interactor(
+        limit=limit, offset=offset, scoped_project_id=project_id
+    )
+
+
+@planning_batches_router.get("/{project_id}/planning/versions/{version_id}")
+@inject
+async def get_dynamic_plan_version(
+    project_id: int,
+    version_id: int,
+    interactor: FromDishka[GetProjectPlanVersionInteractor],
+) -> dict[str, Any]:
+    return await interactor(version_id, project_id)
 
 
 @planning_batches_router.get("/{project_id}/planning/context")

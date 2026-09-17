@@ -47,7 +47,6 @@ class Config:
     postgres_config: PostgresConfig
     session_config: SessionConfig
     planning_service_config: PlanningServiceConfig
-    # RabbitMQConfig полностью удален отсюда
 
 
 def create_config() -> Config:

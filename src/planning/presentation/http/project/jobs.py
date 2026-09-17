@@ -2,8 +2,9 @@ from datetime import date
 from typing import Any
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, File, Query, UploadFile
 
+from planning.application.interactors.job_import import ProjectJobImportInteractor
 from planning.application.interactors.project.jobs import (
     ChangeProjectJobStatusInteractor,
     CreateProjectJobInteractor,
@@ -18,6 +19,24 @@ from planning.presentation.http.project.schemas import (
 )
 
 router = APIRouter()
+
+
+@router.post("/jobs/import/preview")
+@inject
+async def job_import_preview(
+    interactor: FromDishka[ProjectJobImportInteractor],
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    return await interactor(await file.read(), apply=False)
+
+
+@router.post("/jobs/import/apply", status_code=201)
+@inject
+async def job_import_apply(
+    interactor: FromDishka[ProjectJobImportInteractor],
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    return await interactor(await file.read(), apply=True)
 
 
 @router.get("/jobs")

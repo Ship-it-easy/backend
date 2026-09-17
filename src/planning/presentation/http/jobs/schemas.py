@@ -39,3 +39,4 @@ class JobResponse(BaseModel):
     service_duration_min: int | None
     created_at: datetime
     updated_at: datetime
+    planning_event_id: int | None = None

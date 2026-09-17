@@ -164,4 +164,12 @@ class PlanningConfigPatch(BaseModel):
     batch_total_time_limit_sec: int | None = Field(default=None, ge=1, le=900)
     max_jobs_per_batch: int | None = Field(default=None, ge=1, le=5000)
     solver_seed: int | None = Field(default=None, ge=0, le=2_147_483_647)
+    candidate_solver_time_limit_sec: int | None = Field(default=None, ge=1, le=600)
+    single_cascade_time_limit_sec: int | None = Field(default=None, ge=1, le=3600)
+    event_time_limit_sec: int | None = Field(default=None, ge=1, le=3600)
+    event_coalesce_window_sec: int | None = Field(default=None, ge=0, le=120)
+    event_coalesce_max_wait_sec: int | None = Field(default=None, ge=1, le=600)
+    max_parallel_candidate_models: int | None = Field(default=None, ge=1, le=32)
+    nightly_planning_enabled: bool | None = None
+    nightly_planning_time: time | None = None
     travel_provider: Literal["VALHALLA_LOCAL"] | None = None

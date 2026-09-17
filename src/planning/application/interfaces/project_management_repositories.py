@@ -82,7 +82,13 @@ class ProjectJobsRepository(Protocol):
         self, project_id: int, filters: dict[str, Any]
     ) -> dict[str, Any]: ...
     async def create_job(
-        self, project_id: int, values: dict[str, Any]
+        self, project_id: int, values: dict[str, Any], actor_user_id: Any
+    ) -> dict[str, Any]: ...
+    async def import_jobs(
+        self,
+        project_id: int,
+        rows: list[dict[str, Any]],
+        actor_user_id: Any,
     ) -> dict[str, Any]: ...
     async def get_job(self, project_id: int, job_id: int) -> dict[str, Any]: ...
     async def load_job_for_update(

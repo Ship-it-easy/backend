@@ -25,6 +25,21 @@ from planning.infrastructure.adapters.travel_matrix_provider_factory import (
 BLOCKED_MINUTES = 100_000
 
 
+class _InvalidSolverTimetable(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        vehicle: int,
+        from_node: int,
+        to_node: int,
+    ):
+        super().__init__(message)
+        self.vehicle = vehicle
+        self.from_node = from_node
+        self.to_node = to_node
+
+
 class OrToolsPlanningSolver:
     def __init__(self, matrix_provider: TravelMatrixProvider):
         self._matrix_provider = matrix_provider
@@ -61,7 +76,10 @@ class OrToolsPlanningSolver:
         self,
         data: PlanningInput,
         matrices: dict[str, list[list[int | None]]],
+        forbidden_arcs: frozenset[tuple[int, int, int]] = frozenset(),
+        solve_started: float | None = None,
     ) -> PlanningResult:
+        solve_started = solve_started or monotonic_time.perf_counter()
         job_count, vehicle_count = len(data.jobs), len(data.engineers)
         end_node = job_count + vehicle_count
         starts = [job_count + vehicle for vehicle in range(vehicle_count)]
@@ -85,9 +103,9 @@ class OrToolsPlanningSolver:
                     data.jobs[from_node].duration_min if from_node < job_count else 0
                 )
                 if to_node == end_node:
-                    # Dummy end has no travel and no time. Completion of the last
-                    # service is enforced explicitly for every job/vehicle pair.
-                    return 0
+                    # There is no return trip, but the last job's service must
+                    # finish before the vehicle's end-of-shift cumul bound.
+                    return service
                 travel = matrix[from_node][to_node]
                 return service + (BLOCKED_MINUTES if travel is None else travel)
 
@@ -126,29 +144,53 @@ class OrToolsPlanningSolver:
         compatible_vehicles: dict[int, list[int]] = {}
         for job_index, job in enumerate(data.jobs):
             index = manager.NodeToIndex(job_index)
-            time_dimension.CumulVar(index).SetRange(
-                job.window_start_min, job.window_end_min
-            )
             compatible = [
                 vehicle
                 for vehicle, engineer in enumerate(data.engineers)
                 if is_base_compatible(job, engineer)
+                and engineer.shift_start_min <= job.window_end_min
+                and engineer.shift_end_min - job.duration_min >= job.window_start_min
             ]
             compatible_vehicles[job.id] = compatible
-            routing.VehicleVar(index).SetValues(compatible + [-1])
-            routing.AddDisjunction([index], job.drop_penalty)
+            if job.mandatory and not compatible:
+                raise RuntimeError("OR-Tools did not return a feasible solution")
+            latest_start = (
+                max(
+                    data.engineers[vehicle].shift_end_min - job.duration_min
+                    for vehicle in compatible
+                )
+                if compatible
+                else job.window_end_min
+            )
+            time_dimension.CumulVar(index).SetRange(
+                job.window_start_min,
+                min(job.window_end_min, latest_start)
+                if compatible
+                else job.window_end_min,
+            )
+            routing.VehicleVar(index).SetValues(
+                compatible if job.mandatory else compatible + [-1]
+            )
+            if not job.mandatory:
+                routing.AddDisjunction([index], job.drop_penalty)
             for vehicle in compatible:
-                assigned_to_vehicle = routing.solver().IsEqualCstVar(
+                not_assigned_to_vehicle = routing.solver().IsDifferentCstVar(
                     routing.VehicleVar(index), vehicle
                 )
                 routing.solver().Add(
                     time_dimension.CumulVar(index)
                     <= data.engineers[vehicle].shift_end_min
                     - job.duration_min
-                    + 2880 * (1 - assigned_to_vehicle)
+                    + 2880 * not_assigned_to_vehicle
                 )
 
         self._forbid_missing_arcs(routing, manager, data, matrices)
+        self._forbid_invalid_route_arcs(
+            routing,
+            manager,
+            data,
+            forbidden_arcs,
+        )
 
         self._add_equipment_constraints(routing, manager, data, compatible_vehicles)
         parameters = pywrapcp.DefaultRoutingSearchParameters()
@@ -158,22 +200,41 @@ class OrToolsPlanningSolver:
         parameters.local_search_metaheuristic = (
             routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
         )
-        parameters.time_limit.FromSeconds(data.config.solver_time_limit_sec)
+        remaining_ms = int(
+            (
+                data.config.solver_time_limit_sec
+                - (monotonic_time.perf_counter() - solve_started)
+            )
+            * 1000
+        )
+        if remaining_ms <= 0:
+            raise RuntimeError("OR-Tools solver time limit exhausted")
+        parameters.time_limit.FromMilliseconds(remaining_ms)
         routing.solver().ReSeed(data.config.solver_seed)
-        solve_started = monotonic_time.perf_counter()
         assignment = routing.SolveWithParameters(parameters)
         solver_time_ms = int((monotonic_time.perf_counter() - solve_started) * 1000)
         if assignment is None:
             raise RuntimeError("OR-Tools did not return a feasible solution")
-        result = self._extract(
-            data,
-            matrices,
-            manager,
-            routing,
-            time_dimension,
-            assignment,
-            compatible_vehicles,
-        )
+        try:
+            result = self._extract(
+                data,
+                matrices,
+                manager,
+                routing,
+                time_dimension,
+                assignment,
+                compatible_vehicles,
+            )
+        except _InvalidSolverTimetable as error:
+            invalid_arc = (error.vehicle, error.from_node, error.to_node)
+            if invalid_arc in forbidden_arcs:
+                raise RuntimeError(str(error)) from error
+            return self._solve_sync(
+                data,
+                matrices,
+                forbidden_arcs | {invalid_arc},
+                solve_started,
+            )
         result.solver_time_ms = solver_time_ms
         routing_status = routing.status()
         search_status = routing_enums_pb2.RoutingSearchStatus.Value
@@ -225,6 +286,32 @@ class OrToolsPlanningSolver:
                     )
                     solver.Add(from_not_vehicle + to_not_vehicle + not_successor >= 1)
 
+    def _forbid_invalid_route_arcs(
+        self,
+        routing,
+        manager,
+        data: PlanningInput,
+        forbidden_arcs: frozenset[tuple[int, int, int]],
+    ) -> None:
+        solver = routing.solver()
+        job_count = len(data.jobs)
+        for vehicle, from_node, to_node in forbidden_arcs:
+            to_index = manager.NodeToIndex(to_node)
+            if from_node >= job_count:
+                routing.NextVar(routing.Start(vehicle)).RemoveValue(to_index)
+                continue
+            from_index = manager.NodeToIndex(from_node)
+            from_not_vehicle = solver.IsDifferentCstVar(
+                routing.VehicleVar(from_index), vehicle
+            )
+            to_not_vehicle = solver.IsDifferentCstVar(
+                routing.VehicleVar(to_index), vehicle
+            )
+            not_successor = solver.IsDifferentCstVar(
+                routing.NextVar(from_index), to_index
+            )
+            solver.Add(from_not_vehicle + to_not_vehicle + not_successor >= 1)
+
     def _add_equipment_constraints(
         self,
         routing,
@@ -237,7 +324,7 @@ class OrToolsPlanningSolver:
             equipment_id for job in data.jobs for equipment_id in job.required_equipment
         }
         for equipment_id in equipment_ids:
-            uses_variables = []
+            newly_allocated_variables = []
             for vehicle in range(len(data.engineers)):
                 uses = solver.BoolVar(f"uses_equipment_{vehicle}_{equipment_id}")
                 assigned_variables = []
@@ -256,10 +343,20 @@ class OrToolsPlanningSolver:
                     solver.Add(uses <= solver.Sum(assigned_variables))
                 else:
                     solver.Add(uses == 0)
-                uses_variables.append(uses)
-            solver.Add(
-                solver.Sum(uses_variables) <= data.equipment_units.get(equipment_id, 0)
+                engineer_id = data.engineers[vehicle].id
+                if equipment_id not in data.preallocated_equipment_by_engineer.get(
+                    engineer_id, frozenset()
+                ):
+                    newly_allocated_variables.append(uses)
+            already_allocated = sum(
+                equipment_id in values
+                for values in data.preallocated_equipment_by_engineer.values()
             )
+            remaining_units = max(
+                0, data.equipment_units.get(equipment_id, 0) - already_allocated
+            )
+            if newly_allocated_variables:
+                solver.Add(solver.Sum(newly_allocated_variables) <= remaining_units)
 
     def _extract(
         self,
@@ -276,9 +373,10 @@ class OrToolsPlanningSolver:
         travel_cost = 0
         for vehicle, engineer in enumerate(data.engineers):
             index = routing.Start(vehicle)
-            # Routing assignment time variables may contain a feasible interval
-            # instead of one committed timetable. Build the actual timetable
-            # deterministically from the selected sequence and hard constraints.
+            # The routing assignment may keep cumulative time variables as
+            # correlated intervals. Build one deterministic earliest timetable
+            # from the OR-Tools-selected sequence instead of reading interval
+            # bounds independently.
             route_start_min = engineer.shift_start_min
             previous_node = manager.IndexToNode(index)
             route_jobs: list[RouteJob] = []
@@ -288,27 +386,49 @@ class OrToolsPlanningSolver:
             )
             matrix = matrices[profile]
             while not routing.IsEnd(assignment.Value(routing.NextVar(index))):
-                index = assignment.Value(routing.NextVar(index))
+                from_index = index
+                index = assignment.Value(routing.NextVar(from_index))
                 node = manager.IndexToNode(index)
                 job = data.jobs[node]
                 travel = matrix[previous_node][node]
                 if travel is None:
                     raise RuntimeError("Solver selected a forbidden travel arc")
-                previous_finish = route_start_min
-                if route_jobs:
-                    previous_finish = _minute_of(
-                        route_jobs[-1].planned_finish, data.timezone
+                expected_transit = (
+                    data.jobs[previous_node].duration_min if route_jobs else 0
+                ) + travel
+                model_transit = time_dimension.GetTransitValue(
+                    from_index, index, vehicle
+                )
+                if model_transit != expected_transit:
+                    raise RuntimeError(
+                        "Solver transit differs from route data for "
+                        f"engineer {engineer.id}: {model_transit} != "
+                        f"{expected_transit} on {previous_node}->{node}"
                     )
+                previous_finish = (
+                    route_start_min
+                    if not route_jobs
+                    else _minute_of(route_jobs[-1].planned_finish, data.timezone)
+                )
                 arrival_min = previous_finish + travel
                 start_min = max(arrival_min, job.window_start_min)
                 waiting = start_min - arrival_min
                 finish_min = start_min + job.duration_min
                 if (
-                    start_min > job.window_end_min
+                    waiting < 0
+                    or start_min < job.window_start_min
+                    or start_min > job.window_end_min
                     or finish_min > engineer.shift_end_min
                 ):
-                    raise RuntimeError(
-                        f"Solver returned an invalid timetable for job {job.id}"
+                    raise _InvalidSolverTimetable(
+                        "Solver returned an invalid timetable for "
+                        f"job {job.id}: arrival={arrival_min}, start={start_min}, "
+                        f"window={job.window_start_min}-{job.window_end_min}, "
+                        f"finish={finish_min}, shift_end={engineer.shift_end_min}, "
+                        f"engineer={engineer.id}",
+                        vehicle=vehicle,
+                        from_node=previous_node,
+                        to_node=node,
                     )
                 planned_start = _utc_at(data, start_min)
                 route_jobs.append(
@@ -330,6 +450,15 @@ class OrToolsPlanningSolver:
                 assigned_ids.add(job.id)
                 previous_node = node
             if route_jobs:
+                last_service = _job(data.jobs, route_jobs[-1].job_id).duration_min
+                end_transit = time_dimension.GetTransitValue(
+                    index, routing.End(vehicle), vehicle
+                )
+                if end_transit != last_service:
+                    raise RuntimeError(
+                        "Solver end transit omits the last service for "
+                        f"engineer {engineer.id}: {end_transit} != {last_service}"
+                    )
                 equipment = {
                     equipment_id
                     for item in route_jobs

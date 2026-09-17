@@ -24,6 +24,16 @@ class ListAssignmentsInteractor(_AssignmentInteractor):
         )
 
 
+class GetRouteStateInteractor(_AssignmentInteractor):
+    async def __call__(self, scope: str) -> dict[str, Any]:
+        _, project_id, engineer_id = await self._access.engineer()
+        return await self._repository.get_route_state(
+            engineer_id,
+            project_id,
+            scope,
+        )
+
+
 class GetAssignmentInteractor(_AssignmentInteractor):
     async def __call__(self, assignment_id: int) -> dict[str, Any]:
         _, _, engineer_id = await self._access.engineer()

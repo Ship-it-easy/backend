@@ -22,15 +22,15 @@ from planning.application.interfaces.project_management_repositories import (
 )
 from planning.application.management_dto import ProjectJobEditState, WorkTypeEditState
 from planning.infrastructure.persistence_sqla.mappings.tables import (
-    assignments,
-    daily_plans,
     engineer_qualifications,
     engineer_schedules,
     engineers,
     equipment_types,
     job_status_history,
     jobs,
-    plan_versions,
+    planning_events,
+    project_plan_assignments,
+    project_plan_versions,
     qualifications,
     work_type_required_equipment,
     work_type_required_qualifications,
@@ -679,12 +679,13 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             query = query.where(jobs.c.work_type_id == filters["work_type_id"])
         if filters.get("assigned") is not None:
             current = (
-                select(assignments.c.job_id)
-                .join(plan_versions)
+                select(project_plan_assignments.c.job_id)
                 .join(
-                    daily_plans,
-                    daily_plans.c.current_version_id == plan_versions.c.id,
+                    project_plan_versions,
+                    project_plan_versions.c.id
+                    == project_plan_assignments.c.plan_version_id,
                 )
+                .where(project_plan_versions.c.is_current.is_(True))
             )
             query = query.where(
                 jobs.c.id.in_(current)
@@ -713,7 +714,7 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
         }
 
     async def create_job(
-        self, project_id: int, values: dict[str, Any]
+        self, project_id: int, values: dict[str, Any], actor_user_id: Any
     ) -> dict[str, Any]:
         work_type = await self._work_type(values["work_type_id"], project_id)
         values.update(
@@ -732,8 +733,115 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             .mappings()
             .one()
         )
-        await self._session.commit()
-        return await self._result(row)
+        event_id = await self._session.scalar(
+            insert(planning_events)
+            .values(
+                project_id=project_id,
+                event_type="JOB_CREATED",
+                job_ids=[int(row.id)],
+                initiator="SYSTEM",
+                actor_user_id=actor_user_id,
+                idempotency_key=f"job-created:{row.id}",
+                state="PENDING",
+            )
+            .returning(planning_events.c.id)
+        )
+        return {
+            **(await self._result(row)),
+            "planning_event_id": int(event_id),
+            "planning_event_status_url": f"/api/project/planning/events/{event_id}",
+        }
+
+    async def import_jobs(
+        self,
+        project_id: int,
+        rows: list[dict[str, Any]],
+        actor_user_id: Any,
+    ) -> dict[str, Any]:
+        catalog = (
+            (
+                await self._session.execute(
+                    select(work_types).where(
+                        work_types.c.project_id == project_id,
+                        work_types.c.active.is_(True),
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+        by_key = {
+            str(value).strip().casefold(): item
+            for item in catalog
+            for value in (item.code, item.name)
+        }
+        valid: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        for number, values in enumerate(rows, start=2):
+            work_type = by_key.get(
+                str(values.get("work_type") or "").strip().casefold()
+            )
+            if work_type is None:
+                errors.append({"row": number, "error": "WORK_TYPE_NOT_FOUND"})
+                continue
+            if not work_type.default_service_duration_min:
+                errors.append({"row": number, "error": "MISSING_SERVICE_DURATION"})
+                continue
+            valid.append(
+                {
+                    "project_id": project_id,
+                    "external_id": values.get("external_id") or None,
+                    "internal_code": _code("JOB"),
+                    "status": "NEW",
+                    "address": values["address"],
+                    "latitude": values.get("latitude"),
+                    "longitude": values.get("longitude"),
+                    "sla_date": values["sla_date"],
+                    "time_window_start": values.get("time_window_start"),
+                    "time_window_end": values.get("time_window_end"),
+                    "work_type_id": int(work_type.id),
+                    "service_duration_min": int(work_type.default_service_duration_min),
+                }
+            )
+        try:
+            inserted_ids: list[int] = []
+            for values in valid:
+                inserted_ids.append(
+                    int(
+                        await self._session.scalar(
+                            insert(jobs).values(**values).returning(jobs.c.id)
+                        )
+                    )
+                )
+            event_id = None
+            if inserted_ids:
+                event_id = int(
+                    await self._session.scalar(
+                        insert(planning_events)
+                        .values(
+                            project_id=project_id,
+                            event_type="IMPORT",
+                            job_ids=inserted_ids,
+                            initiator="SYSTEM",
+                            actor_user_id=actor_user_id,
+                            idempotency_key=f"import:{uuid.uuid4().hex}",
+                            state="PENDING",
+                        )
+                        .returning(planning_events.c.id)
+                    )
+                )
+        except IntegrityError as error:
+            await self._session.rollback()
+            raise InvalidPlanningRequest(
+                "Import contains duplicate external_id values",
+                code="DUPLICATE_EXTERNAL_ID",
+            ) from error
+        return {
+            "created_job_ids": inserted_ids,
+            "created_count": len(inserted_ids),
+            "errors": errors,
+            "planning_event_id": event_id,
+        }
 
     async def get_job(self, project_id: int, job_id: int) -> dict[str, Any]:
         return await self._result(
@@ -757,10 +865,16 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
         if current is None:
             raise ObjectNotFoundError("Object not found")
         published = await self._session.scalar(
-            select(assignments.c.id)
-            .join(plan_versions)
-            .join(daily_plans, daily_plans.c.current_version_id == plan_versions.c.id)
-            .where(assignments.c.job_id == job_id)
+            select(project_plan_assignments.c.id)
+            .join(
+                project_plan_versions,
+                project_plan_versions.c.id
+                == project_plan_assignments.c.plan_version_id,
+            )
+            .where(
+                project_plan_assignments.c.job_id == job_id,
+                project_plan_versions.c.is_current.is_(True),
+            )
         )
         return ProjectJobEditState(
             id=int(current.id),
@@ -855,21 +969,22 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             (
                 await self._session.execute(
                     select(
-                        assignments.c.id,
-                        assignments.c.engineer_id,
-                        assignments.c.sequence,
-                        assignments.c.planned_start,
-                        assignments.c.planned_finish,
+                        project_plan_assignments.c.id,
+                        project_plan_assignments.c.engineer_id,
+                        project_plan_assignments.c.sequence,
+                        project_plan_assignments.c.planning_date,
+                        project_plan_assignments.c.planned_start,
+                        project_plan_assignments.c.planned_finish,
+                        project_plan_versions.c.version_number.label("plan_version"),
                     )
-                    .select_from(
-                        assignments.join(plan_versions).join(
-                            daily_plans,
-                            daily_plans.c.current_version_id == plan_versions.c.id,
-                        )
+                    .join(
+                        project_plan_versions,
+                        project_plan_versions.c.id
+                        == project_plan_assignments.c.plan_version_id,
                     )
                     .where(
-                        assignments.c.job_id == row.id,
-                        assignments.c.active.is_(True),
+                        project_plan_assignments.c.job_id == row.id,
+                        project_plan_versions.c.is_current.is_(True),
                     )
                 )
             )

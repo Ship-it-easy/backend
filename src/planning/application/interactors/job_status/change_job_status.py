@@ -5,11 +5,17 @@ from planning.application.errors import InvalidJobStatusError, ObjectNotFoundErr
 from planning.application.interfaces.job_status_repository import (
     JobStatusRepository,
 )
+from planning.application.interfaces.transaction_manager import TransactionManager
 
 
 class ChangeJobStatusInteractor:
-    def __init__(self, repository: JobStatusRepository):
+    def __init__(
+        self,
+        repository: JobStatusRepository,
+        transaction_manager: TransactionManager,
+    ):
         self._repository = repository
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self,
@@ -45,7 +51,11 @@ class ChangeJobStatusInteractor:
             ("IN_PROGRESS", "NEW"),
         }:
             self._invalid("Engineer cannot perform this transition")
-        if new_status in {"IN_PROGRESS", "COMPLETED"} and context.assignment_id is None:
+        if (
+            new_status in {"IN_PROGRESS", "COMPLETED"}
+            and context.assignment_id is None
+            and context.project_assignment_id is None
+        ):
             self._invalid("Job has no current published assignment")
         if (
             context.old_status == "COMPLETED"
@@ -60,7 +70,7 @@ class ChangeJobStatusInteractor:
         if context.later_job_started:
             self._invalid("A later route job has already started")
 
-        return await self._repository.save_transition(
+        result = await self._repository.save_transition(
             context,
             new_status,
             user.id,
@@ -69,6 +79,8 @@ class ChangeJobStatusInteractor:
                 context.old_status == "CANCELLED" and new_status == "NEW"
             ),
         )
+        await self._transaction_manager.commit()
+        return result
 
     @staticmethod
     def _invalid(message: str) -> None:

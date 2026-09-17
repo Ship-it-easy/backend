@@ -22,10 +22,13 @@ from planning.application.interfaces.planning_batch_repository import (
 def make_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Recover database-backed cascade work that was interrupted with a worker.
+        # Recover database-backed work interrupted by an application restart.
         executor = await async_ioc_container.get(PlanningBatchExecutor)
         await executor.recover()
-        yield
+        try:
+            yield
+        finally:
+            await executor.shutdown()
 
     config = create_config()
     app = create_app(lifespan=lifespan)

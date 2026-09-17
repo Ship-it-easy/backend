@@ -12,10 +12,10 @@ class StartPlanningRunRequest(BaseModel):
 
 
 class StartPlanningRunResponse(BaseModel):
-    planning_run_id: int
+    planning_event_id: int
+    planning_run_id: int | None = None
     status: str
-    solver_status: str
-    metrics: dict[str, int]
+    status_url: str
 
 
 class PlanningRunRecord(BaseModel):

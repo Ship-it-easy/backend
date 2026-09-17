@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -43,6 +44,12 @@ projects = Table(
         server_default=text("now()"),
     ),
 )
+Index(
+    "uq_projects_active_name_ci",
+    func.lower(projects.c.name),
+    unique=True,
+    postgresql_where=projects.c.status == "ACTIVE",
+)
 
 work_types = Table(
     "work_types",
@@ -59,6 +66,12 @@ work_types = Table(
         "default_service_duration_min IS NULL OR default_service_duration_min > 0",
         name="work_type_duration_positive",
     ),
+)
+Index(
+    "uq_work_types_project_name_ci",
+    work_types.c.project_id,
+    func.lower(work_types.c.name),
+    unique=True,
 )
 
 jobs = Table(
@@ -91,8 +104,10 @@ jobs = Table(
         nullable=False,
         server_default=text("now()"),
     ),
-    UniqueConstraint("project_id", "external_id"),
-    UniqueConstraint("project_id", "internal_code"),
+    UniqueConstraint("project_id", "external_id", name="uq_jobs_project_id"),
+    UniqueConstraint(
+        "project_id", "internal_code", name="uq_jobs_project_internal_code"
+    ),
     CheckConstraint(
         "service_duration_min IS NULL OR service_duration_min > 0",
         name="job_duration_positive",
@@ -130,7 +145,9 @@ engineers = Table(
         "(start_latitude IS NULL) = (start_longitude IS NULL)",
         name="engineer_coordinate_pair",
     ),
-    UniqueConstraint("project_id", "internal_code"),
+    UniqueConstraint(
+        "project_id", "internal_code", name="uq_engineers_project_internal_code"
+    ),
     CheckConstraint(
         "start_address IS NOT NULL OR start_latitude IS NOT NULL",
         name="engineer_start_present",
@@ -160,6 +177,12 @@ qualifications = Table(
     Column("name", String(255), nullable=False),
     Column("active", Boolean, nullable=False, server_default="true"),
     UniqueConstraint("project_id", "code"),
+)
+Index(
+    "uq_qualifications_project_name_ci",
+    qualifications.c.project_id,
+    func.lower(qualifications.c.name),
+    unique=True,
 )
 
 engineer_qualifications = Table(
@@ -201,6 +224,12 @@ equipment_types = Table(
     Column("active", Boolean, nullable=False, server_default="true"),
     UniqueConstraint("project_id", "code"),
     CheckConstraint("available_units >= 0", name="equipment_type_units_nonnegative"),
+)
+Index(
+    "uq_equipment_types_project_name_ci",
+    equipment_types.c.project_id,
+    func.lower(equipment_types.c.name),
+    unique=True,
 )
 
 work_type_required_equipment = Table(
@@ -271,6 +300,39 @@ planning_config = Table(
     Column("batch_total_time_limit_sec", Integer, nullable=False, server_default="900"),
     Column("max_jobs_per_batch", Integer, nullable=False, server_default="5000"),
     Column("solver_seed", Integer, nullable=False, server_default="1"),
+    Column(
+        "candidate_solver_time_limit_sec",
+        Integer,
+        nullable=False,
+        server_default="20",
+    ),
+    Column(
+        "single_cascade_time_limit_sec",
+        Integer,
+        nullable=False,
+        server_default="900",
+    ),
+    Column("event_time_limit_sec", Integer, nullable=False, server_default="1200"),
+    Column(
+        "event_coalesce_window_sec",
+        Integer,
+        nullable=False,
+        server_default="30",
+    ),
+    Column(
+        "event_coalesce_max_wait_sec",
+        Integer,
+        nullable=False,
+        server_default="120",
+    ),
+    Column(
+        "max_parallel_candidate_models",
+        Integer,
+        nullable=False,
+        server_default="1",
+    ),
+    Column("nightly_planning_enabled", Boolean, nullable=False, server_default="true"),
+    Column("nightly_planning_time", Time, nullable=False, server_default="02:00:00"),
     Column(
         "created_at",
         DateTime(timezone=True),
@@ -355,7 +417,7 @@ planning_batches = Table(
         "initiated_by_user_id",
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        nullable=False,
+        nullable=True,
     ),
     Column("idempotency_key", String(255), nullable=False),
     Column("input_hash", String(64), nullable=False),
@@ -375,7 +437,11 @@ planning_batches = Table(
     ),
     Column("started_at", DateTime(timezone=True)),
     Column("finished_at", DateTime(timezone=True)),
-    UniqueConstraint("project_id", "idempotency_key"),
+    UniqueConstraint(
+        "project_id",
+        "idempotency_key",
+        name="uq_planning_batches_project_id",
+    ),
 )
 Index(
     "uq_active_planning_batch_project",
@@ -383,6 +449,90 @@ Index(
     unique=True,
     postgresql_where=planning_batches.c.status.in_(
         ("CREATED", "PREPARING", "RUNNING", "STOP_REQUESTED")
+    ),
+)
+
+# Dynamic planning events are persisted even though execution remains in-process.
+# They are the durable hand-off between a committed business write and a planning
+# task, and also provide the user-visible audit trail required by the API.
+planning_events = Table(
+    "planning_events",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("event_type", String(32), nullable=False),
+    Column("job_ids", JSONB, nullable=False, server_default="[]"),
+    Column("initiator", String(16), nullable=False),
+    Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("idempotency_key", String(255)),
+    Column("state", String(32), nullable=False, server_default="PENDING"),
+    Column("planning_batch_id", ForeignKey("planning_batches.id", ondelete="SET NULL")),
+    Column(
+        "published_plan_version_id",
+        BigInteger,
+        ForeignKey("project_plan_versions.id", use_alter=True),
+    ),
+    Column("input_hash", String(64)),
+    Column("attempt_count", Integer, nullable=False, server_default="0"),
+    Column("candidate_total", Integer, nullable=False, server_default="0"),
+    Column("candidate_completed", Integer, nullable=False, server_default="0"),
+    Column("current_candidate_engineer_id", ForeignKey("engineers.id")),
+    Column("error_code", String(64)),
+    Column("error_message", Text),
+    Column(
+        "requested_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    UniqueConstraint(
+        "project_id",
+        "idempotency_key",
+        name="uq_planning_events_idempotency",
+    ),
+)
+Index(
+    "ix_planning_events_pending", planning_events.c.project_id, planning_events.c.state
+)
+
+candidate_evaluations = Table(
+    "candidate_evaluations",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "planning_event_id",
+        ForeignKey("planning_events.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("planning_batch_id", ForeignKey("planning_batches.id", ondelete="CASCADE")),
+    Column("subject_job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
+    Column("planning_date", Date, nullable=False),
+    Column("solver_status", String(64), nullable=False),
+    Column("validator_status", String(32), nullable=False),
+    Column("rejection_reason", String(128)),
+    Column("original_route", JSONB, nullable=False, server_default="[]"),
+    Column("result_route", JSONB, nullable=False, server_default="[]"),
+    Column("dropped_job_ids", JSONB, nullable=False, server_default="[]"),
+    Column("score_vector", JSONB),
+    Column("travel_matrix_hash", String(64)),
+    Column("selected", Boolean, nullable=False, server_default="false"),
+    Column("solver_time_ms", Integer, nullable=False, server_default="0"),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    UniqueConstraint(
+        "project_id",
+        "planning_event_id",
+        "subject_job_id",
+        "engineer_id",
+        name="uq_candidate_evaluation_event_job_engineer",
     ),
 )
 Index(
@@ -554,7 +704,9 @@ daily_plans = Table(
         nullable=False,
         server_default=text("now()"),
     ),
-    UniqueConstraint("project_id", "planning_date"),
+    UniqueConstraint(
+        "project_id", "planning_date", name="uq_daily_plans_project_date"
+    ),
 )
 
 plan_versions = Table(
@@ -579,7 +731,9 @@ plan_versions = Table(
         server_default=text("now()"),
     ),
     Column("superseded_at", DateTime(timezone=True)),
-    UniqueConstraint("daily_plan_id", "version_number"),
+    UniqueConstraint(
+        "daily_plan_id", "version_number", name="uq_plan_versions_number"
+    ),
 )
 
 assignments = Table(
@@ -599,9 +753,112 @@ assignments = Table(
     Column("route_data", JSONB, nullable=False, server_default="{}"),
     Column("requirement_snapshot", JSONB, nullable=False, server_default="{}"),
     Column("active", Boolean, nullable=False, server_default="true"),
-    UniqueConstraint("plan_version_id", "job_id"),
-    UniqueConstraint("plan_version_id", "engineer_id", "sequence"),
+    UniqueConstraint(
+        "plan_version_id", "job_id", name="uq_assignments_version_job"
+    ),
+    UniqueConstraint(
+        "plan_version_id",
+        "engineer_id",
+        "sequence",
+        name="uq_assignments_version_engineer_sequence",
+    ),
 )
+
+# A published dynamic plan is versioned for the whole project/horizon.  The
+# legacy daily_plans/plan_versions tables remain readable for pre-migration
+# audit, but all new dynamic publications use these tables atomically.
+project_plan_versions = Table(
+    "project_plan_versions",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("version_number", Integer, nullable=False),
+    Column("planning_batch_id", ForeignKey("planning_batches.id", ondelete="SET NULL")),
+    Column("planning_event_id", ForeignKey("planning_events.id", ondelete="SET NULL")),
+    Column("input_hash", String(64), nullable=False),
+    Column("trigger_source", String(32), nullable=False),
+    Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("is_current", Boolean, nullable=False, server_default="false"),
+    Column("unassigned_jobs", JSONB, nullable=False, server_default="[]"),
+    Column("metrics", JSONB, nullable=False, server_default="{}"),
+    Column(
+        "published_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("superseded_at", DateTime(timezone=True)),
+    UniqueConstraint(
+        "project_id",
+        "version_number",
+        name="uq_project_plan_version_number",
+    ),
+)
+Index(
+    "uq_project_plan_versions_current",
+    project_plan_versions.c.project_id,
+    unique=True,
+    postgresql_where=project_plan_versions.c.is_current.is_(True),
+)
+
+project_plan_assignments = Table(
+    "project_plan_assignments",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "plan_version_id",
+        ForeignKey("project_plan_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("planning_date", Date, nullable=False),
+    Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
+    Column("sequence", Integer, nullable=False),
+    Column("planned_arrival", DateTime(timezone=True), nullable=False),
+    Column("planned_start", DateTime(timezone=True), nullable=False),
+    Column("planned_finish", DateTime(timezone=True), nullable=False),
+    Column("travel_from_previous_min", Integer, nullable=False, server_default="0"),
+    Column("waiting_before_job_min", Integer, nullable=False, server_default="0"),
+    Column("requirement_snapshot", JSONB, nullable=False, server_default="{}"),
+    UniqueConstraint(
+        "project_id",
+        "plan_version_id",
+        "job_id",
+        name="uq_project_plan_assignment_job",
+    ),
+    UniqueConstraint(
+        "project_id",
+        "plan_version_id",
+        "planning_date",
+        "engineer_id",
+        "sequence",
+        name="uq_project_plan_assignment_sequence",
+    ),
+)
+Index(
+    "ix_project_plan_assignments_project_job",
+    project_plan_assignments.c.project_id,
+    project_plan_assignments.c.job_id,
+)
+
+plan_changes = Table(
+    "plan_changes",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "plan_version_id",
+        ForeignKey("project_plan_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("change_type", String(32), nullable=False),
+    Column("old_assignment", JSONB),
+    Column("new_assignment", JSONB),
+    Column("reason", String(128), nullable=False),
+)
+Index("ix_plan_changes_version", plan_changes.c.plan_version_id)
 
 job_status_history = Table(
     "job_status_history",
@@ -609,6 +866,13 @@ job_status_history = Table(
     Column("id", BigInteger, primary_key=True),
     Column("job_id", ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False),
     Column("assignment_id", ForeignKey("assignments.id")),
+    Column(
+        "project_plan_assignment_id",
+        ForeignKey(
+            "project_plan_assignments.id",
+            name="fk_job_history_project_assignment",
+        ),
+    ),
     Column("old_status", String(32), nullable=False),
     Column("new_status", String(32), nullable=False),
     Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),

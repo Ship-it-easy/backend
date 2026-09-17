@@ -31,12 +31,13 @@ class PlanningInputNormalizer:
             **{
                 field: source["config"][field]
                 for field in PlanningConfig.__dataclass_fields__
+                if field in source["config"]
             }
         )
         equipment_units = source["equipment_units"]
-        local_today = datetime.now(timezone.utc).astimezone(
-            ZoneInfo(timezone_name)
-        ).date()
+        local_today = (
+            datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)).date()
+        )
         engineers = await self._normalize_engineers(
             source["engineers"],
             source,
@@ -94,6 +95,22 @@ class PlanningInputNormalizer:
                             reason_code=ReasonCode.NO_COMPATIBLE_ENGINEER,
                         )
                     )
+                elif not any(
+                    _fits_daily_window(job, engineer)
+                    for engineer in engineers
+                    if engineer.id in compatible_by_job[job.id]
+                ):
+                    # A dropped RoutingModel node still has a Time dimension.
+                    # Keeping an already expired or otherwise impossible window
+                    # in the model can make the whole solve fail instead of
+                    # returning the job as unassigned.
+                    pre_unassigned.append(
+                        UnassignedJob(
+                            job_id=job.id,
+                            drop_penalty=job.drop_penalty,
+                            reason_code=ReasonCode.DAILY_TIME_WINDOW_CONFLICT,
+                        )
+                    )
                 else:
                     eligible.append(job)
 
@@ -136,6 +153,12 @@ class PlanningInputNormalizer:
                 job.id for job in jobs_with_penalty if job.sla_date <= planning_date
             ),
             snapshot=snapshot,
+            preallocated_equipment_by_engineer={
+                int(engineer_id): frozenset(int(value) for value in equipment_ids)
+                for engineer_id, equipment_ids in source.get(
+                    "preallocated_equipment_by_engineer", {}
+                ).items()
+            },
         )
 
     async def _normalize_engineers(
@@ -239,6 +262,12 @@ class PlanningInputNormalizer:
                         source["required_equipment"].get(work_type_id, set())
                     ),
                     created_at=row["created_at"],
+                    allowed_engineer_ids=(
+                        frozenset(int(value) for value in row["allowed_engineer_ids"])
+                        if row.get("allowed_engineer_ids") is not None
+                        else None
+                    ),
+                    mandatory=bool(row.get("mandatory", False)),
                 )
             )
         return jobs, invalid
@@ -257,12 +286,26 @@ class PlanningInputNormalizer:
 
 
 def is_base_compatible(job: Job, engineer: Engineer) -> bool:
+    if (
+        job.allowed_engineer_ids is not None
+        and engineer.id not in job.allowed_engineer_ids
+    ):
+        return False
     if not job.required_qualifications.issubset(engineer.qualifications):
         return False
     return not (
         job.required_transport == TransportType.CAR
         and engineer.transport_type != TransportType.CAR
     )
+
+
+def _fits_daily_window(job: Job, engineer: Engineer) -> bool:
+    earliest_start = max(job.window_start_min, engineer.shift_start_min)
+    latest_start = min(
+        job.window_end_min,
+        engineer.shift_end_min - job.duration_min,
+    )
+    return earliest_start <= latest_start
 
 
 def calculate_drop_penalty(

@@ -71,7 +71,9 @@ class LogInInteractor:
             id=session_id, expiration=session_expiration, user_id=user.id
         )
 
-        await self._session_data_gateway.add(session)
+        # A user has a single active session. A new login invalidates the
+        # previous session instead of violating the unique user_id constraint.
+        await self._session_data_gateway.replace_for_user(session)
 
         self._request_manager.add_session_id_to_request(session_id=session.id)
 

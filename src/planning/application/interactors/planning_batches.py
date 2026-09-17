@@ -4,10 +4,14 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from planning.application.access import ProjectAccess
 from planning.application.errors import InvalidPlanningRequest
+from planning.application.interfaces.dynamic_planning_repository import (
+    DynamicPlanningRepository,
+)
 from planning.application.interfaces.planning_batch_repository import (
     PlanningBatchExecutor,
     PlanningBatchRepository,
 )
+from planning.application.interfaces.transaction_manager import TransactionManager
 
 
 class StartPlanningBatchInteractor:
@@ -16,10 +20,14 @@ class StartPlanningBatchInteractor:
         access: ProjectAccess,
         repository: PlanningBatchRepository,
         executor: PlanningBatchExecutor,
+        dynamic_repository: DynamicPlanningRepository,
+        transaction_manager: TransactionManager,
     ):
         self._access = access
         self._repository = repository
         self._executor = executor
+        self._dynamic_repository = dynamic_repository
+        self._transaction_manager = transaction_manager
 
     async def __call__(
         self, project_id: int, requested_start_date: date, idempotency_key: str
@@ -40,19 +48,20 @@ class StartPlanningBatchInteractor:
                 "requested_start_date must equal the current project date",
                 code="START_DATE_MUST_BE_TODAY",
             )
-        batch, reused = await self._repository.create_or_reuse(
+        event = await self._dynamic_repository.enqueue(
             project_id,
-            requested_start_date,
+            "MANUAL",
             user.id,
-            idempotency_key,
+            f"manual:{idempotency_key}",
         )
-        if not reused and batch["status"] == "CREATED":
-            self._executor.schedule(int(batch["id"]))
+        await self._transaction_manager.commit()
+        self._executor.schedule_project(project_id)
         return {
-            "planning_batch_id": batch["id"],
-            "status": batch["status"],
-            "status_url": f"/api/projects/{project_id}/planning/batches/{batch['id']}",
-            "reuse": reused,
+            "planning_event_id": event["id"],
+            "planning_batch_id": event.get("planning_batch_id"),
+            "status": event["state"],
+            "status_url": f"/api/project/planning/events/{event['id']}",
+            "reuse": event["state"] != "PENDING",
         }
 
 

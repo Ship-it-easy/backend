@@ -16,6 +16,11 @@ class PlanningBatchRepository(Protocol):
         requested_start_date: date,
         initiated_by_user_id: Any,
         idempotency_key: str,
+        *,
+        effective_start_override: date | None = None,
+        excluded_job_ids: set[int] | None = None,
+        include_published_jobs: bool = False,
+        total_time_limit_override: int | None = None,
     ) -> tuple[dict[str, Any], bool]: ...
 
     @abstractmethod
@@ -121,4 +126,10 @@ class PlanningBatchExecutor(Protocol):
     def schedule(self, batch_id: int) -> None: ...
 
     @abstractmethod
+    def schedule_project(self, project_id: int) -> None: ...
+
+    @abstractmethod
     async def recover(self) -> None: ...
+
+    @abstractmethod
+    async def shutdown(self) -> None: ...

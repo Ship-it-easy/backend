@@ -35,6 +35,12 @@ class PlanningConfig:
     batch_total_time_limit_sec: int = 900
     max_jobs_per_batch: int = 5000
     solver_seed: int = 1
+    candidate_solver_time_limit_sec: int = 20
+    single_cascade_time_limit_sec: int = 900
+    event_time_limit_sec: int = 1200
+    event_coalesce_window_sec: int = 30
+    event_coalesce_max_wait_sec: int = 120
+    max_parallel_candidate_models: int = 1
 
 
 @dataclass
@@ -74,6 +80,9 @@ class PlanningInput:
     input_jobs_count: int
     sla_critical_job_ids: frozenset[int]
     snapshot: dict[str, Any]
+    preallocated_equipment_by_engineer: dict[int, frozenset[int]] = field(
+        default_factory=dict
+    )
 
 
 @dataclass

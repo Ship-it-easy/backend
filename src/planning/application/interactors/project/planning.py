@@ -28,9 +28,20 @@ class GetPlanningConfigInteractor(_PlanningManagementInteractor):
 
 
 class UpdatePlanningConfigInteractor(_PlanningManagementInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: PlanningManagementRepository,
+        transaction_manager: TransactionManager,
+    ):
+        super().__init__(access, repository)
+        self._transaction_manager = transaction_manager
+
     async def __call__(self, values: dict[str, Any]) -> dict[str, Any]:
         _, project_id = await self._access.dispatcher()
-        return await self._repository.update_config(project_id, values)
+        result = await self._repository.update_config(project_id, values)
+        await self._transaction_manager.commit()
+        return result
 
 
 class CheckPlanningReadinessInteractor(_PlanningManagementInteractor):

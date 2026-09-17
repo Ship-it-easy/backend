@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 from planning.application.interactors.engineer.assignments import (
     CompleteAssignmentInteractor,
     GetAssignmentInteractor,
+    GetRouteStateInteractor,
     ListAssignmentsInteractor,
     ReturnAssignmentInteractor,
     StartAssignmentInteractor,
@@ -20,6 +21,15 @@ async def assignment_list(
     interactor: FromDishka[ListAssignmentsInteractor],
     scope: Literal["today", "future", "history"] = Query("today"),
 ) -> list[dict[str, Any]]:
+    return await interactor(scope)
+
+
+@router.get("/assignments/route-state")
+@inject
+async def assignment_route_state(
+    interactor: FromDishka[GetRouteStateInteractor],
+    scope: Literal["today", "future", "history"] = Query("today"),
+) -> dict[str, Any]:
     return await interactor(scope)
 
 

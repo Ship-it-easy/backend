@@ -31,6 +31,8 @@ class PlanningValidator:
             errors.append("assigned and unassigned jobs do not cover the input")
 
         equipment_usage: Counter[int] = Counter()
+        for values in data.preallocated_equipment_by_engineer.values():
+            equipment_usage.update(values)
         job_indexes = {job.id: index for index, job in enumerate(data.jobs)}
         engineer_indexes = {
             engineer.id: index for index, engineer in enumerate(data.engineers)
@@ -114,7 +116,10 @@ class PlanningValidator:
                 errors.append(
                     f"route {route.engineer_id} has invalid equipment assignment"
                 )
-            equipment_usage.update(used_equipment)
+            preallocated = data.preallocated_equipment_by_engineer.get(
+                route.engineer_id, frozenset()
+            )
+            equipment_usage.update(used_equipment - preallocated)
         for equipment_id, used in equipment_usage.items():
             if used > data.equipment_units.get(equipment_id, 0):
                 errors.append(f"equipment {equipment_id} capacity exceeded")
