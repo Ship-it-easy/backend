@@ -71,9 +71,19 @@ async def schedule_put(
     engineer_id: int,
     body: SchedulePut,
     interactor: FromDishka[ReplaceEngineerScheduleInteractor],
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     entries = [entry.model_dump() for entry in body.entries]
     return await interactor(engineer_id, entries)
+
+
+@router.patch("/engineers/{engineer_id}/availability")
+@inject
+async def availability_patch(
+    engineer_id: int,
+    body: SchedulePut,
+    interactor: FromDishka[ReplaceEngineerScheduleInteractor],
+) -> dict[str, Any]:
+    return await interactor(engineer_id, [entry.model_dump() for entry in body.entries])
 
 
 @router.post("/engineers/{engineer_id}/access", status_code=201)
@@ -101,7 +111,7 @@ async def engineer_password(
 async def engineer_access_block(
     engineer_id: int,
     interactor: FromDishka[BlockEngineerAccessInteractor],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     return await interactor(engineer_id)
 
 
@@ -110,5 +120,5 @@ async def engineer_access_block(
 async def engineer_access_unblock(
     engineer_id: int,
     interactor: FromDishka[UnblockEngineerAccessInteractor],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     return await interactor(engineer_id)

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from planning.application.errors import InvalidPlanningRequest, ProjectNotFound
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    job_planning_state,
     jobs,
     planning_events,
     projects,
@@ -19,7 +20,7 @@ class SqlaJobsRepository:
         self._session = session
 
     async def create_job(
-        self, project_id: int, values: dict[str, Any]
+        self, project_id: int, values: dict[str, Any], actor_user_id: Any
     ) -> dict[str, Any]:
         project = await self._session.scalar(
             select(projects.c.id).where(projects.c.id == project_id)
@@ -56,13 +57,19 @@ class SqlaJobsRepository:
                 .mappings()
                 .one()
             )
+            await self._session.execute(
+                insert(job_planning_state).values(
+                    job_id=row.id, project_id=project_id, state="UNASSIGNED"
+                )
+            )
             event_id = await self._session.scalar(
                 insert(planning_events)
                 .values(
                     project_id=project_id,
                     event_type="JOB_CREATED",
                     job_ids=[int(row.id)],
-                    initiator="SYSTEM",
+                    initiator="USER",
+                    actor_user_id=actor_user_id,
                     idempotency_key=f"job-created:{row.id}",
                     state="PENDING",
                 )

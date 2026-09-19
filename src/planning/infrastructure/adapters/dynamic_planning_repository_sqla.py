@@ -3,7 +3,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import case, func, insert, select, update
+from sqlalchemy import case, func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from planning.application.validators.dynamic_plan import DynamicPlanValidator
@@ -14,6 +14,7 @@ from planning.infrastructure.adapters.planning_batch_repository_sqla import (
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     candidate_evaluations,
     engineers,
+    job_planning_state,
     job_status_history,
     jobs,
     plan_changes,
@@ -125,17 +126,16 @@ class SqlaDynamicPlanningRepository:
             )
             await self._session.commit()
             return []
-        if all(row.event_type in {"JOB_CREATED", "IMPORT"} for row in rows):
-            now = datetime.now(timezone.utc)
-            oldest = min(row.requested_at for row in rows)
-            newest = max(row.requested_at for row in rows)
-            quiet_seconds = (now - newest).total_seconds()
-            total_wait_seconds = (now - oldest).total_seconds()
-            if (
-                quiet_seconds < coalesce_window_sec
-                and total_wait_seconds < coalesce_max_wait_sec
-            ):
-                return []
+        now = datetime.now(timezone.utc)
+        oldest = min(row.requested_at for row in rows)
+        newest = max(row.requested_at for row in rows)
+        quiet_seconds = (now - newest).total_seconds()
+        total_wait_seconds = (now - oldest).total_seconds()
+        if (
+            quiet_seconds < coalesce_window_sec
+            and total_wait_seconds < coalesce_max_wait_sec
+        ):
+            return []
         started = datetime.now(timezone.utc)
         await self._session.execute(
             update(planning_events)
@@ -246,6 +246,18 @@ class SqlaDynamicPlanningRepository:
             .mappings()
             .one_or_none()
         )
+        block_anchor_date = planning_date
+        if (
+            current_version is not None
+            and current_version.planning_batch_id is not None
+        ):
+            published_batch_date = await self._session.scalar(
+                select(planning_batches.c.requested_start_date).where(
+                    planning_batches.c.id == current_version.planning_batch_id
+                )
+            )
+            if published_batch_date is not None:
+                block_anchor_date = published_batch_date
         assignment_rows: list[Any] = []
         if current_version is not None:
             actual_started_at = (
@@ -281,6 +293,9 @@ class SqlaDynamicPlanningRepository:
                             jobs.c.work_type_id,
                             jobs.c.service_duration_min,
                             jobs.c.created_at.label("job_created_at"),
+                            jobs.c.priority_type,
+                            jobs.c.previous_status,
+                            jobs.c.cancelled_at,
                             work_types.c.default_service_duration_min,
                             work_types.c.required_transport,
                             actual_started_at.label("actual_started_at"),
@@ -291,9 +306,12 @@ class SqlaDynamicPlanningRepository:
                         .where(
                             project_plan_assignments.c.plan_version_id
                             == current_version.id,
-                            project_plan_assignments.c.planning_date == planning_date,
+                            project_plan_assignments.c.planning_date.between(
+                                planning_date, maximum_end
+                            ),
                         )
                         .order_by(
+                            project_plan_assignments.c.planning_date,
                             project_plan_assignments.c.engineer_id,
                             project_plan_assignments.c.sequence,
                         )
@@ -302,7 +320,12 @@ class SqlaDynamicPlanningRepository:
                 .mappings()
                 .all()
             )
-        assignments = [_jsonable(dict(row)) for row in assignment_rows]
+        current_assignments = [_jsonable(dict(row)) for row in assignment_rows]
+        assignments = [
+            item
+            for item in current_assignments
+            if _as_date(item["planning_date"]) == planning_date
+        ]
         fingerprint = self._fingerprint(current_version, assignments)
         source_hash = hashlib.sha256(
             json.dumps(source, sort_keys=True, separators=(",", ":")).encode()
@@ -319,6 +342,8 @@ class SqlaDynamicPlanningRepository:
                 else 0
             ),
             "today_assignments": assignments,
+            "current_assignments": current_assignments,
+            "block_anchor_date": block_anchor_date,
             "fingerprint": fingerprint,
             "source_hash": source_hash,
             "snapshot_time": datetime.now(timezone.utc),
@@ -354,6 +379,40 @@ class SqlaDynamicPlanningRepository:
         await self._session.commit()
 
     async def attach_batch(self, event_ids: list[int], batch_id: int) -> None:
+        event_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        planning_events.c.id,
+                        planning_events.c.event_type,
+                        planning_events.c.job_ids,
+                        planning_events.c.engineer_ids,
+                        planning_events.c.initiator,
+                        planning_events.c.actor_user_id,
+                        planning_events.c.idempotency_key,
+                        planning_events.c.event_payload,
+                        planning_events.c.requested_at.label("created_at"),
+                    ).where(planning_events.c.id.in_(event_ids))
+                )
+            )
+            .mappings()
+            .all()
+        )
+        snapshot = await self._session.scalar(
+            select(planning_batches.c.input_snapshot).where(
+                planning_batches.c.id == batch_id
+            )
+        )
+        if snapshot is not None:
+            enriched_snapshot = dict(snapshot)
+            enriched_snapshot["source_events"] = [
+                _jsonable(dict(item)) for item in event_rows
+            ]
+            await self._session.execute(
+                update(planning_batches)
+                .where(planning_batches.c.id == batch_id)
+                .values(input_snapshot=enriched_snapshot)
+            )
         await self._session.execute(
             update(planning_events)
             .where(planning_events.c.id.in_(event_ids))
@@ -409,6 +468,7 @@ class SqlaDynamicPlanningRepository:
         planning_date: date,
         timezone_name: str,
         expected_fingerprint: str,
+        expected_source_hash: str,
         today_assignments: list[dict[str, Any]],
         trigger_source: str,
         actor_user_id: Any,
@@ -423,6 +483,22 @@ class SqlaDynamicPlanningRepository:
         await self._session.execute(
             select(projects.c.id).where(projects.c.id == project_id).with_for_update()
         )
+        # Keep every table that contributes to the planning snapshot stable
+        # until the new project plan version is committed. SHARE permits
+        # concurrent reads but blocks source mutations, closing the gap between
+        # the final hash check and publication.
+        await self._session.execute(
+            text(
+                "LOCK TABLE projects, planning_config, jobs, work_types, "
+                "engineers, engineer_schedules, engineer_qualifications, "
+                "work_type_required_qualifications, "
+                "work_type_required_equipment, equipment_types, "
+                "job_status_history IN SHARE MODE"
+            )
+        )
+        fresh_context = await self.load_context(project_id, planning_date)
+        if fresh_context["source_hash"] != expected_source_hash:
+            raise StaleDynamicSnapshot("Planning inputs changed during calculation")
         current_version = (
             (
                 await self._session.execute(
@@ -457,8 +533,50 @@ class SqlaDynamicPlanningRepository:
             "HORIZON_LIMIT",
             "NO_ELIGIBLE_JOBS",
         }:
+            failed_run = (
+                (
+                    await self._session.execute(
+                        select(
+                            planning_runs.c.error_code,
+                            planning_runs.c.error_message,
+                        )
+                        .where(
+                            planning_runs.c.planning_batch_id == batch_id,
+                            planning_runs.c.status.in_(("FAILED", "FAILED_VALIDATION")),
+                        )
+                        .order_by(planning_runs.c.id.desc())
+                        .limit(1)
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if failed_run is not None:
+                raise RuntimeError(
+                    str(failed_run.error_message or failed_run.error_code)
+                )
             raise RuntimeError("The future cascade did not finish publishably")
 
+        preserved_rows: list[Any] = []
+        if current_version is not None and batch.effective_start_date > planning_date:
+            preserved_rows = (
+                (
+                    await self._session.execute(
+                        select(project_plan_assignments)
+                        .join(jobs, jobs.c.id == project_plan_assignments.c.job_id)
+                        .where(
+                            project_plan_assignments.c.plan_version_id
+                            == current_version.id,
+                            project_plan_assignments.c.planning_date > planning_date,
+                            project_plan_assignments.c.planning_date
+                            < batch.effective_start_date,
+                            jobs.c.status != "CANCELLED",
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
         future_rows = (
             (
                 await self._session.execute(
@@ -471,6 +589,7 @@ class SqlaDynamicPlanningRepository:
                         planning_route_jobs.c.planned_start,
                         planning_route_jobs.c.planned_finish,
                         planning_route_jobs.c.travel_from_previous_min,
+                        planning_route_jobs.c.distance_from_previous_meters,
                         planning_route_jobs.c.waiting_before_job_min,
                     )
                     .join(
@@ -484,6 +603,7 @@ class SqlaDynamicPlanningRepository:
                     .where(
                         planning_runs.c.planning_batch_id == batch_id,
                         planning_runs.c.status == "SUCCESS",
+                        planning_runs.c.planning_date > planning_date,
                     )
                 )
             )
@@ -491,6 +611,9 @@ class SqlaDynamicPlanningRepository:
             .all()
         )
         assignments = [*_normalize_assignments(today_assignments)]
+        assignments.extend(
+            _normalize_assignments([dict(row) for row in preserved_rows])
+        )
         assignments.extend(_normalize_assignments([dict(row) for row in future_rows]))
         validation_errors = DynamicPlanValidator().validate_publication(
             assignments,
@@ -500,8 +623,7 @@ class SqlaDynamicPlanningRepository:
         )
         if validation_errors:
             raise RuntimeError(
-                "DYNAMIC_PLAN_VALIDATION_FAILED: "
-                + "; ".join(validation_errors)
+                "FAILED_VALIDATION: " + "; ".join(validation_errors)
             )
         unassigned_rows = (
             (
@@ -623,8 +745,172 @@ class SqlaDynamicPlanningRepository:
             )
         new = {int(item["job_id"]): item for item in assignments}
         changes = _changes(old, new, version_id, project_id)
+        event_rows = (
+            (
+                await self._session.execute(
+                    select(planning_events).where(planning_events.c.id.in_(event_ids))
+                )
+            )
+            .mappings()
+            .all()
+        )
+        cancelled_ids = {
+            int(job_id)
+            for event in event_rows
+            if event.event_type == "JOB_CANCELLED"
+            for job_id in event.job_ids or []
+        }
+        unavailable_ids = {
+            int(job_id)
+            for event in event_rows
+            if event.event_type == "ENGINEER_AVAILABILITY_LOST"
+            for job_id in event.job_ids or []
+        }
+        changed_jobs = [
+            change
+            for change in changes
+            if change.get("old_assignment") != change.get("new_assignment")
+        ]
+        reassigned_jobs = [
+            change
+            for change in changed_jobs
+            if change.get("old_assignment")
+            and change.get("new_assignment")
+            and (
+                change["old_assignment"].get("engineer_id")
+                != change["new_assignment"].get("engineer_id")
+                or change["old_assignment"].get("planning_date")
+                != change["new_assignment"].get("planning_date")
+            )
+        ]
+        route_distances: dict[tuple[str, int], int] = {}
+        for item in assignments:
+            key = (str(item["planning_date"]), int(item["engineer_id"]))
+            route_distances[key] = route_distances.get(key, 0) + int(
+                item.get("distance_from_previous_meters") or 0
+            )
+        run_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        planning_runs.c.id,
+                        planning_runs.c.planning_date,
+                        planning_runs.c.solver_status,
+                        planning_runs.c.objective,
+                        planning_runs.c.solver_time_ms,
+                        planning_runs.c.fixed_active_engineer_count,
+                        planning_runs.c.newly_activated_engineer_count,
+                        planning_runs.c.used_engineer_count,
+                        planning_runs.c.total_distance_meters,
+                        planning_runs.c.max_engineer_distance_meters,
+                        planning_runs.c.objective_range_snapshot,
+                    ).where(planning_runs.c.planning_batch_id == batch_id)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        publication_metrics = {
+            **(batch.metrics or {}),
+            "source_event_count": len(event_ids),
+            "coalesced_event_count": max(0, len(event_ids) - 1),
+            "cancelled_count": len(cancelled_ids),
+            "removed_unavailable_count": sum(
+                change["job_id"] in unavailable_ids
+                and change.get("old_assignment") is not None
+                for change in changed_jobs
+            ),
+            "reassigned_count": len(reassigned_jobs),
+            "unassigned_count": len(unassigned),
+            "active_engineers_before": len(
+                {
+                    int(item["engineer_id"])
+                    for item in old.values()
+                    if item.get("engineer_id") is not None
+                }
+            ),
+            "active_engineers_after": len(
+                {int(item["engineer_id"]) for item in assignments}
+            ),
+            "total_distance_meters": sum(route_distances.values()),
+            "maximum_route_distance_meters": max(
+                route_distances.values(), default=0
+            ),
+            "solver_time_ms": sum(int(item.solver_time_ms or 0) for item in run_rows),
+            "feasible_time_limit": any(
+                item.solver_status == "FEASIBLE_TIME_LIMIT" for item in run_rows
+            ),
+            "solver_runs": [_jsonable(dict(item)) for item in run_rows],
+            "route_distances": [
+                {
+                    "planning_date": planning_day,
+                    "engineer_id": engineer_id,
+                    "distance_meters": distance_meters,
+                }
+                for (planning_day, engineer_id), distance_meters in sorted(
+                    route_distances.items()
+                )
+            ],
+        }
+        await self._session.execute(
+            update(project_plan_versions)
+            .where(project_plan_versions.c.id == version_id)
+            .values(metrics=_jsonable(publication_metrics))
+        )
+        for change in changes:
+            if change["job_id"] in cancelled_ids:
+                change["change_type"] = "CANCELLED"
+                change["reason"] = "JOB_CANCELLED"
+            elif change["job_id"] in unavailable_ids and change["old_assignment"]:
+                change["reason"] = "ENGINEER_UNAVAILABLE"
         if changes:
             await self._session.execute(insert(plan_changes), changes)
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        assigned_ids = set(new)
+        planning_rows = []
+        for item in assignments:
+            planning_rows.append(
+                {
+                    "job_id": int(item["job_id"]),
+                    "project_id": project_id,
+                    "state": "ASSIGNED",
+                    "reason_code": None,
+                    "source_event_id": event_ids[0],
+                    "plan_version_id": version_id,
+                }
+            )
+        for item in unassigned:
+            job_id = int(item["job_id"])
+            if job_id in assigned_ids:
+                continue
+            planning_rows.append(
+                {
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "state": "UNASSIGNED",
+                    "reason_code": (
+                        "ENGINEER_UNAVAILABLE"
+                        if job_id in unavailable_ids
+                        else item.get("primary_reason_code")
+                    ),
+                    "source_event_id": event_ids[0],
+                    "plan_version_id": version_id,
+                }
+            )
+        for state_row in planning_rows:
+            await self._session.execute(
+                pg_insert(job_planning_state)
+                .values(**state_row)
+                .on_conflict_do_update(
+                    index_elements=[job_planning_state.c.job_id],
+                    set_={
+                        key: value
+                        for key, value in state_row.items()
+                        if key != "job_id"
+                    },
+                )
+            )
         return version_id, input_hash
 
     async def get_event(self, project_id: int, event_id: int) -> dict[str, Any] | None:
@@ -772,6 +1058,11 @@ class SqlaDynamicPlanningRepository:
         return None if version is None else await self._plan_version_result(version)
 
     async def _plan_version_result(self, version: Any) -> dict[str, Any]:
+        timezone_name = await self._session.scalar(
+            select(projects.c.planning_timezone).where(
+                projects.c.id == version.project_id
+            )
+        )
         rows = (
             (
                 await self._session.execute(
@@ -779,6 +1070,7 @@ class SqlaDynamicPlanningRepository:
                         project_plan_assignments,
                         jobs.c.address,
                         jobs.c.status,
+                        jobs.c.priority_type,
                         jobs.c.latitude,
                         jobs.c.longitude,
                         engineers.c.name.label("engineer_name"),
@@ -817,11 +1109,8 @@ class SqlaDynamicPlanningRepository:
         serialized_changes = []
         for row in changes:
             item = _jsonable(dict(row))
-            if (
-                item["change_type"] == "CHANGED"
-                and _same_assignment(
-                    item.get("old_assignment"), item.get("new_assignment")
-                )
+            if item["change_type"] == "CHANGED" and _same_assignment(
+                item.get("old_assignment"), item.get("new_assignment")
             ):
                 # Versions published before assignment values were normalized may
                 # contain a false diff (JSON date string versus Python date).
@@ -829,8 +1118,10 @@ class SqlaDynamicPlanningRepository:
             serialized_changes.append(item)
         return {
             "version": _jsonable(dict(version)),
+            "timezone": str(timezone_name),
             "assignments": [_jsonable(dict(row)) for row in rows],
             "changes": serialized_changes,
+            "route_metrics": _route_metrics(rows),
         }
 
     async def _current_today(
@@ -862,6 +1153,12 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
+                        jobs.c.previous_status,
+                        jobs.c.address,
+                        jobs.c.latitude,
+                        jobs.c.longitude,
+                        jobs.c.sla_date,
+                        jobs.c.work_type_id,
                         actual_started_at.label("actual_started_at"),
                         actual_completed_at.label("actual_completed_at"),
                     )
@@ -924,6 +1221,9 @@ def _normalize_assignments(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     row.get("travel_from_previous_min") or 0
                 ),
                 "waiting_before_job_min": int(row.get("waiting_before_job_min") or 0),
+                "distance_from_previous_meters": int(
+                    row.get("distance_from_previous_meters") or 0
+                ),
                 "requirement_snapshot": row.get("requirement_snapshot") or {},
             }
         )
@@ -964,6 +1264,15 @@ def _changes(
             )
             change_type = "CHANGED"
             reason = "DISPLACED_TO_FUTURE" if moved_later else "REPLANNED"
+            diagnostics = (
+                (after.get("requirement_snapshot") or {}).get(
+                    "protection_diagnostics", []
+                )
+                if after
+                else []
+            )
+            if "CANCELLED_EN_ROUTE_ASSUMPTION" in diagnostics:
+                reason = "CANCELLED_EN_ROUTE_ASSUMPTION"
         result.append(
             {
                 "plan_version_id": version_id,
@@ -989,9 +1298,39 @@ def _same_assignment(
         "sequence",
         "planned_start",
         "planned_finish",
+        "requirement_snapshot",
     )
     normalized_before = _jsonable(before)
     normalized_after = _jsonable(after)
-    return all(
-        normalized_before.get(key) == normalized_after.get(key) for key in keys
+    return all(normalized_before.get(key) == normalized_after.get(key) for key in keys)
+
+
+def _route_metrics(rows: list[Any]) -> dict[str, Any]:
+    routes: dict[tuple[str, int], dict[str, Any]] = {}
+    active_engineer_ids: set[int] = set()
+    for row in rows:
+        planning_date = str(row.planning_date)
+        engineer_id = int(row.engineer_id)
+        if row.status in {"NEW", "IN_PROGRESS"}:
+            active_engineer_ids.add(engineer_id)
+        key = (planning_date, engineer_id)
+        route = routes.setdefault(
+            key,
+            {
+                "planning_date": planning_date,
+                "engineer_id": engineer_id,
+                "engineer_name": row.engineer_name,
+                "distance_meters": 0,
+            },
+        )
+        route["distance_meters"] += int(row.distance_from_previous_meters or 0)
+    items = sorted(
+        routes.values(), key=lambda item: (item["planning_date"], item["engineer_id"])
     )
+    distances = [int(item["distance_meters"]) for item in items]
+    return {
+        "active_engineers": len(active_engineer_ids),
+        "total_distance_meters": sum(distances),
+        "maximum_route_distance_meters": max(distances, default=0),
+        "routes": items,
+    }

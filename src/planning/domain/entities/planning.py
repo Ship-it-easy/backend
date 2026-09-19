@@ -41,6 +41,9 @@ class PlanningConfig:
     event_coalesce_window_sec: int = 30
     event_coalesce_max_wait_sec: int = 120
     max_parallel_candidate_models: int = 1
+    distance_unit_meters: int = 10
+    time_unit_seconds: int = 60
+    travel_cache_ttl_days: int | None = None
 
 
 @dataclass
@@ -53,6 +56,7 @@ class RouteJob:
     travel_from_previous_min: int
     waiting_before_job_min: int
     drop_penalty: int
+    distance_from_previous_meters: int = 0
 
 
 @dataclass
@@ -65,6 +69,7 @@ class Route:
     total_waiting_min: int
     jobs: list[RouteJob]
     equipment_type_ids: set[int]
+    total_distance_meters: int = 0
 
 
 @dataclass
@@ -83,6 +88,7 @@ class PlanningInput:
     preallocated_equipment_by_engineer: dict[int, frozenset[int]] = field(
         default_factory=dict
     )
+    fixed_active_engineer_ids: frozenset[int] = frozenset()
 
 
 @dataclass
@@ -96,3 +102,8 @@ class PlanningResult:
     solver_time_ms: int
     validation_errors: list[str] = field(default_factory=list)
     travel_matrices: dict[str, list[list[int | None]]] = field(default_factory=dict)
+    travel_time_seconds_matrices: dict[str, list[list[int | None]]] = field(
+        default_factory=dict
+    )
+    distance_matrices: dict[str, list[list[int | None]]] = field(default_factory=dict)
+    objective_metrics: dict[str, Any] = field(default_factory=dict)

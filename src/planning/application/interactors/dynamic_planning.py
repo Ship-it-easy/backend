@@ -47,9 +47,7 @@ class StartDynamicPlanningInteractor:
 
 
 class GetPlanningEventInteractor:
-    def __init__(
-        self, access: ProjectAccess, repository: DynamicPlanningRepository
-    ):
+    def __init__(self, access: ProjectAccess, repository: DynamicPlanningRepository):
         self._access = access
         self._repository = repository
 
@@ -68,9 +66,7 @@ class GetPlanningEventInteractor:
 
 
 class GetCurrentProjectPlanInteractor:
-    def __init__(
-        self, access: ProjectAccess, repository: DynamicPlanningRepository
-    ):
+    def __init__(self, access: ProjectAccess, repository: DynamicPlanningRepository):
         self._access = access
         self._repository = repository
 
@@ -85,9 +81,7 @@ class GetCurrentProjectPlanInteractor:
 
 
 class ListProjectPlanVersionsInteractor:
-    def __init__(
-        self, access: ProjectAccess, repository: DynamicPlanningRepository
-    ):
+    def __init__(self, access: ProjectAccess, repository: DynamicPlanningRepository):
         self._access = access
         self._repository = repository
 
@@ -107,9 +101,7 @@ class ListProjectPlanVersionsInteractor:
 
 
 class GetProjectPlanVersionInteractor:
-    def __init__(
-        self, access: ProjectAccess, repository: DynamicPlanningRepository
-    ):
+    def __init__(self, access: ProjectAccess, repository: DynamicPlanningRepository):
         self._access = access
         self._repository = repository
 

@@ -11,7 +11,9 @@ from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job, UnassignedJob
 from planning.domain.entities.planning import PlanningConfig, PlanningInput
-from planning.domain.enums import ReasonCode, TransportType
+from planning.domain.enums import JobPriorityType, ReasonCode, TransportType
+
+EMERGENCY_BONUS = 1_000_000
 
 
 class PlanningInputNormalizer:
@@ -27,13 +29,14 @@ class PlanningInputNormalizer:
     ) -> PlanningInput:
         if source["config"] is None:
             raise PlanningUnavailable("Project has no active planning configuration")
-        config = PlanningConfig(
-            **{
-                field: source["config"][field]
-                for field in PlanningConfig.__dataclass_fields__
-                if field in source["config"]
-            }
-        )
+        config_values = {
+            field: source["config"][field]
+            for field in PlanningConfig.__dataclass_fields__
+            if field in source["config"]
+        }
+        if config_values.get("travel_cache_ttl_days") is None:
+            config_values["travel_cache_ttl_days"] = 7
+        config = PlanningConfig(**config_values)
         equipment_units = source["equipment_units"]
         local_today = (
             datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)).date()
@@ -62,16 +65,20 @@ class PlanningInputNormalizer:
             compatible_by_job[job.id] = compatible
             compatible_counts[job.id] = len(compatible)
 
+        penalty_components = {
+            job.id: calculate_drop_penalty_components(
+                job,
+                planning_date,
+                config,
+                compatible_counts[job.id],
+                equipment_units,
+            )
+            for job in jobs
+        }
         jobs_with_penalty = [
             replace(
                 job,
-                drop_penalty=calculate_drop_penalty(
-                    job,
-                    planning_date,
-                    config,
-                    compatible_counts[job.id],
-                    equipment_units,
-                ),
+                drop_penalty=penalty_components[job.id]["daily_drop_penalty_v2"],
             )
             for job in jobs
         ]
@@ -138,6 +145,9 @@ class PlanningInputNormalizer:
             "jobs": [asdict(job) for job in jobs_with_penalty],
             "engineers": [asdict(engineer) for engineer in engineers],
             "equipment_units": equipment_units,
+            "penalty_components": {
+                str(job_id): values for job_id, values in penalty_components.items()
+            },
         }
         return PlanningInput(
             project_id=project_id,
@@ -268,6 +278,9 @@ class PlanningInputNormalizer:
                         else None
                     ),
                     mandatory=bool(row.get("mandatory", False)),
+                    priority_type=JobPriorityType(
+                        row.get("priority_type", JobPriorityType.NORMAL)
+                    ),
                 )
             )
         return jobs, invalid
@@ -315,25 +328,73 @@ def calculate_drop_penalty(
     compatible_count: int,
     equipment_units: dict[int, int],
 ) -> int:
-    value = _sla_penalty(job.sla_date, planning_date, config)
+    return calculate_drop_penalty_components(
+        job,
+        planning_date,
+        config,
+        compatible_count,
+        equipment_units,
+    )["daily_drop_penalty_v2"]
+
+
+def calculate_drop_penalty_components(
+    job: Job,
+    planning_date: date,
+    config: PlanningConfig,
+    compatible_count: int,
+    equipment_units: dict[int, int],
+) -> dict[str, int]:
+    days = (job.sla_date - planning_date).days
+    sla_base = (
+        config.sla_overdue_base
+        if days < 0
+        else _sla_penalty(job.sla_date, planning_date, config)
+    )
+    overdue_bonus = config.sla_overdue_per_day * -days if days < 0 else 0
+    emergency_bonus = (
+        EMERGENCY_BONUS
+        if job.priority_type == JobPriorityType.EMERGENCY
+        else 0
+    )
+    skill_scarcity_bonus = 0
     if compatible_count == 1:
-        value += config.skill_one_engineer
+        skill_scarcity_bonus = config.skill_one_engineer
     elif compatible_count == 2:
-        value += config.skill_two_engineers
+        skill_scarcity_bonus = config.skill_two_engineers
+    equipment_inventory_bonus = 0
     for equipment_id in job.required_equipment:
         units = equipment_units.get(equipment_id, 0)
         if units == 1:
-            value += config.equipment_one_unit
+            equipment_inventory_bonus += config.equipment_one_unit
         elif units == 2:
-            value += config.equipment_two_units
+            equipment_inventory_bonus += config.equipment_two_units
     window_size = job.window_end_min - job.window_start_min
+    window_tightness_bonus = 0
     if window_size <= 30:
-        value += config.window_30
+        window_tightness_bonus = config.window_30
     elif window_size <= 60:
-        value += config.window_60
+        window_tightness_bonus = config.window_60
     elif window_size <= 120:
-        value += config.window_120
-    return value
+        window_tightness_bonus = config.window_120
+    daily_drop_penalty = sum(
+        (
+            sla_base,
+            overdue_bonus,
+            skill_scarcity_bonus,
+            equipment_inventory_bonus,
+            window_tightness_bonus,
+            emergency_bonus,
+        )
+    )
+    return {
+        "sla_base": sla_base,
+        "overdue_bonus": overdue_bonus,
+        "skill_scarcity_bonus": skill_scarcity_bonus,
+        "equipment_inventory_bonus": equipment_inventory_bonus,
+        "window_tightness_bonus": window_tightness_bonus,
+        "emergency_bonus": emergency_bonus,
+        "daily_drop_penalty_v2": daily_drop_penalty,
+    }
 
 
 def _sla_penalty(sla_date: date, planning_date: date, config: PlanningConfig) -> int:

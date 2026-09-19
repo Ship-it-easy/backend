@@ -1,3 +1,4 @@
+import math
 import time as monotonic_time
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta, timezone
@@ -332,6 +333,9 @@ class MultiDayPlanningService:
                     "future_opportunity_bonus": opportunity.bonus,
                     "daily_drop_penalty": daily_penalty,
                     "cascade_drop_penalty": daily_penalty + opportunity.bonus,
+                    "emergency_bonus": (
+                        1_000_000 if item.get("priority_type") == "EMERGENCY" else 0
+                    ),
                 }
             penalized = []
             for job in data.jobs:
@@ -342,9 +346,17 @@ class MultiDayPlanningService:
                     )
                 )
             ordered = _order_for_daily_limit(penalized, decisions)
-            selected = _enforce_sla_hierarchy(
-                ordered[:daily_limit], decisions, data
+            selected = _enforce_sla_hierarchy(ordered[:daily_limit], decisions, data)
+            selected_penalties = [
+                item.drop_penalty for item in selected if item.drop_penalty > 0
+            ]
+            solver_drop_divisor = (
+                math.gcd(*selected_penalties) if selected_penalties else 1
             )
+            for selected_job in selected:
+                decisions[selected_job.id]["solver_drop_cost"] = (
+                    selected_job.drop_penalty // solver_drop_divisor
+                )
             selected_ids = {item.id for item in selected}
             deferred = [
                 UnassignedJob(
@@ -408,9 +420,7 @@ class MultiDayPlanningService:
                         data.config.travel_provider
                     ).solve(data)
                 else:
-                    drop_cost = sum(
-                        item.drop_penalty for item in data.pre_unassigned
-                    )
+                    drop_cost = sum(item.drop_penalty for item in data.pre_unassigned)
                     result = PlanningResult(
                         routes=[],
                         unassigned=list(data.pre_unassigned),
@@ -605,9 +615,7 @@ def _enforce_sla_hierarchy(
     )
     for group in groups:
         group_jobs = [
-            item
-            for item in jobs
-            if decisions[item.id]["priority_group"] == group
+            item for item in jobs if decisions[item.id]["priority_group"] == group
         ]
         # The common cardinality component dominates every possible secondary
         # penalty difference in this group and all less urgent groups. Thus the
@@ -618,14 +626,13 @@ def _enforce_sla_hierarchy(
         for item in group_jobs:
             penalty = floor + item.drop_penalty
             if penalty >= 2**62:
-                raise RuntimeError("SLA hierarchy penalty exceeds solver range")
-            decisions[item.id]["cascade_drop_penalty"] = penalty
+                raise RuntimeError("INVALID_PENALTY_BANDS")
             adjusted_by_id[item.id] = replace(item, drop_penalty=penalty)
         lower_priority_total += sum(
             adjusted_by_id[item.id].drop_penalty for item in group_jobs
         )
         if lower_priority_total >= 2**62:
-            raise RuntimeError("SLA hierarchy penalty exceeds solver range")
+            raise RuntimeError("INVALID_PENALTY_BANDS")
     return [adjusted_by_id[item.id] for item in jobs]
 
 

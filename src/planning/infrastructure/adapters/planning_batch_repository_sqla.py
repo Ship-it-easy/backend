@@ -4,6 +4,7 @@ from collections import Counter
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import and_, bindparam, exists, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
@@ -155,6 +156,10 @@ class SqlaPlanningBatchRepository:
             or not 1 <= int(config.max_parallel_candidate_models) <= 32
             or not 1 <= int(config.max_jobs_per_run) <= 1000
             or not 1 <= int(config.max_jobs_per_batch) <= 5000
+            or (
+                config.travel_cache_ttl_days is not None
+                and not 0 <= int(config.travel_cache_ttl_days) <= 3650
+            )
             or int(config.travel_cost_per_minute) < 0
             or min(
                 int(config.future_opportunity_critical),
@@ -268,11 +273,19 @@ class SqlaPlanningBatchRepository:
             if effective_start > requested_start_date:
                 await self._session.execute(
                     insert(planning_batch_days).values(
-                        planning_batch_id=row.id,
-                        planning_date=requested_start_date,
-                        block_number=0,
-                        status="PINNED_PUBLISHED",
-                        finished_at=datetime.now(timezone.utc),
+                        [
+                            {
+                                "planning_batch_id": row.id,
+                                "planning_date": requested_start_date
+                                + timedelta(days=offset),
+                                "block_number": offset // 7,
+                                "status": "PINNED_PUBLISHED",
+                                "finished_at": datetime.now(timezone.utc),
+                            }
+                            for offset in range(
+                                (effective_start - requested_start_date).days
+                            )
+                        ]
                     )
                 )
             await self._session.commit()
@@ -428,6 +441,32 @@ class SqlaPlanningBatchRepository:
     async def mark_daily_run_running(self, run_id: int, data: PlanningInput) -> None:
         await self._daily.mark_running(run_id, data)
 
+    async def save_auxiliary_run(
+        self,
+        batch_id: int,
+        planning_date: date,
+        timezone_name: str,
+        user_id: Any,
+        data: PlanningInput,
+        result: PlanningResult,
+    ) -> int:
+        """Persist an audited solver model that is not a cascade batch day."""
+
+        run_id = await self.create_daily_run(
+            batch_id, planning_date, timezone_name, user_id
+        )
+        try:
+            await self.mark_daily_run_running(run_id, data)
+            await self._daily.save_result(run_id, data, result)
+        except Exception as error:
+            await self._daily.fail_run(
+                run_id,
+                "AUXILIARY_RUN_PERSISTENCE_FAILED",
+                str(error),
+            )
+            raise
+        return run_id
+
     async def save_day_result(
         self,
         batch_id: int,
@@ -455,6 +494,8 @@ class SqlaPlanningBatchRepository:
                     future_opportunity_bonus=bindparam("future_opportunity_bonus"),
                     daily_drop_penalty=bindparam("daily_drop_penalty"),
                     cascade_drop_penalty=bindparam("cascade_drop_penalty"),
+                    emergency_bonus=bindparam("emergency_bonus"),
+                    solver_drop_cost=bindparam("solver_drop_cost", required=False),
                 ),
                 [
                     {"batch_key": batch_id, "job_key": job_id, **values}
@@ -1442,6 +1483,7 @@ class SqlaPlanningBatchRepository:
                         jobs.c.service_duration_min,
                         jobs.c.created_at,
                         jobs.c.updated_at,
+                        jobs.c.priority_type,
                         work_types.c.default_service_duration_min,
                         work_types.c.required_transport,
                     )
@@ -1615,6 +1657,8 @@ def _jsonable(value: Any) -> Any:
         return value.isoformat().replace("+00:00", "Z")
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, UUID):
+        return str(value)
     if hasattr(value, "as_tuple"):
         return str(value)
     return value

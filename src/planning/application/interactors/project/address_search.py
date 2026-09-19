@@ -11,6 +11,11 @@ class SearchAddressesInteractor:
         self._access = access
         self._provider = provider
 
-    async def __call__(self, query: str) -> list[dict[str, Any]]:
-        await self._access.dispatcher()
+    async def __call__(
+        self, query: str, scoped_project_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        if scoped_project_id is None:
+            await self._access.dispatcher()
+        else:
+            await self._access.project(scoped_project_id)
         return await self._provider.search(query)

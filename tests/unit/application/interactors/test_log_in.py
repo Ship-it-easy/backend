@@ -47,7 +47,7 @@ class TestLogInInteractor:
         result = await interactor(request)
         assert result is None
 
-        mock_session_data_gateway.add.assert_called_once()
+        mock_session_data_gateway.replace_for_user.assert_awaited_once()
         mock_request_manager.add_session_id_to_request.assert_called_once()
         mock_transaction_manager.commit.assert_called_once()
 

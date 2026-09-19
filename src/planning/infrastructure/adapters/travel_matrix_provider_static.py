@@ -1,23 +1,31 @@
 import math
 
+from planning.application.interfaces.travel_matrix_provider import TravelMatrix
 from planning.domain.entities.coordinate import Coordinate
 
 
 class StaticTravelMatrixProvider:
-    """Deterministic offline provider useful for local development and demo fallback."""
+    """Deterministic offline provider used only by explicit STATIC_TEST config."""
 
     async def get_matrix(
-        self, coordinates: list[Coordinate], profile: str
-    ) -> list[list[int | None]]:
+        self,
+        coordinates: list[Coordinate],
+        profile: str,
+        cache_ttl_days: int | None = None,
+    ) -> TravelMatrix:
         speed_kmh = 25 if profile == "auto" else 5
-        result: list[list[int | None]] = []
+        times: list[list[int | None]] = []
+        distances: list[list[int | None]] = []
         for origin in coordinates:
-            row = []
+            time_row = []
+            distance_row = []
             for destination in coordinates:
                 distance_km = _haversine_km(origin, destination)
-                row.append(math.ceil(distance_km / speed_kmh * 60))
-            result.append(row)
-        return result
+                distance_row.append(math.ceil(distance_km * 1000))
+                time_row.append(math.ceil(distance_km / speed_kmh * 3600))
+            times.append(time_row)
+            distances.append(distance_row)
+        return TravelMatrix(times, distances, profile, "STATIC_TEST")
 
 
 def _haversine_km(a: Coordinate, b: Coordinate) -> float:

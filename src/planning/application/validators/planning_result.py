@@ -1,3 +1,4 @@
+import math
 from collections import Counter
 from datetime import timedelta
 from zoneinfo import ZoneInfo
@@ -32,9 +33,7 @@ class PlanningValidator:
             errors.append(f"jobs unassigned more than once: {duplicate_unassigned}")
         actual_job_ids = set(assigned) | set(unassigned)
         if actual_job_ids != expected_job_ids:
-            errors.append(
-                "assigned and unassigned jobs do not exactly cover the input"
-            )
+            errors.append("assigned and unassigned jobs do not exactly cover the input")
         if any(job.mandatory and job.id not in assigned for job in data.jobs):
             errors.append("mandatory job is not assigned")
 
@@ -45,6 +44,7 @@ class PlanningValidator:
         engineer_indexes = {
             engineer.id: index for index, engineer in enumerate(data.engineers)
         }
+        actual_travel_time_units = 0
         for route in result.routes:
             engineer = engineers.get(route.engineer_id)
             if engineer is None:
@@ -55,9 +55,13 @@ class PlanningValidator:
             previous_finish = route.planned_start
             previous_node = len(data.jobs) + engineer_indexes[engineer.id]
             calculated_travel = calculated_service = calculated_waiting = 0
+            calculated_distance = 0
             profile = (
                 "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
             )
+            matrix = result.travel_matrices.get(profile)
+            seconds_matrix = result.travel_time_seconds_matrices.get(profile)
+            distance_matrix = result.distance_matrices.get(profile)
             for item in route.jobs:
                 job = jobs.get(item.job_id)
                 if job is None:
@@ -106,17 +110,34 @@ class PlanningValidator:
                     errors.append(f"job {item.job_id} has invalid service duration")
                 previous_finish = item.planned_finish
                 job_index = job_indexes[item.job_id]
-                matrix = result.travel_matrices.get(profile)
                 if (
                     matrix is not None
                     and matrix[previous_node][job_index]
                     != item.travel_from_previous_min
                 ):
                     errors.append(f"job {item.job_id} has invalid travel time")
+                if (
+                    distance_matrix is not None
+                    and distance_matrix[previous_node][job_index]
+                    != item.distance_from_previous_meters
+                ):
+                    errors.append(f"job {item.job_id} has invalid distance")
+                travel_seconds = (
+                    seconds_matrix[previous_node][job_index]
+                    if seconds_matrix is not None
+                    else item.travel_from_previous_min * 60
+                )
+                if travel_seconds is None:
+                    errors.append(f"job {item.job_id} has no raw travel time")
+                else:
+                    actual_travel_time_units += math.ceil(
+                        travel_seconds / data.config.time_unit_seconds
+                    )
                 previous_node = job_index
                 calculated_travel += item.travel_from_previous_min
                 calculated_service += job.duration_min
                 calculated_waiting += item.waiting_before_job_min
+                calculated_distance += item.distance_from_previous_meters
                 used_equipment.update(job.required_equipment)
             if route.jobs and route.planned_finish != route.jobs[-1].planned_finish:
                 errors.append(f"route {route.engineer_id} has invalid finish")
@@ -130,6 +151,8 @@ class PlanningValidator:
                 errors.append(
                     f"route {route.engineer_id} has invalid equipment assignment"
                 )
+            if route.total_distance_meters != calculated_distance:
+                errors.append(f"route {route.engineer_id} has invalid distance total")
             preallocated = data.preallocated_equipment_by_engineer.get(
                 route.engineer_id, frozenset()
             )
@@ -146,6 +169,71 @@ class PlanningValidator:
             errors.append("invalid drop cost")
         if result.travel_cost != expected_travel_cost:
             errors.append("invalid travel cost")
-        if result.objective != expected_drop_cost + expected_travel_cost:
+        metrics = result.objective_metrics
+        if metrics:
+            weights = metrics["weights"]
+            model_job_ids = {job.id for job in data.jobs}
+            model_drop = sum(
+                item.drop_penalty // metrics["drop_cost_divisor"]
+                for item in result.unassigned
+                if item.job_id in model_job_ids
+            )
+            distance_units_by_route = [
+                sum(
+                    math.ceil(
+                        item.distance_from_previous_meters
+                        / data.config.distance_unit_meters
+                    )
+                    for item in route.jobs
+                )
+                for route in result.routes
+            ]
+            time_units = actual_travel_time_units
+            actual_total_distance = sum(distance_units_by_route)
+            actual_max_distance = max(distance_units_by_route, default=0)
+            actual_fixed = len(data.fixed_active_engineer_ids)
+            actual_new = sum(
+                route.engineer_id not in data.fixed_active_engineer_ids
+                for route in result.routes
+            )
+            actual_used = actual_fixed + actual_new
+            if model_drop > metrics["pmax"]:
+                errors.append("actual drop cost exceeds Pmax")
+            if actual_used > metrics["emax"]:
+                errors.append("actual used engineers exceed Emax")
+            if actual_total_distance > metrics["dmax"]:
+                errors.append("actual total distance exceeds Dmax")
+            if actual_max_distance > metrics["mmax"]:
+                errors.append("actual maximum distance exceeds Mmax")
+            if time_units > metrics["tmax"]:
+                errors.append("actual travel time exceeds Tmax")
+            if metrics["fixed_active_engineer_count"] != actual_fixed:
+                errors.append("invalid fixed active engineer count")
+            if metrics["newly_activated_engineer_count"] != actual_new:
+                errors.append("invalid newly activated engineer count")
+            if metrics["used_engineer_count"] != actual_used:
+                errors.append("invalid used engineer count")
+            expected_fixed_costs = {
+                str(engineer.id): (
+                    0
+                    if engineer.id in data.fixed_active_engineer_ids
+                    else weights["w_engineer"]
+                )
+                for engineer in data.engineers
+            }
+            if metrics["vehicle_fixed_costs"] != expected_fixed_costs:
+                errors.append("invalid vehicle fixed costs")
+            expected_objective = (
+                model_drop * weights["w_drop"]
+                + metrics["newly_activated_engineer_count"] * weights["w_engineer"]
+                + actual_total_distance * weights["w_total_distance"]
+                + actual_max_distance * weights["w_max_distance"]
+                + time_units
+            )
+            if result.objective != expected_objective:
+                errors.append("invalid lexicographic objective")
+            if result.objective > metrics["maximum_objective"]:
+                errors.append("actual objective exceeds proven maximum")
+        elif result.objective != expected_drop_cost + expected_travel_cost:
             errors.append("invalid objective")
         return errors

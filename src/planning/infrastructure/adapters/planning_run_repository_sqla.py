@@ -288,12 +288,15 @@ class SqlaPlanningRunRepository:
         matrix_hash = (
             hashlib.sha256(
                 json.dumps(
-                    result.travel_matrices,
+                    {
+                        "travel_time_seconds": result.travel_time_seconds_matrices,
+                        "distance_meters": result.distance_matrices,
+                    },
                     sort_keys=True,
                     separators=(",", ":"),
                 ).encode()
             ).hexdigest()
-            if result.travel_matrices
+            if result.travel_time_seconds_matrices
             else None
         )
         for route in result.routes:
@@ -307,6 +310,7 @@ class SqlaPlanningRunRepository:
                     total_travel_min=route.total_travel_min,
                     total_service_min=route.total_service_min,
                     total_waiting_min=route.total_waiting_min,
+                    total_distance_meters=route.total_distance_meters,
                 )
                 .returning(planning_routes.c.id)
             )
@@ -323,6 +327,9 @@ class SqlaPlanningRunRepository:
                             "planned_start": item.planned_start,
                             "planned_finish": item.planned_finish,
                             "travel_from_previous_min": item.travel_from_previous_min,
+                            "distance_from_previous_meters": (
+                                item.distance_from_previous_meters
+                            ),
                             "waiting_before_job_min": item.waiting_before_job_min,
                             "drop_penalty_snapshot": item.drop_penalty,
                         }
@@ -373,6 +380,28 @@ class SqlaPlanningRunRepository:
                 solver_time_ms=result.solver_time_ms,
                 travel_matrix_hash=matrix_hash,
                 validation_errors=result.validation_errors,
+                config_snapshot=_jsonable(
+                    {
+                        **asdict(data.config),
+                        **result.objective_metrics,
+                    }
+                ),
+                objective_range_snapshot=result.objective_metrics,
+                fixed_active_engineer_count=result.objective_metrics.get(
+                    "fixed_active_engineer_count", 0
+                ),
+                newly_activated_engineer_count=result.objective_metrics.get(
+                    "newly_activated_engineer_count", 0
+                ),
+                used_engineer_count=result.objective_metrics.get(
+                    "used_engineer_count", 0
+                ),
+                total_distance_meters=result.objective_metrics.get(
+                    "total_distance_meters", 0
+                ),
+                max_engineer_distance_meters=result.objective_metrics.get(
+                    "max_engineer_distance_meters", 0
+                ),
             )
         )
         if commit:

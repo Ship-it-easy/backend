@@ -127,6 +127,20 @@ class DynamicPlanValidator:
                     f"route {engineer_id} on {planning_date} has invalid sequence"
                 )
             for previous, current in zip(ordered, ordered[1:], strict=False):
+                requirement_snapshot = current.get("requirement_snapshot") or {}
+                replan_boundary = requirement_snapshot.get("replan_boundary")
+                if replan_boundary:
+                    expected_arrival = _datetime(
+                        replan_boundary["model_start_time"]
+                    ) + timedelta(
+                        minutes=int(current.get("travel_from_previous_min") or 0)
+                    )
+                    if expected_arrival != _datetime(current["planned_arrival"]):
+                        errors.append(
+                            f"route {engineer_id} on {planning_date} "
+                            "has an invalid replan boundary"
+                        )
+                    continue
                 expected_arrival = _datetime(previous["planned_finish"]) + timedelta(
                     minutes=int(current.get("travel_from_previous_min") or 0)
                 )

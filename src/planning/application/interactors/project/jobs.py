@@ -90,6 +90,11 @@ class UpdateProjectJobInteractor(_ProjectJobsInteractor):
 
     async def __call__(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]:
         _, project_id = await self._access.dispatcher()
+        if "priority_type" in values:
+            raise ConflictError(
+                "Job priority type is immutable",
+                code="PRIORITY_TYPE_IMMUTABLE",
+            )
         current = await self._repository.load_job_for_update(project_id, job_id)
         if current.status != "NEW":
             raise InvalidJobStatusError("Only NEW jobs may be edited")
@@ -145,7 +150,7 @@ class UpdateProjectJobInteractor(_ProjectJobsInteractor):
         if (
             final_start is not None
             and final_end is not None
-            and final_start > final_end
+            and final_start >= final_end
         ):
             raise InvalidPlanningRequest(
                 "Time window cannot cross midnight",
@@ -181,3 +186,38 @@ class ChangeProjectJobStatusInteractor:
             reason=reason,
             dispatcher=True,
         )
+
+
+class CancelProjectJobInteractor(_ProjectJobsInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: ProjectJobsRepository,
+        executor: PlanningBatchExecutor,
+        transaction_manager: TransactionManager,
+    ):
+        super().__init__(access, repository)
+        self._executor = executor
+        self._transaction_manager = transaction_manager
+
+    async def __call__(
+        self, job_id: int, scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        if scoped_project_id is None:
+            user, project_id = await self._access.dispatcher()
+        else:
+            project_id = scoped_project_id
+            user = await self._access.project(project_id, write=True)
+        result = await self._repository.cancel_job(project_id, job_id, user.id)
+        if (
+            scoped_project_id is not None
+            and result.get("planning_event_id") is not None
+        ):
+            result["planning_event_status_url"] = (
+                f"/api/projects/{project_id}/planning/events/"
+                f"{result['planning_event_id']}"
+            )
+        await self._transaction_manager.commit()
+        if result.get("planning_event_state") == "PENDING":
+            self._executor.schedule_project(project_id)
+        return result

@@ -63,8 +63,14 @@ class ClearEquipmentQuantityInteractor(_CatalogInteractor):
 
 
 class ListWorkTypesInteractor(_CatalogInteractor):
-    async def __call__(self) -> list[dict[str, Any]]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, scoped_project_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        if scoped_project_id is None:
+            _, project_id = await self._access.dispatcher()
+        else:
+            project_id = scoped_project_id
+            await self._access.project(project_id)
         return await self._repository.list_work_types(project_id)
 
 

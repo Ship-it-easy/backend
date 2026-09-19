@@ -28,14 +28,31 @@ class ProjectJobImportInteractor:
         self._executor = executor
         self._transaction_manager = transaction_manager
 
-    async def __call__(self, content: bytes, *, apply: bool) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+    async def __call__(
+        self,
+        content: bytes,
+        *,
+        apply: bool,
+        scoped_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        if scoped_project_id is None:
+            user, project_id = await self._access.dispatcher()
+        else:
+            project_id = scoped_project_id
+            user = await self._access.project(project_id, write=apply)
         rows, parse_errors = _parse_workbook(content)
         if not apply:
             return {
                 "valid_rows": len(rows),
                 "errors": parse_errors,
                 "preview": rows[:100],
+            }
+        if parse_errors:
+            return {
+                "created_job_ids": [],
+                "created_count": 0,
+                "errors": parse_errors,
+                "planning_event_id": None,
             }
         result = await self._repository.import_jobs(project_id, rows, user.id)
         result["errors"] = [*parse_errors, *result["errors"]]
@@ -89,6 +106,17 @@ def _parse_workbook(
             longitude = _as_float(raw.get("longitude"))
             if (latitude is None) != (longitude is None):
                 raise ValueError("latitude and longitude must be supplied together")
+            priority_raw = str(raw.get("priority_type") or "NORMAL").strip().casefold()
+            priority_type = {
+                "normal": "NORMAL",
+                "обычная": "NORMAL",
+                "emergency": "EMERGENCY",
+                "аварийная": "EMERGENCY",
+            }.get(priority_raw)
+            if priority_type is None:
+                raise ValueError(
+                    "priority_type must be NORMAL/EMERGENCY or Обычная/Аварийная"
+                )
             result.append(
                 {
                     "external_id": (
@@ -103,6 +131,7 @@ def _parse_workbook(
                     "time_window_end": end,
                     "latitude": latitude,
                     "longitude": longitude,
+                    "priority_type": priority_type,
                 }
             )
         except (TypeError, ValueError) as error:

@@ -146,7 +146,7 @@ class BlockUserInteractor(_AdminUserInteractor):
         self._transaction_manager = transaction_manager
 
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        await self._access.owner()
+        actor = await self._access.owner()
         state = await self._repository.lock_activation(user_id)
         if not state.active:
             await self._transaction_manager.commit()
@@ -156,7 +156,7 @@ class BlockUserInteractor(_AdminUserInteractor):
                 "The last active owner cannot be blocked",
                 code="LAST_ACTIVE_OWNER",
             )
-        result = await self._repository.save_active(user_id, False)
+        result = await self._repository.save_active(user_id, False, actor.id)
         await self._transaction_manager.commit()
         return result
 
@@ -173,11 +173,11 @@ class UnblockUserInteractor(_AdminUserInteractor):
         self._transaction_manager = transaction_manager
 
     async def __call__(self, user_id: UUID) -> dict[str, Any]:
-        await self._access.owner()
+        actor = await self._access.owner()
         state = await self._repository.lock_activation(user_id)
         if state.active:
             await self._transaction_manager.commit()
             return state.response()
-        result = await self._repository.save_active(user_id, True)
+        result = await self._repository.save_active(user_id, True, actor.id)
         await self._transaction_manager.commit()
         return result

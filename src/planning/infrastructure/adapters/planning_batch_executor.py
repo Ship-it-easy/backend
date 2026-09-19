@@ -52,6 +52,17 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
 logger = logging.getLogger(__name__)
 
 
+def _seven_day_block_start(anchor: date, affected: date) -> date:
+    offset = max(0, (affected - anchor).days)
+    return anchor + timedelta(days=(offset // 7) * 7)
+
+
+def _as_event_datetime(value: str | datetime) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
 class InProcessPlanningBatchExecutor:
     """Runs a durable database-backed batch outside the request-scoped session.
 
@@ -374,8 +385,31 @@ class InProcessPlanningBatchExecutor:
                             max(int(item.get("attempt_count") or 0) for item in events)
                             < 2
                         )
+                        message = str(error)
+                        code = next(
+                            (
+                                value
+                                for value in (
+                                    "DISTANCE_DATA_NOT_READY",
+                                    "TRAVEL_PROVIDER_UNAVAILABLE",
+                                    "INVALID_PENALTY_BANDS",
+                                    "OBJECTIVE_RANGE_OVERFLOW",
+                                    "FAILED_VALIDATION",
+                                )
+                                if value in message
+                            ),
+                            "SYSTEM_ERROR",
+                        )
                         await repository.fail(
-                            event_ids, "SYSTEM_ERROR", str(error), retry=retry
+                            event_ids,
+                            code,
+                            message,
+                            retry=retry
+                            and code
+                            in {
+                                "DISTANCE_DATA_NOT_READY",
+                                "TRAVEL_PROVIDER_UNAVAILABLE",
+                            },
                         )
 
     async def _process_events(
@@ -397,6 +431,8 @@ class InProcessPlanningBatchExecutor:
         context["event_deadline_monotonic"] = event_started + event_limit
         event_id_by_job: dict[int, int] = {}
         for event in events:
+            if event.get("event_type") not in {"JOB_CREATED", "IMPORT"}:
+                continue
             for job_id in event.get("job_ids") or []:
                 event_id_by_job[int(job_id)] = int(event["id"])
         jobs_by_id = {int(item["id"]): item for item in context["source"]["jobs"]}
@@ -417,8 +453,60 @@ class InProcessPlanningBatchExecutor:
             PlanningValidator(),
             repository,
         )
+        trigger_types = {str(item["event_type"]) for item in events}
+        cancelled_job_ids = {
+            int(job_id)
+            for item in events
+            if item["event_type"] == "JOB_CANCELLED"
+            for job_id in item.get("job_ids") or []
+        }
+        cancelled_at_by_job = {
+            int(job_id): _as_event_datetime(
+                (item.get("event_payload") or {}).get("cancelled_at")
+            )
+            for item in events
+            if item["event_type"] == "JOB_CANCELLED"
+            for job_id in item.get("job_ids") or []
+            if (item.get("event_payload") or {}).get("cancelled_at")
+        }
+        planning_date_text = planning_date.isoformat()
+        block_anchor = context.get("block_anchor_date") or planning_date
+        if isinstance(block_anchor, str):
+            block_anchor = date.fromisoformat(block_anchor)
+        current_block_start = _seven_day_block_start(block_anchor, planning_date)
+        lost_engineer_ids = {
+            int(engineer_id)
+            for item in events
+            if item["event_type"]
+            in {"ENGINEER_AVAILABILITY_LOST", "ENGINEER_AVAILABILITY_RESTORED"}
+            and planning_date_text
+            in (item.get("event_payload") or {}).get("lost_dates", [])
+            for engineer_id in item.get("engineer_ids") or []
+        }
+        restored_engineer_ids = {
+            int(engineer_id)
+            for item in events
+            if item["event_type"]
+            in {"ENGINEER_AVAILABILITY_LOST", "ENGINEER_AVAILABILITY_RESTORED"}
+            and planning_date_text
+            in (item.get("event_payload") or {}).get("restored_dates", [])
+            for engineer_id in item.get("engineer_ids") or []
+        }
+        current_block_end = current_block_start + timedelta(days=6)
+        cancelled_current_block_engineers = {
+            int(item["engineer_id"])
+            for item in context["current_assignments"]
+            if int(item["job_id"]) in cancelled_job_ids
+            and current_block_start
+            <= date.fromisoformat(str(item["planning_date"]))
+            <= current_block_end
+        }
         full_replan = any(
             item["event_type"] in {"MANUAL", "NIGHTLY"} for item in events
+        ) or bool(
+            lost_engineer_ids
+            or cancelled_current_block_engineers
+            or restored_engineer_ids
         )
         if full_replan:
             today_assignments = await today_service.replan_full_today(
@@ -430,6 +518,15 @@ class InProcessPlanningBatchExecutor:
                 # manual/nightly solve can assign the same urgent job before the
                 # per-engineer comparison and create a duplicate assignment.
                 excluded_job_ids=set(event_id_by_job),
+                cancelled_job_ids=cancelled_job_ids,
+                cancelled_at_by_job=cancelled_at_by_job,
+                unavailable_engineer_ids=lost_engineer_ids,
+                affected_engineer_ids=(
+                    cancelled_current_block_engineers
+                    if cancelled_current_block_engineers and not lost_engineer_ids
+                    else None
+                ),
+                restoration_engineer_ids=restored_engineer_ids,
             )
             context = {**context, "today_assignments": today_assignments}
         else:
@@ -441,18 +538,66 @@ class InProcessPlanningBatchExecutor:
                 planning_date=planning_date,
                 context=context,
             )
-        today_validation_errors = DynamicPlanValidator().validate_today(
-            context, today_assignments, planning_date
-        )
+        if cancelled_job_ids or lost_engineer_ids or restored_engineer_ids:
+            today_validation_errors = DynamicPlanValidator().validate_publication(
+                today_assignments,
+                timezone_name=timezone_name,
+                minimum_date=planning_date,
+                maximum_date=planning_date,
+            )
+            if cancelled_job_ids & {int(item["job_id"]) for item in today_assignments}:
+                today_validation_errors.append("cancelled job remains assigned")
+        else:
+            today_validation_errors = DynamicPlanValidator().validate_today(
+                context, today_assignments, planning_date
+            )
         if today_validation_errors:
             raise RuntimeError(
-                "DYNAMIC_PLAN_VALIDATION_FAILED: "
-                + "; ".join(today_validation_errors)
+                "FAILED_VALIDATION: " + "; ".join(today_validation_errors)
             )
         today_job_ids = {
             int(item["job_id"])
             for item in today_assignments
             if item.get("status") == "NEW"
+        }
+        affected_future_dates = [
+            date.fromisoformat(str(item["planning_date"]))
+            for item in context["current_assignments"]
+            if int(item["job_id"]) in cancelled_job_ids
+            and date.fromisoformat(str(item["planning_date"])) > planning_date
+        ]
+        for event in events:
+            payload = event.get("event_payload") or {}
+            for key in ("lost_dates", "restored_dates"):
+                affected_future_dates.extend(
+                    value
+                    for item in payload.get(key, [])
+                    if (value := date.fromisoformat(str(item))) > planning_date
+                )
+        boundary_sensitive = all(
+            item["event_type"]
+            in {
+                "JOB_CANCELLED",
+                "ENGINEER_AVAILABILITY_LOST",
+                "ENGINEER_AVAILABILITY_RESTORED",
+            }
+            for item in events
+        )
+        future_start = planning_date + timedelta(days=1)
+        if boundary_sensitive and affected_future_dates:
+            future_start = min(
+                max(
+                    planning_date + timedelta(days=1),
+                    _seven_day_block_start(block_anchor, affected_date),
+                )
+                for affected_date in affected_future_dates
+            )
+        preserved_job_ids = {
+            int(item["job_id"])
+            for item in context["current_assignments"]
+            if planning_date
+            < date.fromisoformat(str(item["planning_date"]))
+            < future_start
         }
         actor_user_id = next(
             (item.get("actor_user_id") for item in events if item.get("actor_user_id")),
@@ -473,31 +618,49 @@ class InProcessPlanningBatchExecutor:
             "dynamic:"
             + ":".join(str(item["id"]) for item in events)
             + f":attempt-{attempt}",
-            effective_start_override=planning_date + timedelta(days=1),
-            excluded_job_ids=today_job_ids,
+            effective_start_override=future_start,
+            excluded_job_ids=today_job_ids | preserved_job_ids,
             include_published_jobs=True,
             total_time_limit_override=min(remaining_event_seconds, cascade_limit),
         )
         batch_id = int(batch["id"])
-        await repository.attach_batch([int(item["id"]) for item in events], batch_id)
-        if not reused or batch["status"] in {
-            "CREATED",
-            "PREPARING",
-            "RUNNING",
-            "STOP_REQUESTED",
-        }:
-            service = MultiDayPlanningService(
-                batch_repository,
-                PlanningInputNormalizer(geocoder),
-                OrToolsPlanningSolverFactory(matrix_factory),
-                PlanningValidator(),
-                PlanningBatchValidator(),
+        try:
+            await repository.attach_batch(
+                [int(item["id"]) for item in events], batch_id
             )
-            await service.execute(batch_id)
+            if not reused or batch["status"] in {
+                "CREATED",
+                "PREPARING",
+                "RUNNING",
+                "STOP_REQUESTED",
+            }:
+                service = MultiDayPlanningService(
+                    batch_repository,
+                    PlanningInputNormalizer(geocoder),
+                    OrToolsPlanningSolverFactory(matrix_factory),
+                    PlanningValidator(),
+                    PlanningBatchValidator(),
+                )
+                await service.execute(batch_id)
+        except Exception as error:
+            # The batch row is committed before it is attached to the dynamic
+            # event. Never leave that row active when attachment or early batch
+            # preparation fails, otherwise every subsequent event is blocked by
+            # the one-active-batch-per-project constraint.
+            await batch_repository.fail_batch(batch_id, "SYSTEM_ERROR", str(error))
+            raise
+        for data, result in context.get("today_solver_runs", []):
+            await batch_repository.save_auxiliary_run(
+                batch_id,
+                planning_date,
+                timezone_name,
+                actor_user_id,
+                data,
+                result,
+            )
         fresh_context = await repository.load_context(project_id, planning_date)
         if fresh_context["source_hash"] != context["source_hash"]:
             raise StaleDynamicSnapshot("Planning inputs changed during calculation")
-        trigger_types = {str(item["event_type"]) for item in events}
         trigger_source = (
             next(iter(trigger_types)) if len(trigger_types) == 1 else "COALESCED"
         )
@@ -508,6 +671,7 @@ class InProcessPlanningBatchExecutor:
             planning_date=planning_date,
             timezone_name=timezone_name,
             expected_fingerprint=context["fingerprint"],
+            expected_source_hash=context["source_hash"],
             today_assignments=today_assignments,
             trigger_source=trigger_source,
             actor_user_id=actor_user_id,

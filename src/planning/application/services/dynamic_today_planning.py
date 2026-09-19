@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 from collections import defaultdict
 from dataclasses import replace
 from datetime import date, datetime, time, timedelta
@@ -89,40 +90,159 @@ class DynamicTodayPlanningService:
         planning_date: date,
         context: dict[str, Any],
         excluded_job_ids: set[int] | None = None,
+        cancelled_job_ids: set[int] | None = None,
+        cancelled_at_by_job: dict[int, datetime] | None = None,
+        unavailable_engineer_ids: set[int] | None = None,
+        affected_engineer_ids: set[int] | None = None,
+        restoration_engineer_ids: set[int] | None = None,
     ) -> list[dict[str, Any]]:
-        assignments = [_typed_assignment(item) for item in context["today_assignments"]]
+        cancelled_job_ids = cancelled_job_ids or set()
+        cancelled_at_by_job = cancelled_at_by_job or {}
+        unavailable_engineer_ids = unavailable_engineer_ids or set()
+        restoration_engineer_ids = restoration_engineer_ids or set()
+        original_assignments = [
+            _typed_assignment(item) for item in context["today_assignments"]
+        ]
+        assignments = [
+            item
+            for item in original_assignments
+            if int(item["job_id"]) not in cancelled_job_ids
+        ]
+        for item in assignments:
+            if (
+                int(item["engineer_id"]) in unavailable_engineer_ids
+                and item.get("status") == "IN_PROGRESS"
+            ):
+                # Until an actual completion arrives, the executing job remains
+                # a fixed fact through the later of its planned finish and T0.
+                # The adjusted finish also forms the travel-chain boundary for
+                # a partially shortened shift.
+                item["planned_finish"] = max(
+                    item["planned_finish"], context["snapshot_time"]
+                )
         source = context["source"]
         jobs_by_id = {int(item["id"]): item for item in source["jobs"]}
         schedules = _schedules_for(source, planning_date)
         routes: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for item in assignments:
             routes[int(item["engineer_id"])].append(item)
+        original_routes: dict[int, list[dict[str, Any]]] = defaultdict(list)
+        for item in original_assignments:
+            original_routes[int(item["engineer_id"])].append(item)
         protections = {}
         mutable_owner: dict[int, int] = {}
+        protected_ids: set[int] = set()
         for schedule in schedules:
             engineer_id = int(schedule["engineer_id"])
+            if (
+                affected_engineer_ids is not None
+                and engineer_id not in affected_engineer_ids
+            ):
+                protected_ids.update(
+                    int(item["job_id"]) for item in routes[engineer_id]
+                )
+                continue
+            cancelled_on_route = [
+                item
+                for item in original_routes[engineer_id]
+                if int(item["job_id"]) in cancelled_job_ids
+            ]
+            pre_cancel_route = [
+                {
+                    **item,
+                    "status": item.get("previous_status") or item.get("status"),
+                }
+                for item in original_routes[engineer_id]
+            ]
+            protected_before_cancel = self._protection.build(
+                engineer_id,
+                pre_cancel_route,
+                _minute(_time(schedule["shift_start"])),
+                context["snapshot_time"],
+                source["project"]["timezone"],
+            )
+            cancelled_in_progress = next(
+                (
+                    item
+                    for item in cancelled_on_route
+                    if item.get("previous_status") == "IN_PROGRESS"
+                ),
+                None,
+            )
+            protected_before_ids = {
+                int(item["job_id"]) for item in protected_before_cancel.fixed
+            }
+            cancelled_en_route = next(
+                (
+                    item
+                    for item in cancelled_on_route
+                    if item.get("previous_status") == "NEW"
+                    and int(item["job_id"]) in protected_before_ids
+                ),
+                None,
+            )
+            virtual_boundary = cancelled_in_progress or cancelled_en_route
             protection = self._protection.build(
                 engineer_id,
                 routes[engineer_id],
                 _minute(_time(schedule["shift_start"])),
                 context["snapshot_time"],
                 source["project"]["timezone"],
+                protect_next=engineer_id not in unavailable_engineer_ids
+                and virtual_boundary is None,
             )
+            if virtual_boundary is not None:
+                cancelled_job_id = int(virtual_boundary["job_id"])
+                boundary_time = cancelled_at_by_job.get(
+                    cancelled_job_id, context["snapshot_time"]
+                )
+                if virtual_boundary.get("previous_status") != "IN_PROGRESS":
+                    boundary_time = max(
+                        boundary_time, virtual_boundary["planned_start"]
+                    )
+                protection = replace(
+                    protection,
+                    boundary=virtual_boundary,
+                    boundary_time=boundary_time,
+                    diagnostics=(
+                        *protection.diagnostics,
+                        "CANCELLED_EN_ROUTE_ASSUMPTION",
+                    ),
+                )
             protections[engineer_id] = protection
             for item in protection.mutable:
-                mutable_owner[int(item["job_id"])] = engineer_id
-        protected_ids = {
+                if engineer_id not in unavailable_engineer_ids:
+                    mutable_owner[int(item["job_id"])] = engineer_id
+        protected_ids.update(
             int(item["job_id"])
             for protection in protections.values()
             for item in protection.fixed
-        }
+        )
         candidate_ids = set(jobs_by_id) - protected_ids - (excluded_job_ids or set())
+        # A current-day recalculation may use only free backlog and today's
+        # mutable assignments. Jobs already assigned on a future date stay in
+        # the future cascade and must never be pulled into today's route.
+        future_assigned_ids = {
+            int(item["job_id"])
+            for item in context["current_assignments"]
+            if _date(item["planning_date"]) > planning_date
+        }
+        candidate_ids.difference_update(future_assigned_ids)
+        assigned_elsewhere = {
+            int(item["job_id"])
+            for item in assignments
+            if int(item["engineer_id"]) in unavailable_engineer_ids
+            and item.get("status") in {"COMPLETED", "IN_PROGRESS"}
+        }
+        candidate_ids.difference_update(assigned_elsewhere)
         candidate_source = _daily_source(
             source, planning_date, candidate_ids, schedules
         )
         for engineer_row in candidate_source["engineers"]:
             engineer_id = int(engineer_row["engineer_id"])
-            protection = protections[engineer_id]
+            protection = protections.get(engineer_id)
+            if protection is None:
+                continue
             if protection.boundary is not None:
                 boundary = protection.boundary
                 engineer_row.update(
@@ -139,14 +259,43 @@ class DynamicTodayPlanningService:
             owner = mutable_owner.get(int(item["id"]))
             if owner is not None:
                 item["allowed_engineer_ids"] = [owner]
+            elif affected_engineer_ids is not None:
+                item["allowed_engineer_ids"] = sorted(affected_engineer_ids)
+            elif restoration_engineer_ids:
+                item["allowed_engineer_ids"] = sorted(restoration_engineer_ids)
+        released_assignment_ids = set(mutable_owner) | {
+            int(item["job_id"])
+            for item in assignments
+            if int(item["engineer_id"]) in unavailable_engineer_ids
+            and item.get("status") == "NEW"
+        }
         candidate_source["preallocated_equipment_by_engineer"] = (
-            _preallocated_equipment(assignments, source, set(mutable_owner))
+            _preallocated_equipment(assignments, source, released_assignment_ids)
         )
         data = await self._normalizer.normalize(
             project_id,
             planning_date,
             source["project"]["timezone"],
             candidate_source,
+        )
+        data = replace(
+            data,
+            fixed_active_engineer_ids=frozenset(
+                {
+                    engineer_id
+                    for engineer_id, protection in protections.items()
+                    if any(
+                        item.get("status") in {"NEW", "IN_PROGRESS"}
+                        for item in protection.fixed
+                    )
+                }
+                | {
+                    int(item["engineer_id"])
+                    for item in assignments
+                    if int(item["engineer_id"]) in unavailable_engineer_ids
+                    and item.get("status") == "IN_PROGRESS"
+                }
+            ),
         )
         opportunity_calendar = FutureOpportunityCalendar(
             source["jobs"], source, context["maximum_end"]
@@ -163,13 +312,26 @@ class DynamicTodayPlanningService:
         errors = self._validator.validate(data, result)
         if errors:
             raise RuntimeError("; ".join(errors))
+        context.setdefault("today_solver_runs", []).append((data, result))
         replanned = [
             dict(item)
             for item in assignments
             if int(item["job_id"]) not in mutable_owner
+            and not (
+                int(item["engineer_id"]) in unavailable_engineer_ids
+                and item.get("status") == "NEW"
+            )
         ]
         for route in result.routes:
-            protection = protections[route.engineer_id]
+            protection = protections.get(route.engineer_id)
+            if protection is None:
+                protection = self._protection.build(
+                    route.engineer_id,
+                    [],
+                    0,
+                    context["snapshot_time"],
+                    source["project"]["timezone"],
+                )
             offset = len(protection.fixed)
             for item in route.jobs:
                 job = jobs_by_id[item.job_id]
@@ -183,9 +345,33 @@ class DynamicTodayPlanningService:
                         "planned_start": item.planned_start,
                         "planned_finish": item.planned_finish,
                         "travel_from_previous_min": item.travel_from_previous_min,
+                        "distance_from_previous_meters": (
+                            item.distance_from_previous_meters
+                        ),
                         "waiting_before_job_min": item.waiting_before_job_min,
                         "requirement_snapshot": {
-                            "protection_diagnostics": list(protection.diagnostics)
+                            "protection_diagnostics": list(protection.diagnostics),
+                            "replan_boundary": (
+                                {
+                                    "source_job_id": int(protection.boundary["job_id"]),
+                                    "model_start_time": route.planned_start.isoformat(),
+                                }
+                                if item.sequence == 1
+                                and protection.boundary is not None
+                                else None
+                            ),
+                            "virtual_start": (
+                                {
+                                    "reason": "CANCELLED_EN_ROUTE_ASSUMPTION",
+                                    "source_job_id": int(protection.boundary["job_id"]),
+                                    "start_time": protection.boundary_time.isoformat(),
+                                }
+                                if item.sequence == 1
+                                and protection.boundary is not None
+                                and "CANCELLED_EN_ROUTE_ASSUMPTION"
+                                in protection.diagnostics
+                                else None
+                            ),
                         },
                         "status": "NEW",
                         "address": job["address"],
@@ -241,7 +427,9 @@ class DynamicTodayPlanningService:
             + opportunity_calendar.get(item.id, planning_date, common_data.config).bonus
             for item in common_data.jobs
         }
-        candidates: list[tuple[tuple[Any, ...], int, list[dict[str, Any]]]] = []
+        candidates: list[
+            tuple[tuple[Any, ...], int, list[dict[str, Any]], Any, Any]
+        ] = []
         event_deadline = context.get("event_deadline_monotonic")
         candidate_engineer_ids = sorted(schedule_by_engineer)
         await self._repository.set_candidate_progress(
@@ -307,6 +495,17 @@ class DynamicTodayPlanningService:
                     source["project"]["timezone"],
                     candidate_source,
                 )
+                data = replace(
+                    data,
+                    fixed_active_engineer_ids=frozenset(
+                        {engineer_id}
+                        if any(
+                            item.get("status") in {"NEW", "IN_PROGRESS"}
+                            for item in protection.fixed
+                        )
+                        else set()
+                    ),
+                )
                 if event_deadline is None:
                     event_deadline = monotonic() + data.config.event_time_limit_sec
                 if monotonic() >= event_deadline:
@@ -365,7 +564,7 @@ class DynamicTodayPlanningService:
                     planning_date,
                     daily_penalties,
                 )
-                candidates.append((score, engineer_id, replacement))
+                candidates.append((score, engineer_id, replacement, data, result))
                 await self._repository.save_candidate(
                     {
                         "project_id": project_id,
@@ -383,7 +582,10 @@ class DynamicTodayPlanningService:
                             mutable_ids - {item.job_id for item in route.jobs}
                         ),
                         "score_vector": list(score),
-                        "travel_matrix_hash": _matrix_hash(result.travel_matrices),
+                        "travel_matrix_hash": _matrix_hash(
+                            result.travel_time_seconds_matrices,
+                            result.distance_matrices,
+                        ),
                         "solver_time_ms": result.solver_time_ms,
                     }
                 )
@@ -417,9 +619,8 @@ class DynamicTodayPlanningService:
         if not candidates:
             return assignments, False
         winner = min(candidates, key=lambda item: item[0])
-        await self._repository.select_candidate(
-            event_id, int(new_job["id"]), winner[1]
-        )
+        await self._repository.select_candidate(event_id, int(new_job["id"]), winner[1])
+        context.setdefault("today_solver_runs", []).append((winner[3], winner[4]))
         return winner[2], True
 
 
@@ -454,9 +655,18 @@ def _replace_route(
                 "planned_start": item.planned_start,
                 "planned_finish": item.planned_finish,
                 "travel_from_previous_min": item.travel_from_previous_min,
+                "distance_from_previous_meters": item.distance_from_previous_meters,
                 "waiting_before_job_min": item.waiting_before_job_min,
                 "requirement_snapshot": {
-                    "protection_diagnostics": list(protection_diagnostics)
+                    "protection_diagnostics": list(protection_diagnostics),
+                    "replan_boundary": (
+                        {
+                            "source_job_id": int(fixed[-1]["job_id"]),
+                            "model_start_time": route.planned_start.isoformat(),
+                        }
+                        if item.sequence == 1 and fixed
+                        else None
+                    ),
                 },
                 "status": "NEW",
                 "address": job["address"],
@@ -499,9 +709,27 @@ def _with_sla_hierarchy(
         )
         for item in data.jobs
     ]
+    adjusted = _enforce_sla_hierarchy(penalized, decisions, data)
+    positive_costs = [item.drop_penalty for item in adjusted if item.drop_penalty > 0]
+    divisor = math.gcd(*positive_costs) if positive_costs else 1
+    penalty_components = {
+        str(job_id): dict(values)
+        for job_id, values in data.snapshot.get("penalty_components", {}).items()
+    }
+    adjusted_by_id = {item.id: item for item in adjusted}
+    for item in data.jobs:
+        values = penalty_components.setdefault(str(item.id), {})
+        daily_penalty = int(values.get("daily_drop_penalty_v2", item.drop_penalty))
+        cascade_penalty = int(cascade_penalties.get(item.id, item.drop_penalty))
+        values.update(
+            future_opportunity_bonus=max(0, cascade_penalty - daily_penalty),
+            cascade_drop_penalty_v2=cascade_penalty,
+            solver_drop_cost=adjusted_by_id[item.id].drop_penalty // divisor,
+        )
     return replace(
         data,
-        jobs=_enforce_sla_hierarchy(penalized, decisions, data),
+        jobs=adjusted,
+        snapshot={**data.snapshot, "penalty_components": penalty_components},
     )
 
 
@@ -533,6 +761,13 @@ def _candidate_score(
             )
         )
     common = [job_id for job_id in mutable_ids if job_id in after_by_id]
+    used_engineers = len(
+        {
+            int(item["engineer_id"])
+            for item in after
+            if item.get("status") in {"NEW", "IN_PROGRESS"}
+        }
+    )
     inversions = 0
     for index, left in enumerate(common):
         for right in common[index + 1 :]:
@@ -560,6 +795,13 @@ def _candidate_score(
         ),
     )
     travel = sum(int(item.get("travel_from_previous_min") or 0) for item in after)
+    distance_by_engineer: dict[int, int] = defaultdict(int)
+    for item in after:
+        distance_by_engineer[int(item["engineer_id"])] += int(
+            item.get("distance_from_previous_meters") or 0
+        )
+    total_distance = sum(distance_by_engineer.values())
+    max_distance = max(distance_by_engineer.values(), default=0)
     waiting = sum(int(item.get("waiting_before_job_min") or 0) for item in after)
     engineer_id = int(after_by_id[new_job_id]["engineer_id"])
     tie_route = tuple(
@@ -580,10 +822,13 @@ def _candidate_score(
     )
     return (
         *vector,
+        used_engineers,
         inversions,
         len(shifts),
         sum(shifts),
         new_delay,
+        total_distance,
+        max_distance,
         travel,
         waiting,
         engineer_id,
@@ -659,9 +904,19 @@ def _datetime(value: datetime | str) -> datetime:
     )
 
 
-def _matrix_hash(matrices: dict[str, list[list[int | None]]]) -> str | None:
-    if not matrices:
+def _matrix_hash(
+    time_matrices: dict[str, list[list[int | None]]],
+    distance_matrices: dict[str, list[list[int | None]]],
+) -> str | None:
+    if not time_matrices:
         return None
     return hashlib.sha256(
-        json.dumps(matrices, sort_keys=True, separators=(",", ":")).encode()
+        json.dumps(
+            {
+                "travel_time_seconds": time_matrices,
+                "distance_meters": distance_matrices,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
     ).hexdigest()

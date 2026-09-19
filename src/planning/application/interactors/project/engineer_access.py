@@ -4,6 +4,9 @@ from auth.application.interfaces.password_hasher import PasswordHasher
 from auth.domain.entities.user import RawPassword
 from planning.application.access import ProjectAccess
 from planning.application.errors import ObjectNotFoundError
+from planning.application.interfaces.planning_batch_repository import (
+    PlanningBatchExecutor,
+)
 from planning.application.interfaces.project_management_repositories import (
     EngineerAccountRepository,
 )
@@ -66,12 +69,42 @@ class ResetEngineerPasswordInteractor(_EngineerAccessInteractor):
 
 
 class BlockEngineerAccessInteractor(_EngineerAccessInteractor):
-    async def __call__(self, engineer_id: int) -> dict[str, str]:
-        _, project_id = await self._access.dispatcher()
-        return await self._repository.set_active(project_id, engineer_id, False)
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: EngineerAccountRepository,
+        password_hasher: PasswordHasher,
+        executor: PlanningBatchExecutor,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._executor = executor
+
+    async def __call__(self, engineer_id: int) -> dict[str, Any]:
+        user, project_id = await self._access.dispatcher()
+        result = await self._repository.set_active(
+            project_id, engineer_id, False, user.id
+        )
+        if result.get("planning_event_id"):
+            self._executor.schedule_project(project_id)
+        return result
 
 
 class UnblockEngineerAccessInteractor(_EngineerAccessInteractor):
-    async def __call__(self, engineer_id: int) -> dict[str, str]:
-        _, project_id = await self._access.dispatcher()
-        return await self._repository.set_active(project_id, engineer_id, True)
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: EngineerAccountRepository,
+        password_hasher: PasswordHasher,
+        executor: PlanningBatchExecutor,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._executor = executor
+
+    async def __call__(self, engineer_id: int) -> dict[str, Any]:
+        user, project_id = await self._access.dispatcher()
+        result = await self._repository.set_active(
+            project_id, engineer_id, True, user.id
+        )
+        if result.get("planning_event_id"):
+            self._executor.schedule_project(project_id)
+        return result

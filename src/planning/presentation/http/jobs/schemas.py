@@ -8,14 +8,19 @@ class CreateJobRequest(BaseModel):
 
     external_id: str | None = Field(default=None, max_length=255)
     address: str = Field(min_length=1)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     sla_date: date
     work_type_id: int
     service_duration_min: int | None = Field(default=None, gt=0)
     time_window_start: time | None = None
     time_window_end: time | None = None
+    priority_type: str = Field(default="NORMAL", pattern="^(NORMAL|EMERGENCY)$")
 
     @model_validator(mode="after")
     def validate_time_window(self) -> "CreateJobRequest":
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("coordinates must be provided together")
         if self.time_window_start is not None and self.time_window_end is not None:
             if self.time_window_start >= self.time_window_end:
                 raise ValueError(
@@ -29,6 +34,7 @@ class JobResponse(BaseModel):
     project_id: int
     external_id: str | None
     status: str
+    priority_type: str
     address: str
     latitude: float | None
     longitude: float | None

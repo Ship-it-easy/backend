@@ -356,7 +356,9 @@ class SqlaAdminUserRepository(AdminUserRepository):
             active_owner_count=len(active_owners),
         )
 
-    async def save_active(self, user_id: UUID, active: bool) -> dict[str, Any]:
+    async def save_active(
+        self, user_id: UUID, active: bool, actor_user_id: UUID | None = None
+    ) -> dict[str, Any]:
         row = (
             (
                 await self._session.execute(
@@ -373,7 +375,25 @@ class SqlaAdminUserRepository(AdminUserRepository):
             await self._session.execute(
                 delete(sessions_table).where(sessions_table.c.user_id == user_id)
             )
-        return _user(row)
+        result = _user(row)
+        if row.engineer_id is not None and row.project_id is not None:
+            from planning.infrastructure.adapters import (
+                project_management_repositories_sqla,
+            )
+
+            repository_type = (
+                project_management_repositories_sqla.SqlaEngineerManagementRepository
+            )
+            availability = await repository_type(self._session).update_engineer(
+                int(row.project_id),
+                int(row.engineer_id),
+                {"active": active},
+                None,
+                actor_user_id,
+            )
+            result["planning_event_id"] = availability.get("planning_event_id")
+            result["planning_event_state"] = availability.get("planning_event_state")
+        return result
 
     async def _target(self, user_id: UUID, *, for_update: bool = False) -> Any:
         query = select(users_table).where(users_table.c.id == user_id)

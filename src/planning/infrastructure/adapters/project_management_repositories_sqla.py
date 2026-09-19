@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
@@ -22,15 +23,19 @@ from planning.application.interfaces.project_management_repositories import (
 )
 from planning.application.management_dto import ProjectJobEditState, WorkTypeEditState
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    engineer_availability_events,
     engineer_qualifications,
     engineer_schedules,
     engineers,
     equipment_types,
+    job_planning_state,
     job_status_history,
     jobs,
+    planning_config,
     planning_events,
     project_plan_assignments,
     project_plan_versions,
+    projects,
     qualifications,
     work_type_required_equipment,
     work_type_required_qualifications,
@@ -430,8 +435,14 @@ class SqlaEngineerManagementRepository(EngineerManagementRepository):
         engineer_id: int,
         values: dict[str, Any],
         qualification_ids: list[int] | None,
+        actor_user_id: Any,
     ) -> dict[str, Any]:
-        await _belongs(self._session, engineers, engineer_id, project_id)
+        previous_engineer = await _belongs(
+            self._session, engineers, engineer_id, project_id
+        )
+        active_changed = "active" in values and bool(values["active"]) != bool(
+            previous_engineer.active
+        )
         if qualification_ids is not None:
             await _validate_ids(
                 self._session, qualifications, qualification_ids, project_id
@@ -461,8 +472,124 @@ class SqlaEngineerManagementRepository(EngineerManagementRepository):
             .mappings()
             .one()
         )
+        event_id = None
+        if active_changed:
+            current_version_id = await self._session.scalar(
+                select(project_plan_versions.c.id).where(
+                    project_plan_versions.c.project_id == project_id,
+                    project_plan_versions.c.is_current.is_(True),
+                )
+            )
+            timezone_name = await self._session.scalar(
+                select(projects.c.planning_timezone).where(projects.c.id == project_id)
+            )
+            today = (
+                datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)).date()
+            )
+            maximum_days = int(
+                await self._session.scalar(
+                    select(planning_config.c.batch_maximum_horizon_days).where(
+                        planning_config.c.project_id == project_id,
+                        planning_config.c.active.is_(True),
+                    )
+                )
+                or 30
+            )
+            maximum_date = today + timedelta(days=maximum_days - 1)
+            event_type = (
+                "ENGINEER_AVAILABILITY_RESTORED"
+                if bool(values["active"])
+                else "ENGINEER_AVAILABILITY_LOST"
+            )
+            affected_job_ids: list[int] = []
+            affected_dates: list[Any] = []
+            if current_version_id is not None and not bool(values["active"]):
+                assignment_rows = (
+                    (
+                        await self._session.execute(
+                            select(
+                                project_plan_assignments.c.job_id,
+                                project_plan_assignments.c.planning_date,
+                            )
+                            .join(
+                                jobs,
+                                jobs.c.id == project_plan_assignments.c.job_id,
+                            )
+                            .where(
+                                project_plan_assignments.c.plan_version_id
+                                == current_version_id,
+                                project_plan_assignments.c.engineer_id == engineer_id,
+                                project_plan_assignments.c.planning_date.between(
+                                    today, maximum_date
+                                ),
+                                jobs.c.status.in_(["NEW", "IN_PROGRESS"]),
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                affected_job_ids = sorted(
+                    {int(item.job_id) for item in assignment_rows}
+                )
+                affected_dates = sorted(
+                    {item.planning_date for item in assignment_rows}
+                )
+            elif current_version_id is not None:
+                affected_dates = list(
+                    (
+                        await self._session.scalars(
+                            select(engineer_schedules.c.work_date).where(
+                                engineer_schedules.c.engineer_id == engineer_id,
+                                engineer_schedules.c.work_date.between(
+                                    today, maximum_date
+                                ),
+                            )
+                        )
+                    ).all()
+                )
+            if affected_dates:
+                for work_date in affected_dates:
+                    await self._session.execute(
+                        insert(engineer_availability_events).values(
+                            project_id=project_id,
+                            engineer_id=engineer_id,
+                            change_type=event_type,
+                            effective_date=work_date,
+                            old_interval={"active": bool(previous_engineer.active)},
+                            new_interval={"active": bool(values["active"])},
+                            actor_user_id=actor_user_id,
+                        )
+                    )
+                date_key = "restored_dates" if bool(values["active"]) else "lost_dates"
+                event_id = int(
+                    await self._session.scalar(
+                        insert(planning_events)
+                        .values(
+                            project_id=project_id,
+                            event_type=event_type,
+                            job_ids=affected_job_ids,
+                            engineer_ids=[engineer_id],
+                            initiator="USER",
+                            actor_user_id=actor_user_id,
+                            idempotency_key=(
+                                f"engineer-active:{engineer_id}:{uuid.uuid4().hex}"
+                            ),
+                            state="PENDING",
+                            event_payload={
+                                date_key: [
+                                    value.isoformat() for value in affected_dates
+                                ]
+                            },
+                        )
+                        .returning(planning_events.c.id)
+                    )
+                )
         await self._session.commit()
-        return await self._result(row)
+        result = await self._result(row)
+        result["planning_event_id"] = event_id
+        result["planning_event_state"] = "PENDING" if event_id else None
+        return result
 
     async def replace_schedule(
         self,
@@ -508,6 +635,219 @@ class SqlaEngineerManagementRepository(EngineerManagementRepository):
             .all()
         )
         return [_dict(row, hidden=()) for row in rows]
+
+    async def replace_schedule_with_event(
+        self,
+        project_id: int,
+        engineer_id: int,
+        entries: list[dict[str, Any]],
+        actor_user_id: Any,
+    ) -> dict[str, Any]:
+        engineer = await _belongs(self._session, engineers, engineer_id, project_id)
+        dates = [entry["work_date"] for entry in entries]
+        previous_rows = (
+            (
+                await self._session.execute(
+                    select(engineer_schedules).where(
+                        engineer_schedules.c.engineer_id == engineer_id,
+                        engineer_schedules.c.work_date.in_(dates),
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+        previous = {
+            row.work_date: {
+                "shift_start": row.shift_start.isoformat(),
+                "shift_end": row.shift_end.isoformat(),
+            }
+            for row in previous_rows
+        }
+        await self._session.execute(
+            delete(engineer_schedules).where(
+                engineer_schedules.c.engineer_id == engineer_id,
+                engineer_schedules.c.work_date.in_(dates),
+            )
+        )
+        working = [entry for entry in entries if entry["working"]]
+        if working:
+            await self._session.execute(
+                insert(engineer_schedules),
+                [
+                    {
+                        "engineer_id": engineer_id,
+                        "work_date": item["work_date"],
+                        "shift_start": item["shift_start"],
+                        "shift_end": item["shift_end"],
+                    }
+                    for item in working
+                ],
+            )
+        current_version_id = await self._session.scalar(
+            select(project_plan_versions.c.id).where(
+                project_plan_versions.c.project_id == project_id,
+                project_plan_versions.c.is_current.is_(True),
+            )
+        )
+        timezone_name = await self._session.scalar(
+            select(projects.c.planning_timezone).where(projects.c.id == project_id)
+        )
+        project_today = (
+            datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)).date()
+        )
+        maximum_days = int(
+            await self._session.scalar(
+                select(planning_config.c.batch_maximum_horizon_days).where(
+                    planning_config.c.project_id == project_id,
+                    planning_config.c.active.is_(True),
+                )
+            )
+            or 30
+        )
+        maximum_date = project_today + timedelta(days=maximum_days - 1)
+        assignments_by_date: dict[Any, list[Any]] = {}
+        if current_version_id is not None:
+            assignment_rows = (
+                (
+                    await self._session.execute(
+                        select(project_plan_assignments)
+                        .join(
+                            jobs,
+                            jobs.c.id == project_plan_assignments.c.job_id,
+                        )
+                        .where(
+                            project_plan_assignments.c.plan_version_id
+                            == current_version_id,
+                            project_plan_assignments.c.engineer_id == engineer_id,
+                            project_plan_assignments.c.planning_date.in_(dates),
+                            jobs.c.status.in_(["NEW", "IN_PROGRESS"]),
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            for row in assignment_rows:
+                assignments_by_date.setdefault(row.planning_date, []).append(row)
+        lost_dates: list[Any] = []
+        restored_dates: list[Any] = []
+        affected_job_ids: set[int] = set()
+        for entry in entries:
+            work_date = entry["work_date"]
+            old = previous.get(work_date)
+            new = (
+                {
+                    "shift_start": entry["shift_start"].isoformat(),
+                    "shift_end": entry["shift_end"].isoformat(),
+                }
+                if entry["working"]
+                else None
+            )
+            old_start = time.fromisoformat(old["shift_start"]) if old else None
+            old_end = time.fromisoformat(old["shift_end"]) if old else None
+            new_start = entry.get("shift_start") if entry["working"] else None
+            new_end = entry.get("shift_end") if entry["working"] else None
+            shrunk = old is not None and (
+                new is None or new_start > old_start or new_end < old_end
+            )
+            expanded = new is not None and (
+                old is None or new_start < old_start or new_end > old_end
+            )
+            invalid = []
+            inside_published_horizon = (
+                current_version_id is not None
+                and project_today <= work_date <= maximum_date
+            )
+            if shrunk and inside_published_horizon:
+                for assignment in assignments_by_date.get(work_date, []):
+                    local_start = (
+                        assignment.planned_start.astimezone(
+                            ZoneInfo(timezone_name)
+                        )
+                        .time()
+                        .replace(tzinfo=None)
+                    )
+                    local_finish = (
+                        assignment.planned_finish.astimezone(
+                            ZoneInfo(timezone_name)
+                        )
+                        .time()
+                        .replace(tzinfo=None)
+                    )
+                    if new is None or local_start < new_start or local_finish > new_end:
+                        invalid.append(int(assignment.job_id))
+            change_type = None
+            if invalid:
+                lost_dates.append(work_date)
+                affected_job_ids.update(invalid)
+                change_type = "ENGINEER_AVAILABILITY_LOST"
+            elif expanded and inside_published_horizon and bool(engineer.active):
+                restored_dates.append(work_date)
+                change_type = "ENGINEER_AVAILABILITY_RESTORED"
+            if change_type:
+                await self._session.execute(
+                    insert(engineer_availability_events).values(
+                        project_id=project_id,
+                        engineer_id=engineer_id,
+                        change_type=change_type,
+                        effective_date=work_date,
+                        old_interval=old,
+                        new_interval=new,
+                        actor_user_id=actor_user_id,
+                    )
+                )
+        event_id = None
+        event_type = (
+            "ENGINEER_AVAILABILITY_LOST"
+            if lost_dates
+            else "ENGINEER_AVAILABILITY_RESTORED"
+            if restored_dates
+            else None
+        )
+        if event_type:
+            event_id = int(
+                await self._session.scalar(
+                    insert(planning_events)
+                    .values(
+                        project_id=project_id,
+                        event_type=event_type,
+                        job_ids=sorted(affected_job_ids),
+                        engineer_ids=[engineer_id],
+                        initiator="USER",
+                        actor_user_id=actor_user_id,
+                        idempotency_key=f"availability:{engineer_id}:{uuid.uuid4().hex}",
+                        state="PENDING",
+                        event_payload={
+                            "lost_dates": [value.isoformat() for value in lost_dates],
+                            "restored_dates": [
+                                value.isoformat() for value in restored_dates
+                            ],
+                        },
+                    )
+                    .returning(planning_events.c.id)
+                )
+            )
+        rows = (
+            (
+                await self._session.execute(
+                    select(engineer_schedules)
+                    .where(
+                        engineer_schedules.c.engineer_id == engineer_id,
+                        engineer_schedules.c.work_date.in_(dates),
+                    )
+                    .order_by(engineer_schedules.c.work_date)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        return {
+            "schedule": [_dict(row, hidden=()) for row in rows],
+            "planning_event_id": event_id,
+            "planning_event_state": "PENDING" if event_id else None,
+            "affected_job_ids": sorted(affected_job_ids),
+        }
 
     async def _result(self, row: Any) -> dict[str, Any]:
         qualification_ids = list(
@@ -627,8 +967,12 @@ class SqlaEngineerAccountRepository(EngineerAccountRepository):
         return {"status": "PASSWORD_RESET"}
 
     async def set_active(
-        self, project_id: int, engineer_id: int, active: bool
-    ) -> dict[str, str]:
+        self,
+        project_id: int,
+        engineer_id: int,
+        active: bool,
+        actor_user_id: Any,
+    ) -> dict[str, Any]:
         account = await self._required_account(project_id, engineer_id)
         await self._session.execute(
             update(users_table)
@@ -639,8 +983,20 @@ class SqlaEngineerAccountRepository(EngineerAccountRepository):
             await self._session.execute(
                 delete(sessions_table).where(sessions_table.c.user_id == account.id)
             )
-        await self._session.commit()
-        return {"status": "ACTIVE" if active else "BLOCKED"}
+        availability = await SqlaEngineerManagementRepository(
+            self._session
+        ).update_engineer(
+            project_id,
+            engineer_id,
+            {"active": active},
+            None,
+            actor_user_id,
+        )
+        return {
+            "status": "ACTIVE" if active else "BLOCKED",
+            "planning_event_id": availability.get("planning_event_id"),
+            "planning_event_state": availability.get("planning_event_state"),
+        }
 
     async def _account(self, project_id: int, engineer_id: int) -> Any:
         await _belongs(self._session, engineers, engineer_id, project_id)
@@ -733,13 +1089,20 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             .mappings()
             .one()
         )
+        await self._session.execute(
+            insert(job_planning_state).values(
+                job_id=row.id,
+                project_id=project_id,
+                state="UNASSIGNED",
+            )
+        )
         event_id = await self._session.scalar(
             insert(planning_events)
             .values(
                 project_id=project_id,
                 event_type="JOB_CREATED",
                 job_ids=[int(row.id)],
-                initiator="SYSTEM",
+                    initiator="USER",
                 actor_user_id=actor_user_id,
                 idempotency_key=f"job-created:{row.id}",
                 state="PENDING",
@@ -793,6 +1156,7 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                     "external_id": values.get("external_id") or None,
                     "internal_code": _code("JOB"),
                     "status": "NEW",
+                    "priority_type": values.get("priority_type", "NORMAL"),
                     "address": values["address"],
                     "latitude": values.get("latitude"),
                     "longitude": values.get("longitude"),
@@ -803,14 +1167,27 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                     "service_duration_min": int(work_type.default_service_duration_min),
                 }
             )
+        if errors:
+            return {
+                "created_job_ids": [],
+                "created_count": 0,
+                "errors": errors,
+                "planning_event_id": None,
+            }
         try:
             inserted_ids: list[int] = []
             for values in valid:
-                inserted_ids.append(
-                    int(
-                        await self._session.scalar(
-                            insert(jobs).values(**values).returning(jobs.c.id)
-                        )
+                inserted_id = int(
+                    await self._session.scalar(
+                        insert(jobs).values(**values).returning(jobs.c.id)
+                    )
+                )
+                inserted_ids.append(inserted_id)
+                await self._session.execute(
+                    insert(job_planning_state).values(
+                        job_id=inserted_id,
+                        project_id=project_id,
+                        state="UNASSIGNED",
                     )
                 )
             event_id = None
@@ -822,7 +1199,7 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                             project_id=project_id,
                             event_type="IMPORT",
                             job_ids=inserted_ids,
-                            initiator="SYSTEM",
+                            initiator="USER",
                             actor_user_id=actor_user_id,
                             idempotency_key=f"import:{uuid.uuid4().hex}",
                             state="PENDING",
@@ -925,6 +1302,139 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             .one()
         )
         return await self._result(row)
+
+    async def cancel_job(
+        self, project_id: int, job_id: int, actor_user_id: Any
+    ) -> dict[str, Any]:
+        current = (
+            (
+                await self._session.execute(
+                    select(jobs)
+                    .where(jobs.c.id == job_id, jobs.c.project_id == project_id)
+                    .with_for_update()
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if current is None:
+            raise ObjectNotFoundError("Job not found")
+        if current.status == "COMPLETED":
+            raise ConflictError(
+                "Completed job cannot be cancelled", code="JOB_ALREADY_COMPLETED"
+            )
+        existing_event = (
+            (
+                await self._session.execute(
+                    select(planning_events).where(
+                        planning_events.c.project_id == project_id,
+                        planning_events.c.idempotency_key == f"job-cancelled:{job_id}",
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if current.status == "CANCELLED":
+            return {
+                **(await self._result(current)),
+                "planning_event_id": int(existing_event.id) if existing_event else None,
+                "planning_event_state": existing_event.state
+                if existing_event
+                else None,
+                "idempotent": True,
+            }
+        if current.status not in {"NEW", "IN_PROGRESS"}:
+            raise ConflictError(
+                "Only NEW or IN_PROGRESS job can be cancelled",
+                code="INVALID_STATUS_TRANSITION",
+            )
+        now = datetime.now(timezone.utc)
+        row = (
+            (
+                await self._session.execute(
+                    update(jobs)
+                    .where(jobs.c.id == job_id)
+                    .values(
+                        status="CANCELLED",
+                        previous_status=current.status,
+                        cancelled_at=now,
+                        cancelled_by_user_id=actor_user_id,
+                        updated_at=now,
+                    )
+                    .returning(*jobs.c)
+                )
+            )
+            .mappings()
+            .one()
+        )
+        current_assignment = (
+            (
+                await self._session.execute(
+                    select(
+                        project_plan_assignments.c.id,
+                        project_plan_assignments.c.plan_version_id,
+                    )
+                    .join(
+                        project_plan_versions,
+                        project_plan_versions.c.id
+                        == project_plan_assignments.c.plan_version_id,
+                    )
+                    .where(
+                        project_plan_assignments.c.job_id == job_id,
+                        project_plan_versions.c.project_id == project_id,
+                        project_plan_versions.c.is_current.is_(True),
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        assignment_id = current_assignment.id if current_assignment else None
+        await self._session.execute(
+            insert(job_status_history).values(
+                job_id=job_id,
+                project_plan_assignment_id=assignment_id,
+                old_status=current.status,
+                new_status="CANCELLED",
+                actor_user_id=actor_user_id,
+                reason="JOB_CANCELLED",
+            )
+        )
+        event_id = int(
+            await self._session.scalar(
+                insert(planning_events)
+                .values(
+                    project_id=project_id,
+                    event_type="JOB_CANCELLED",
+                    job_ids=[job_id],
+                    initiator="USER",
+                    actor_user_id=actor_user_id,
+                    idempotency_key=f"job-cancelled:{job_id}",
+                    state="PENDING",
+                    event_payload={
+                        "previous_status": str(current.status),
+                        "source_plan_version_id": (
+                            int(current_assignment.plan_version_id)
+                            if current_assignment
+                            else None
+                        ),
+                        "cancelled_at": now.isoformat(),
+                    },
+                )
+                .returning(planning_events.c.id)
+            )
+        )
+        await self._session.execute(
+            delete(job_planning_state).where(job_planning_state.c.job_id == job_id)
+        )
+        return {
+            **(await self._result(row)),
+            "planning_event_id": event_id,
+            "planning_event_state": "PENDING",
+            "planning_event_status_url": f"/api/project/planning/events/{event_id}",
+            "idempotent": False,
+        }
 
     async def _work_type(self, work_type_id: int, project_id: int) -> Any:
         row = (

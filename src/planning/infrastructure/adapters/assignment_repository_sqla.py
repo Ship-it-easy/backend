@@ -311,6 +311,7 @@ class SqlaAssignmentRepository(AssignmentRepository):
                 jobs.c.time_window_end,
                 jobs.c.service_duration_min,
                 jobs.c.status.label("job_status"),
+                jobs.c.priority_type,
                 work_types.c.name.label("work_type_name"),
             )
             .join(
@@ -343,6 +344,7 @@ class SqlaAssignmentRepository(AssignmentRepository):
                 jobs.c.time_window_end,
                 jobs.c.service_duration_min,
                 jobs.c.status.label("job_status"),
+                jobs.c.priority_type,
                 work_types.c.name.label("work_type_name"),
             )
             .join(

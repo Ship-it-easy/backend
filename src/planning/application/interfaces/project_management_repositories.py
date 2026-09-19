@@ -56,10 +56,18 @@ class EngineerManagementRepository(Protocol):
         engineer_id: int,
         values: dict[str, Any],
         qualification_ids: list[int] | None,
+        actor_user_id: Any,
     ) -> dict[str, Any]: ...
     async def replace_schedule(
         self, project_id: int, engineer_id: int, entries: list[dict[str, Any]]
     ) -> list[dict[str, Any]]: ...
+    async def replace_schedule_with_event(
+        self,
+        project_id: int,
+        engineer_id: int,
+        entries: list[dict[str, Any]],
+        actor_user_id: Any,
+    ) -> dict[str, Any]: ...
 
 
 class EngineerAccountRepository(Protocol):
@@ -73,8 +81,12 @@ class EngineerAccountRepository(Protocol):
         self, project_id: int, engineer_id: int, password_hash: str
     ) -> dict[str, str]: ...
     async def set_active(
-        self, project_id: int, engineer_id: int, active: bool
-    ) -> dict[str, str]: ...
+        self,
+        project_id: int,
+        engineer_id: int,
+        active: bool,
+        actor_user_id: Any,
+    ) -> dict[str, Any]: ...
 
 
 class ProjectJobsRepository(Protocol):
@@ -98,6 +110,9 @@ class ProjectJobsRepository(Protocol):
         self, work_type_id: int
     ) -> WorkTypeEditState | None: ...
     async def save_job(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]: ...
+    async def cancel_job(
+        self, project_id: int, job_id: int, actor_user_id: Any
+    ) -> dict[str, Any]: ...
 
 
 class PlanningManagementRepository(Protocol):

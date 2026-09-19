@@ -24,6 +24,8 @@ class TodayRouteProtectionService:
         shift_start_minute: int,
         snapshot_time: datetime,
         timezone_name: str,
+        *,
+        protect_next: bool = True,
     ) -> ProtectedRoute:
         ordered = sorted(
             assignments, key=lambda item: (item["sequence"], item["job_id"])
@@ -53,10 +55,10 @@ class TodayRouteProtectionService:
                 ),
                 None,
             )
-            if next_unfinished is not None:
+            if protect_next and next_unfinished is not None:
                 fixed_end = max(fixed_end, next_unfinished)
             diagnostics.append("IN_PROGRESS_AND_NEXT_STOP_PROTECTED")
-        elif minute >= shift_start_minute:
+        elif protect_next and minute >= shift_start_minute:
             first_unfinished = next(
                 (
                     index

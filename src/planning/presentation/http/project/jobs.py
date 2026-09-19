@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, Query, UploadFile
 
 from planning.application.interactors.job_import import ProjectJobImportInteractor
 from planning.application.interactors.project.jobs import (
+    CancelProjectJobInteractor,
     ChangeProjectJobStatusInteractor,
     CreateProjectJobInteractor,
     GetProjectJobInteractor,
@@ -19,6 +20,15 @@ from planning.presentation.http.project.schemas import (
 )
 
 router = APIRouter()
+
+
+@router.post("/jobs/{job_id}/cancel", status_code=202)
+@inject
+async def job_cancel(
+    job_id: int,
+    interactor: FromDishka[CancelProjectJobInteractor],
+) -> dict[str, Any]:
+    return await interactor(job_id)
 
 
 @router.post("/jobs/import/preview")
@@ -96,5 +106,8 @@ async def job_status_change(
     job_id: int,
     body: JobStatusChange,
     interactor: FromDishka[ChangeProjectJobStatusInteractor],
+    cancel_interactor: FromDishka[CancelProjectJobInteractor],
 ) -> dict[str, Any]:
+    if body.status == "CANCELLED":
+        return await cancel_interactor(job_id)
     return await interactor(job_id, body.status, body.reason)

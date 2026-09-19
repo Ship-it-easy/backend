@@ -34,7 +34,7 @@ async def test_dispatcher_can_cancel_new_job() -> None:
         "status": "CANCELLED",
     }
     user = Mock(id=uuid4())
-    interactor = ChangeJobStatusInteractor(repository)
+    interactor = ChangeJobStatusInteractor(repository, AsyncMock())
 
     result = await interactor(
         user,
@@ -51,7 +51,7 @@ async def test_dispatcher_can_cancel_new_job() -> None:
 async def test_engineer_cannot_cancel_job() -> None:
     repository = AsyncMock()
     repository.load_transition_context.return_value = _context()
-    interactor = ChangeJobStatusInteractor(repository)
+    interactor = ChangeJobStatusInteractor(repository, AsyncMock())
 
     with pytest.raises(InvalidJobStatusError, match="Engineer cannot"):
         await interactor(Mock(id=uuid4()), 10, "CANCELLED", project_id=1)
@@ -60,7 +60,7 @@ async def test_engineer_cannot_cancel_job() -> None:
 async def test_start_requires_published_assignment() -> None:
     repository = AsyncMock()
     repository.load_transition_context.return_value = _context(assignment_id=None)
-    interactor = ChangeJobStatusInteractor(repository)
+    interactor = ChangeJobStatusInteractor(repository, AsyncMock())
 
     with pytest.raises(InvalidJobStatusError, match="published assignment"):
         await interactor(Mock(id=uuid4()), 10, "IN_PROGRESS", project_id=1)
@@ -71,7 +71,7 @@ async def test_completed_job_requires_reason_to_reopen() -> None:
     repository.load_transition_context.return_value = _context(
         old_status="COMPLETED"
     )
-    interactor = ChangeJobStatusInteractor(repository)
+    interactor = ChangeJobStatusInteractor(repository, AsyncMock())
 
     with pytest.raises(InvalidJobStatusError, match="Reason is required"):
         await interactor(
@@ -88,7 +88,7 @@ async def test_engineer_cannot_change_another_assignment() -> None:
     repository.load_transition_context.return_value = _context(
         assignment_matches_engineer=False
     )
-    interactor = ChangeJobStatusInteractor(repository)
+    interactor = ChangeJobStatusInteractor(repository, AsyncMock())
 
     with pytest.raises(ObjectNotFoundError, match="Assignment not found"):
         await interactor(

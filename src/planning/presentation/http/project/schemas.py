@@ -105,6 +105,7 @@ class JobCreate(BaseModel):
     time_window_start: time | None = None
     time_window_end: time | None = None
     work_type_id: int
+    priority_type: Literal["NORMAL", "EMERGENCY"] = "NORMAL"
 
     @model_validator(mode="after")
     def validate_values(self) -> "JobCreate":
@@ -113,7 +114,7 @@ class JobCreate(BaseModel):
         if (
             self.time_window_start
             and self.time_window_end
-            and self.time_window_start > self.time_window_end
+            and self.time_window_start >= self.time_window_end
         ):
             raise ValueError("time window cannot cross midnight")
         return self
@@ -128,6 +129,7 @@ class JobPatch(BaseModel):
     time_window_start: time | None = None
     time_window_end: time | None = None
     work_type_id: int | None = None
+    priority_type: Literal["NORMAL", "EMERGENCY"] | None = None
 
 
 class JobStatusChange(BaseModel):
@@ -170,6 +172,9 @@ class PlanningConfigPatch(BaseModel):
     event_coalesce_window_sec: int | None = Field(default=None, ge=0, le=120)
     event_coalesce_max_wait_sec: int | None = Field(default=None, ge=1, le=600)
     max_parallel_candidate_models: int | None = Field(default=None, ge=1, le=32)
+    distance_unit_meters: int | None = Field(default=None, ge=1, le=100_000)
+    time_unit_seconds: int | None = Field(default=None, ge=1, le=86_400)
+    travel_cache_ttl_days: int | None = Field(default=None, ge=0, le=3_650)
     nightly_planning_enabled: bool | None = None
     nightly_planning_time: time | None = None
     travel_provider: Literal["VALHALLA_LOCAL"] | None = None

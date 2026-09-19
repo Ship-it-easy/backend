@@ -82,6 +82,10 @@ jobs = Table(
     Column("external_id", String(255)),
     Column("internal_code", String(64), nullable=False),
     Column("status", String(32), nullable=False),
+    Column("priority_type", String(16), nullable=False, server_default="NORMAL"),
+    Column("cancelled_at", DateTime(timezone=True)),
+    Column("cancelled_by_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("previous_status", String(32)),
     Column("address", Text, nullable=False),
     Column("address_hash", String(64)),
     Column("latitude", Numeric(9, 6)),
@@ -333,6 +337,8 @@ planning_config = Table(
     ),
     Column("nightly_planning_enabled", Boolean, nullable=False, server_default="true"),
     Column("nightly_planning_time", Time, nullable=False, server_default="02:00:00"),
+    Column("distance_unit_meters", Integer, nullable=False, server_default="10"),
+    Column("time_unit_seconds", Integer, nullable=False, server_default="60"),
     Column(
         "created_at",
         DateTime(timezone=True),
@@ -383,6 +389,16 @@ planning_runs = Table(
     Column("traffic_reference_time", DateTime(timezone=True)),
     Column("solver_version", String(64)),
     Column("solver_time_ms", Integer),
+    Column("objective_range_snapshot", JSONB, nullable=False, server_default="{}"),
+    Column("fixed_active_engineer_count", Integer, nullable=False, server_default="0"),
+    Column(
+        "newly_activated_engineer_count", Integer, nullable=False, server_default="0"
+    ),
+    Column("used_engineer_count", Integer, nullable=False, server_default="0"),
+    Column("total_distance_meters", BigInteger, nullable=False, server_default="0"),
+    Column(
+        "max_engineer_distance_meters", BigInteger, nullable=False, server_default="0"
+    ),
     Column("error_code", String(64)),
     Column("error_message", Text),
     Column("validation_errors", JSONB, nullable=False, server_default="[]"),
@@ -462,6 +478,8 @@ planning_events = Table(
     Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
     Column("event_type", String(32), nullable=False),
     Column("job_ids", JSONB, nullable=False, server_default="[]"),
+    Column("engineer_ids", JSONB, nullable=False, server_default="[]"),
+    Column("event_payload", JSONB, nullable=False, server_default="{}"),
     Column("initiator", String(16), nullable=False),
     Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
     Column("idempotency_key", String(255)),
@@ -585,6 +603,8 @@ planning_batch_jobs = Table(
     Column("future_opportunity_bonus", Integer),
     Column("daily_drop_penalty", BigInteger),
     Column("cascade_drop_penalty", BigInteger),
+    Column("emergency_bonus", BigInteger, nullable=False, server_default="0"),
+    Column("solver_drop_cost", BigInteger),
     Column("processing_status", String(40), nullable=False),
     Column("assigned_date", Date),
     Column("planning_run_id", ForeignKey("planning_runs.id")),
@@ -620,6 +640,7 @@ planning_routes = Table(
     Column("total_travel_min", Integer, nullable=False),
     Column("total_service_min", Integer, nullable=False),
     Column("total_waiting_min", Integer, nullable=False),
+    Column("total_distance_meters", BigInteger, nullable=False, server_default="0"),
     UniqueConstraint("planning_run_id", "engineer_id"),
 )
 
@@ -643,6 +664,9 @@ planning_route_jobs = Table(
     Column("planned_start", DateTime(timezone=True), nullable=False),
     Column("planned_finish", DateTime(timezone=True), nullable=False),
     Column("travel_from_previous_min", Integer, nullable=False),
+    Column(
+        "distance_from_previous_meters", BigInteger, nullable=False, server_default="0"
+    ),
     Column("waiting_before_job_min", Integer, nullable=False),
     Column("drop_penalty_snapshot", Integer, nullable=False),
     UniqueConstraint("planning_route_id", "sequence"),
@@ -704,9 +728,7 @@ daily_plans = Table(
         nullable=False,
         server_default=text("now()"),
     ),
-    UniqueConstraint(
-        "project_id", "planning_date", name="uq_daily_plans_project_date"
-    ),
+    UniqueConstraint("project_id", "planning_date", name="uq_daily_plans_project_date"),
 )
 
 plan_versions = Table(
@@ -731,9 +753,7 @@ plan_versions = Table(
         server_default=text("now()"),
     ),
     Column("superseded_at", DateTime(timezone=True)),
-    UniqueConstraint(
-        "daily_plan_id", "version_number", name="uq_plan_versions_number"
-    ),
+    UniqueConstraint("daily_plan_id", "version_number", name="uq_plan_versions_number"),
 )
 
 assignments = Table(
@@ -753,9 +773,7 @@ assignments = Table(
     Column("route_data", JSONB, nullable=False, server_default="{}"),
     Column("requirement_snapshot", JSONB, nullable=False, server_default="{}"),
     Column("active", Boolean, nullable=False, server_default="true"),
-    UniqueConstraint(
-        "plan_version_id", "job_id", name="uq_assignments_version_job"
-    ),
+    UniqueConstraint("plan_version_id", "job_id", name="uq_assignments_version_job"),
     UniqueConstraint(
         "plan_version_id",
         "engineer_id",
@@ -820,6 +838,9 @@ project_plan_assignments = Table(
     Column("planned_finish", DateTime(timezone=True), nullable=False),
     Column("travel_from_previous_min", Integer, nullable=False, server_default="0"),
     Column("waiting_before_job_min", Integer, nullable=False, server_default="0"),
+    Column(
+        "distance_from_previous_meters", BigInteger, nullable=False, server_default="0"
+    ),
     Column("requirement_snapshot", JSONB, nullable=False, server_default="{}"),
     UniqueConstraint(
         "project_id",
@@ -912,8 +933,50 @@ travel_time_cache = Table(
     Column("destination_longitude", Numeric(9, 6), nullable=False),
     Column("profile", String(32), nullable=False),
     Column("duration_min", Integer),
+    Column("travel_time_seconds", Integer),
+    Column("distance_meters", BigInteger),
     Column("provider", String(32), nullable=False),
     Column("provider_version", String(64)),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+)
+
+job_planning_state = Table(
+    "job_planning_state",
+    metadata_obj,
+    Column("job_id", ForeignKey("jobs.id", ondelete="CASCADE"), primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("state", String(16), nullable=False),
+    Column("reason_code", String(64)),
+    Column(
+        "changed_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("source_event_id", ForeignKey("planning_events.id", ondelete="SET NULL")),
+    Column(
+        "plan_version_id", ForeignKey("project_plan_versions.id", ondelete="SET NULL")
+    ),
+)
+
+engineer_availability_events = Table(
+    "engineer_availability_events",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "engineer_id", ForeignKey("engineers.id", ondelete="CASCADE"), nullable=False
+    ),
+    Column("change_type", String(32), nullable=False),
+    Column("effective_date", Date, nullable=False),
+    Column("old_interval", JSONB),
+    Column("new_interval", JSONB),
+    Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
     Column(
         "created_at",
         DateTime(timezone=True),

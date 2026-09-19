@@ -119,6 +119,7 @@ class PlanningInteractorProvider(Provider):
     get_project_job = provide(project_jobs.GetProjectJobInteractor)
     update_project_job = provide(project_jobs.UpdateProjectJobInteractor)
     change_project_job_status = provide(project_jobs.ChangeProjectJobStatusInteractor)
+    cancel_project_job = provide(project_jobs.CancelProjectJobInteractor)
 
     search_addresses = provide(address_search.SearchAddressesInteractor)
     get_planning_config = provide(project_planning.GetPlanningConfigInteractor)
