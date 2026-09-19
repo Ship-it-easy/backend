@@ -612,8 +612,15 @@ def _preallocated_equipment(
 
 def _typed_assignment(item: dict[str, Any]) -> dict[str, Any]:
     value = dict(item)
-    for key in ("planned_arrival", "planned_start", "planned_finish"):
-        value[key] = _datetime(value[key])
+    for key in (
+        "planned_arrival",
+        "planned_start",
+        "planned_finish",
+        "actual_started_at",
+        "actual_completed_at",
+    ):
+        if value.get(key) is not None:
+            value[key] = _datetime(value[key])
     value["planning_date"] = _date(value["planning_date"])
     value["sla_date"] = _date(value["sla_date"])
     return value

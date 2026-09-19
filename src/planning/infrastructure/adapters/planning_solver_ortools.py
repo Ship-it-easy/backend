@@ -134,9 +134,12 @@ class OrToolsPlanningSolver:
         time_dimension = routing.GetDimensionOrDie("Time")
         for vehicle, engineer in enumerate(data.engineers):
             earliest = engineer.shift_start_min
-            time_dimension.CumulVar(routing.Start(vehicle)).SetRange(
-                earliest, engineer.shift_end_min
-            )
+            # The published timetable is reconstructed from the beginning of
+            # the available shift. Fix the model to the same boundary instead
+            # of letting OR-Tools choose a floating route start: otherwise the
+            # selected sequence and the deterministic published timetable may
+            # describe different schedules.
+            time_dimension.CumulVar(routing.Start(vehicle)).SetValue(earliest)
             time_dimension.CumulVar(routing.End(vehicle)).SetRange(
                 earliest, engineer.shift_end_min
             )
@@ -185,6 +188,7 @@ class OrToolsPlanningSolver:
                 )
 
         self._forbid_missing_arcs(routing, manager, data, matrices)
+        self._forbid_time_infeasible_arcs(routing, manager, data, matrices)
         self._forbid_invalid_route_arcs(
             routing,
             manager,
@@ -197,9 +201,15 @@ class OrToolsPlanningSolver:
         parameters.first_solution_strategy = (
             routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
         )
+        # Stop at a local optimum instead of consuming the entire limit after a
+        # feasible result; the remaining budget is available for the bounded
+        # invalid-arc repair below when post-validation rejects a sequence.
         parameters.local_search_metaheuristic = (
-            routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+            routing_enums_pb2.LocalSearchMetaheuristic.GREEDY_DESCENT
         )
+        # Publication validation depends on correlated route-wide time bounds,
+        # so use complete Time-dimension propagation during search.
+        parameters.use_full_propagation = True
         remaining_ms = int(
             (
                 data.config.solver_time_limit_sec
@@ -311,6 +321,79 @@ class OrToolsPlanningSolver:
                 routing.NextVar(from_index), to_index
             )
             solver.Add(from_not_vehicle + to_not_vehicle + not_successor >= 1)
+
+    def _forbid_time_infeasible_arcs(
+        self,
+        routing,
+        manager,
+        data: PlanningInput,
+        matrices: dict[str, list[list[int | None]]],
+    ) -> None:
+        """Remove arcs that cannot satisfy a shift and the destination window.
+
+        These are necessary pairwise bounds, not a replacement solver. They keep
+        an impossible sequence out of the routing search before its time limit is
+        spent and the complete Time dimension still validates the whole route.
+        """
+        solver = routing.solver()
+        job_count = len(data.jobs)
+        for vehicle, engineer in enumerate(data.engineers):
+            profile = (
+                "auto"
+                if engineer.transport_type == TransportType.CAR
+                else "pedestrian"
+            )
+            matrix = matrices[profile]
+            start_index = routing.Start(vehicle)
+            start_node = job_count + vehicle
+            for to_node, destination in enumerate(data.jobs):
+                travel = matrix[start_node][to_node]
+                if travel is None:
+                    continue
+                arrival = engineer.shift_start_min + travel
+                start = max(arrival, destination.window_start_min)
+                if (
+                    start > destination.window_end_min
+                    or start + destination.duration_min > engineer.shift_end_min
+                ):
+                    routing.NextVar(start_index).RemoveValue(
+                        manager.NodeToIndex(to_node)
+                    )
+
+            for from_node, source in enumerate(data.jobs):
+                from_index = manager.NodeToIndex(from_node)
+                earliest_source_start = max(
+                    engineer.shift_start_min, source.window_start_min
+                )
+                for to_node, destination in enumerate(data.jobs):
+                    if from_node == to_node:
+                        continue
+                    travel = matrix[from_node][to_node]
+                    if travel is None:
+                        continue
+                    arrival = (
+                        earliest_source_start + source.duration_min + travel
+                    )
+                    start = max(arrival, destination.window_start_min)
+                    if (
+                        start <= destination.window_end_min
+                        and start + destination.duration_min
+                        <= engineer.shift_end_min
+                    ):
+                        continue
+                    to_index = manager.NodeToIndex(to_node)
+                    from_not_vehicle = solver.IsDifferentCstVar(
+                        routing.VehicleVar(from_index), vehicle
+                    )
+                    to_not_vehicle = solver.IsDifferentCstVar(
+                        routing.VehicleVar(to_index), vehicle
+                    )
+                    not_successor = solver.IsDifferentCstVar(
+                        routing.NextVar(from_index), to_index
+                    )
+                    solver.Add(
+                        from_not_vehicle + to_not_vehicle + not_successor >= 1
+                    )
 
     def _add_equipment_constraints(
         self,

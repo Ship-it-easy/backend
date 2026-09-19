@@ -14,6 +14,9 @@ class PlanningValidator:
         engineers = {engineer.id: engineer for engineer in data.engineers}
         assigned = [item.job_id for route in result.routes for item in route.jobs]
         unassigned = [item.job_id for item in result.unassigned]
+        expected_job_ids = {job.id for job in data.jobs} | {
+            item.job_id for item in data.pre_unassigned
+        }
         duplicates = [
             job_id for job_id, count in Counter(assigned).items() if count > 1
         ]
@@ -27,8 +30,13 @@ class PlanningValidator:
         ]
         if duplicate_unassigned:
             errors.append(f"jobs unassigned more than once: {duplicate_unassigned}")
-        if len(set(assigned) | set(unassigned)) != data.input_jobs_count:
-            errors.append("assigned and unassigned jobs do not cover the input")
+        actual_job_ids = set(assigned) | set(unassigned)
+        if actual_job_ids != expected_job_ids:
+            errors.append(
+                "assigned and unassigned jobs do not exactly cover the input"
+            )
+        if any(job.mandatory and job.id not in assigned for job in data.jobs):
+            errors.append("mandatory job is not assigned")
 
         equipment_usage: Counter[int] = Counter()
         for values in data.preallocated_equipment_by_engineer.values():
@@ -61,10 +69,16 @@ class PlanningValidator:
                 if not is_base_compatible(job, engineer):
                     errors.append(f"job {item.job_id} is incompatible with engineer")
                 local_start = item.planned_start.astimezone(ZoneInfo(data.timezone))
+                local_arrival = item.planned_arrival.astimezone(ZoneInfo(data.timezone))
                 start_min = local_start.hour * 60 + local_start.minute
+                local_finish = item.planned_finish.astimezone(ZoneInfo(data.timezone))
+                if any(
+                    value.date() != data.planning_date
+                    for value in (local_arrival, local_start, local_finish)
+                ):
+                    errors.append(f"job {item.job_id} is planned on another date")
                 if not job.window_start_min <= start_min <= job.window_end_min:
                     errors.append(f"job {item.job_id} starts outside its window")
-                local_finish = item.planned_finish.astimezone(ZoneInfo(data.timezone))
                 finish_min = local_finish.hour * 60 + local_finish.minute
                 if (
                     start_min < engineer.shift_start_min

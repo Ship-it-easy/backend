@@ -79,10 +79,12 @@ class TodayRouteProtectionService:
             else (ordered[max(completed_indexes)] if completed_indexes else None)
         )
         known_finish = boundary.get("planned_finish") if boundary else None
+        if isinstance(known_finish, str):
+            known_finish = _datetime(known_finish)
         if boundary is not None and boundary["status"] == "COMPLETED":
             actual_finish = boundary.get("actual_completed_at")
             if actual_finish is not None:
-                known_finish = actual_finish
+                known_finish = _datetime(actual_finish)
                 diagnostics.append("ACTUAL_COMPLETION_TIME_USED")
             else:
                 diagnostics.append("ACTUAL_COMPLETION_TIME_MISSING")
@@ -99,3 +101,11 @@ class TodayRouteProtectionService:
             boundary_time=boundary_time,
             diagnostics=tuple(diagnostics),
         )
+
+
+def _datetime(value: datetime | str) -> datetime:
+    return (
+        value
+        if isinstance(value, datetime)
+        else datetime.fromisoformat(value.replace("Z", "+00:00"))
+    )

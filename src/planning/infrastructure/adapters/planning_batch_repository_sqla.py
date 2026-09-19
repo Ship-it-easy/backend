@@ -41,6 +41,8 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     planning_routes,
     planning_runs,
     planning_unassigned_jobs,
+    project_plan_assignments,
+    project_plan_versions,
     projects,
     qualifications,
     work_type_required_equipment,
@@ -1499,6 +1501,28 @@ class SqlaPlanningBatchRepository:
                 .all()
             )
         work_type_ids = {int(row.work_type_id) for row in job_rows}
+        if include_published_jobs:
+            published_work_type_ids = (
+                await self._session.scalars(
+                    select(jobs.c.work_type_id)
+                    .join(
+                        project_plan_assignments,
+                        project_plan_assignments.c.job_id == jobs.c.id,
+                    )
+                    .join(
+                        project_plan_versions,
+                        project_plan_versions.c.id
+                        == project_plan_assignments.c.plan_version_id,
+                    )
+                    .where(
+                        project_plan_versions.c.project_id == project_id,
+                        project_plan_versions.c.is_current.is_(True),
+                        project_plan_assignments.c.planning_date >= effective_start,
+                        project_plan_assignments.c.planning_date <= maximum_end,
+                    )
+                )
+            ).all()
+            work_type_ids.update(int(value) for value in published_work_type_ids)
         required_qualifications = await self._pairs(
             work_type_required_qualifications,
             "work_type_id",

@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import case, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from planning.application.validators.dynamic_plan import DynamicPlanValidator
 from planning.infrastructure.adapters.planning_batch_repository_sqla import (
     SqlaPlanningBatchRepository,
     _jsonable,
@@ -491,9 +492,17 @@ class SqlaDynamicPlanningRepository:
         )
         assignments = [*_normalize_assignments(today_assignments)]
         assignments.extend(_normalize_assignments([dict(row) for row in future_rows]))
-        job_ids = [int(item["job_id"]) for item in assignments]
-        if len(job_ids) != len(set(job_ids)):
-            raise RuntimeError("A job is assigned more than once in the new plan")
+        validation_errors = DynamicPlanValidator().validate_publication(
+            assignments,
+            timezone_name=timezone_name,
+            minimum_date=planning_date,
+            maximum_date=batch.maximum_horizon_end,
+        )
+        if validation_errors:
+            raise RuntimeError(
+                "DYNAMIC_PLAN_VALIDATION_FAILED: "
+                + "; ".join(validation_errors)
+            )
         unassigned_rows = (
             (
                 await self._session.execute(

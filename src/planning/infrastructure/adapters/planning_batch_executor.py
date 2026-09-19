@@ -16,6 +16,7 @@ from planning.application.services.multi_day_planning import MultiDayPlanningSer
 from planning.application.services.planning_input_normalizer import (
     PlanningInputNormalizer,
 )
+from planning.application.validators.dynamic_plan import DynamicPlanValidator
 from planning.application.validators.planning_batch import PlanningBatchValidator
 from planning.application.validators.planning_result import PlanningValidator
 from planning.entrypoint.config import PlanningServiceConfig
@@ -439,6 +440,14 @@ class InProcessPlanningBatchExecutor:
                 event_id_by_job=urgent,
                 planning_date=planning_date,
                 context=context,
+            )
+        today_validation_errors = DynamicPlanValidator().validate_today(
+            context, today_assignments, planning_date
+        )
+        if today_validation_errors:
+            raise RuntimeError(
+                "DYNAMIC_PLAN_VALIDATION_FAILED: "
+                + "; ".join(today_validation_errors)
             )
         today_job_ids = {
             int(item["job_id"])
