@@ -64,8 +64,6 @@ EXPECTED_ROUTES = {
     ("PATCH", "/api/project/work-types/{item_id}"),
     ("GET", "/api/project/jobs"),
     ("POST", "/api/project/jobs"),
-    ("POST", "/api/project/jobs/import/preview"),
-    ("POST", "/api/project/jobs/import/apply"),
     ("GET", "/api/project/jobs/{job_id}"),
     ("PATCH", "/api/project/jobs/{job_id}"),
     ("POST", "/api/project/jobs/{job_id}/status"),

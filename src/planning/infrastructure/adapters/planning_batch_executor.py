@@ -431,7 +431,7 @@ class InProcessPlanningBatchExecutor:
         context["event_deadline_monotonic"] = event_started + event_limit
         event_id_by_job: dict[int, int] = {}
         for event in events:
-            if event.get("event_type") not in {"JOB_CREATED", "IMPORT"}:
+            if event.get("event_type") not in {"JOB_CREATED", "IMPORT", "JOBS_IMPORTED"}:
                 continue
             for job_id in event.get("job_ids") or []:
                 event_id_by_job[int(job_id)] = int(event["id"])

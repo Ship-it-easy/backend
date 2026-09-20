@@ -135,11 +135,10 @@ class ValhallaTravelMatrixProvider:
                 except (httpx.HTTPError, TypeError, ValueError):
                     continue
 
-        values = []
+        values_by_key = {}
         for i, j in missing:
             origin, destination = coordinates[i], coordinates[j]
-            values.append(
-                {
+            values_by_key[keys[(i, j)]] = {
                     "cache_key": keys[(i, j)],
                     "origin_latitude": Decimal(str(origin.latitude)),
                     "origin_longitude": Decimal(str(origin.longitude)),
@@ -153,7 +152,7 @@ class ValhallaTravelMatrixProvider:
                     "distance_meters": distances[i][j],
                     "provider": "VALHALLA_LOCAL",
                 }
-            )
+        values = list(values_by_key.values())
         if values:
             await self._session.execute(
                 insert(travel_time_cache)

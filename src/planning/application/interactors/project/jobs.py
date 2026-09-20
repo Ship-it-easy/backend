@@ -36,6 +36,7 @@ class ListProjectJobsInteractor(_ProjectJobsInteractor):
         assigned: bool | None,
         limit: int,
         offset: int,
+        import_batch_id: int | None = None,
     ) -> dict[str, Any]:
         _, project_id = await self._access.dispatcher()
         return await self._repository.list_jobs(
@@ -46,6 +47,7 @@ class ListProjectJobsInteractor(_ProjectJobsInteractor):
                 "sla_date": sla_date,
                 "work_type_id": work_type_id,
                 "assigned": assigned,
+                "import_batch_id": import_batch_id,
                 "limit": limit,
                 "offset": offset,
             },

@@ -11,6 +11,7 @@ from planning.application.interfaces.dynamic_planning_repository import (
     DynamicPlanningRepository,
 )
 from planning.application.interfaces.geocoder import Geocoder
+from planning.application.interfaces.job_imports import JobImportOperations
 from planning.application.interfaces.job_status_repository import JobStatusRepository
 from planning.application.interfaces.jobs_repository import JobsRepository
 from planning.application.interfaces.planning_batch_repository import (
@@ -48,6 +49,10 @@ from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
 )
 from planning.infrastructure.adapters.geocoder_nominatim import NominatimGeocoder
+from planning.infrastructure.adapters.job_import_csv import (
+    JobImportExecutor,
+    JobImportService,
+)
 from planning.infrastructure.adapters.job_status_repository_sqla import (
     SqlaJobStatusRepository,
 )
@@ -94,6 +99,8 @@ from planning.infrastructure.adapters.travel_matrix_provider_valhalla import (
 
 class PlanningAdaptersProvider(Provider):
     scope = Scope.REQUEST
+    job_import_executor = provide(JobImportExecutor, scope=Scope.APP)
+    job_import_service = provide(JobImportService, provides=JobImportOperations)
 
     @provide(scope=Scope.APP)
     def planning_config(self, config: Config) -> PlanningServiceConfig:

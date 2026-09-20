@@ -195,3 +195,11 @@ Read model связывает каждую дату опубликованной
 ## Полезные материалы
 1. Web sessions - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 2. OAuth2 - https://auth0.com/docs и https://oauth.net/
+# Импорт заявок из CSV
+
+После миграции Alembic `e37b19a5c200` диспетчер и владелец могут загружать CSV
+через `POST /api/projects/{project_id}/job-imports`. Проверка выполняется в фоне;
+состояние и ошибки доступны через `GET` маршруты того же раздела. Применение
+проверенного пакета выполняется отдельным `POST .../{batch_id}/apply` с UUID в
+заголовке `Idempotency-Key`. Исходный файл и результаты проверки хранятся в БД;
+файл удаляется через 30 дней фоновым обслуживанием, результаты и аудит остаются.

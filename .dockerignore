@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.env.docker
+.env.*
+db-backups
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+migration_*.sql
+tests
+logs.log

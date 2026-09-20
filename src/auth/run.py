@@ -17,6 +17,7 @@ from auth.presentation.http.base.root_router import root_router
 from planning.application.interfaces.planning_batch_repository import (
     PlanningBatchExecutor,
 )
+from planning.infrastructure.adapters.job_import_csv import JobImportExecutor
 
 
 def make_app() -> FastAPI:
@@ -24,11 +25,14 @@ def make_app() -> FastAPI:
     async def lifespan(app: FastAPI):
         # Recover database-backed work interrupted by an application restart.
         executor = await async_ioc_container.get(PlanningBatchExecutor)
+        import_executor = await async_ioc_container.get(JobImportExecutor)
         await executor.recover()
+        await import_executor.recover()
         try:
             yield
         finally:
             await executor.shutdown()
+            await import_executor.shutdown()
 
     config = create_config()
     app = create_app(lifespan=lifespan)

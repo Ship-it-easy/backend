@@ -2,9 +2,8 @@ from datetime import date
 from typing import Any
 
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, Query
 
-from planning.application.interactors.job_import import ProjectJobImportInteractor
 from planning.application.interactors.project.jobs import (
     CancelProjectJobInteractor,
     ChangeProjectJobStatusInteractor,
@@ -31,24 +30,6 @@ async def job_cancel(
     return await interactor(job_id)
 
 
-@router.post("/jobs/import/preview")
-@inject
-async def job_import_preview(
-    interactor: FromDishka[ProjectJobImportInteractor],
-    file: UploadFile = File(...),
-) -> dict[str, Any]:
-    return await interactor(await file.read(), apply=False)
-
-
-@router.post("/jobs/import/apply", status_code=201)
-@inject
-async def job_import_apply(
-    interactor: FromDishka[ProjectJobImportInteractor],
-    file: UploadFile = File(...),
-) -> dict[str, Any]:
-    return await interactor(await file.read(), apply=True)
-
-
 @router.get("/jobs")
 @inject
 async def job_list(
@@ -58,6 +39,7 @@ async def job_list(
     sla_date: date | None = None,
     work_type_id: int | None = None,
     assigned: bool | None = None,
+    import_batch_id: int | None = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
@@ -67,6 +49,7 @@ async def job_list(
         sla_date=sla_date,
         work_type_id=work_type_id,
         assigned=assigned,
+        import_batch_id=import_batch_id,
         limit=limit,
         offset=offset,
     )

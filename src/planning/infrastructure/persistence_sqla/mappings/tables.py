@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Table,
@@ -96,6 +97,8 @@ jobs = Table(
     Column("time_window_end", Time),
     Column("work_type_id", ForeignKey("work_types.id"), nullable=False),
     Column("service_duration_min", Integer),
+    Column("import_batch_id", ForeignKey("job_import_batches.id")),
+    Column("import_row_number", Integer),
     Column(
         "created_at",
         DateTime(timezone=True),
@@ -110,6 +113,9 @@ jobs = Table(
     ),
     UniqueConstraint("project_id", "external_id", name="uq_jobs_project_id"),
     UniqueConstraint(
+        "import_batch_id", "import_row_number", name="uq_jobs_import_origin"
+    ),
+    UniqueConstraint(
         "project_id", "internal_code", name="uq_jobs_project_internal_code"
     ),
     CheckConstraint(
@@ -120,6 +126,102 @@ jobs = Table(
         "(latitude IS NULL) = (longitude IS NULL)", name="job_coordinate_pair"
     ),
 )
+
+job_import_batches = Table(
+    "job_import_batches",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("created_by", UUID(as_uuid=True), ForeignKey("users.id"), nullable=False),
+    Column("original_filename", String(255), nullable=False),
+    Column("content_sha256", String(64), nullable=False),
+    Column("source_bytes", LargeBinary),
+    Column("source_encoding", String(16)),
+    Column("source_delimiter", String(1)),
+    Column("validation_rules_version", String(32)),
+    Column("address_provider_version", String(32)),
+    Column("status", String(32), nullable=False, server_default="UPLOADED"),
+    Column("stage", String(64)),
+    Column("total_rows", Integer, nullable=False, server_default="0"),
+    Column("processed_rows", Integer, nullable=False, server_default="0"),
+    Column("error_count", Integer, nullable=False, server_default="0"),
+    Column("warning_count", Integer, nullable=False, server_default="0"),
+    Column("created_count", Integer, nullable=False, server_default="0"),
+    Column("warnings_acknowledged_by", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("warnings_acknowledged_at", DateTime(timezone=True)),
+    Column("planning_event_id", BigInteger),
+    Column("apply_idempotency_key", String(64)),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("validation_started_at", DateTime(timezone=True)),
+    Column("validation_finished_at", DateTime(timezone=True)),
+    Column("applied_at", DateTime(timezone=True)),
+    Column("source_file_expires_at", DateTime(timezone=True), nullable=False),
+    Column("technical_error_category", String(64)),
+    Column("package_issues", JSONB, nullable=False, server_default="[]"),
+)
+Index(
+    "uq_job_import_live_hash",
+    job_import_batches.c.project_id,
+    job_import_batches.c.content_sha256,
+    unique=True,
+    postgresql_where=job_import_batches.c.status != "EXPIRED",
+)
+
+job_import_rows = Table(
+    "job_import_rows",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "batch_id",
+        ForeignKey("job_import_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("row_number", Integer, nullable=False),
+    Column("raw_required_values_json", JSONB, nullable=False),
+    Column("normalized_address", Text),
+    Column("canonical_address_key", String(255)),
+    Column("latitude", Numeric(9, 6)),
+    Column("longitude", Numeric(9, 6)),
+    Column("sla_date", Date),
+    Column("time_window_start", Time),
+    Column("time_window_end", Time),
+    Column("work_type_id", ForeignKey("work_types.id")),
+    Column("work_type_duration_min", Integer),
+    Column("severity", String(16)),
+    Column("issues_json", JSONB, nullable=False, server_default="[]"),
+    Column("created_job_id", ForeignKey("jobs.id")),
+    UniqueConstraint("batch_id", "row_number"),
+)
+Index(
+    "ix_job_import_rows_batch", job_import_rows.c.batch_id, job_import_rows.c.row_number
+)
+
+job_import_audit = Table(
+    "job_import_audit",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "batch_id",
+        ForeignKey("job_import_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("actor_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("event_type", String(64), nullable=False),
+    Column("details", JSONB, nullable=False, server_default="{}"),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+)
+Index("ix_job_import_audit_batch", job_import_audit.c.batch_id, job_import_audit.c.id)
 
 engineers = Table(
     "engineers",

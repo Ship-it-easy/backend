@@ -48,6 +48,8 @@ class NominatimAddressSearchProvider(AddressSearchProvider):
                     "display_name": item["display_name"],
                     "latitude": float(item["lat"]),
                     "longitude": float(item["lon"]),
+                    "address": address,
+                    "address_key": str(item.get("place_id") or item.get("osm_id") or ""),
                 }
             )
         return result

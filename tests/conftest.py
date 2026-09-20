@@ -1,3 +1,5 @@
+import asyncio
+import sys
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
@@ -7,6 +9,10 @@ import pytest
 from auth.domain.entities.session import Session, SessionId
 from auth.domain.entities.user import PasswordHash, User, UserId, UserName
 from auth.domain.user_role import UserRoleEnum
+
+if sys.platform == "win32":
+    # psycopg's async connection requires a selector loop on Windows.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 HASHED_PASSWORD = PasswordHash(
     "$2b$12$8mjSL2sL8qauE3o2cNTgyeSwUlVa0LufWdZd2WrBaGgQQ3fPMIJoy"

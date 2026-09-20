@@ -1033,6 +1033,8 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
             query = query.where(jobs.c.sla_date == filters["sla_date"])
         if filters.get("work_type_id"):
             query = query.where(jobs.c.work_type_id == filters["work_type_id"])
+        if filters.get("import_batch_id"):
+            query = query.where(jobs.c.import_batch_id == filters["import_batch_id"])
         if filters.get("assigned") is not None:
             current = (
                 select(project_plan_assignments.c.job_id)
