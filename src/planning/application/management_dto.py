@@ -46,7 +46,11 @@ class PlanningReadinessState:
     has_config: bool
     has_work_types: bool
     has_engineers: bool
+    has_shifts: bool
     has_jobs: bool
+    has_engineer_locations: bool
+    has_job_locations: bool
+    has_travel_provider: bool
 
 
 @dataclass(frozen=True, slots=True)

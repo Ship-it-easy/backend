@@ -5,7 +5,10 @@ from planning.application.interactors.admin import users as admin_users
 from planning.application.interactors.create_job import CreateJobInteractor
 from planning.application.interactors.dynamic_planning import (
     GetCurrentProjectPlanInteractor,
+    GetPlanningBoardDayInteractor,
+    GetPlanningBoardInteractor,
     GetPlanningEventInteractor,
+    GetPlanningJobExplanationInteractor,
     GetProjectPlanVersionInteractor,
     ListProjectPlanVersionsInteractor,
     StartDynamicPlanningInteractor,
@@ -56,6 +59,9 @@ class PlanningInteractorProvider(Provider):
     start_dynamic_planning = provide(StartDynamicPlanningInteractor)
     get_planning_event = provide(GetPlanningEventInteractor)
     get_current_project_plan = provide(GetCurrentProjectPlanInteractor)
+    get_planning_board = provide(GetPlanningBoardInteractor)
+    get_planning_board_day = provide(GetPlanningBoardDayInteractor)
+    get_planning_job_explanation = provide(GetPlanningJobExplanationInteractor)
     list_project_plan_versions = provide(ListProjectPlanVersionsInteractor)
     get_project_plan_version = provide(GetProjectPlanVersionInteractor)
     list_jobs = provide(ListJobsInteractor)

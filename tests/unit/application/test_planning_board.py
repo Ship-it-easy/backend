@@ -1,0 +1,123 @@
+from datetime import date
+
+from planning.application.services.planning_board import (
+    REASON_TEXTS,
+    assigned_primary_reason,
+    reason,
+    unassigned_reason,
+    unassigned_sort_key,
+)
+
+
+def test_assigned_reason_priority_is_emergency_then_overdue_then_due_today() -> None:
+    planning_date = date(2026, 9, 19)
+
+    assert (
+        assigned_primary_reason(
+            {
+                "priority_type": "EMERGENCY",
+                "sla_date": "2026-09-18",
+                "emergency_bonus": 1_000_000,
+            },
+            planning_date,
+            2,
+        )["code"]
+        == "EMERGENCY_PRIORITY"
+    )
+    assert (
+        assigned_primary_reason(
+            {"priority_type": "NORMAL", "sla_date": "2026-09-17"},
+            planning_date,
+            2,
+        )["parameters"]["overdue_days"]
+        == 2
+    )
+    assert (
+        assigned_primary_reason(
+            {"priority_type": "NORMAL", "sla_date": "2026-09-19"},
+            planning_date,
+            2,
+        )["code"]
+        == "SLA_DUE_TODAY"
+    )
+
+
+def test_unassigned_reason_maps_saved_legacy_codes_without_guessing() -> None:
+    value = unassigned_reason(
+        "NO_COMPATIBLE_ENGINEER_IN_HORIZON",
+        solver_status="SUCCESS",
+        diagnostic_flags={"qualification_ids": [7]},
+    )
+
+    assert value == {
+        "code": "NO_ELIGIBLE_ENGINEER",
+        "text": "Нет инженера, удовлетворяющего обязательным требованиям",
+        "parameters": {"qualification_ids": [7]},
+        "known": True,
+    }
+
+
+def test_time_limit_and_horizon_have_explicit_outcomes() -> None:
+    assert (
+        unassigned_reason(
+            "NOT_SELECTED_BY_OPTIMIZER", solver_status="FEASIBLE_TIME_LIMIT"
+        )["code"]
+        == "TIME_LIMIT_NO_ASSIGNMENT"
+    )
+    assert (
+        unassigned_reason(
+            "NOT_ASSIGNED_WITHIN_HORIZON",
+            solver_status="SUCCESS",
+            final_horizon=True,
+        )["code"]
+        == "HORIZON_EXHAUSTED"
+    )
+
+
+def test_unknown_reason_has_safe_text_and_marker() -> None:
+    assert reason("NEW_SERVER_REASON") == {
+        "code": "NEW_SERVER_REASON",
+        "text": "Подробная причина недоступна",
+        "parameters": {},
+        "known": False,
+    }
+
+
+def test_every_public_reason_code_has_human_readable_text() -> None:
+    for code, text in REASON_TEXTS.items():
+        value = reason(code)
+        assert value["known"] is True
+        assert value["code"] == code
+        assert value["text"] == text
+        assert value["text"] != "Подробная причина недоступна"
+
+
+def test_unassigned_sort_is_overdue_then_emergency_then_sla_then_created() -> None:
+    planning_date = date(2026, 9, 19)
+    jobs = [
+        {
+            "job_id": 1,
+            "sla_date": "2026-09-20",
+            "priority_type": "EMERGENCY",
+            "created_at": "2026-09-01T10:00:00Z",
+        },
+        {
+            "job_id": 2,
+            "sla_date": "2026-09-18",
+            "priority_type": "NORMAL",
+            "created_at": "2026-09-02T10:00:00Z",
+        },
+        {
+            "job_id": 3,
+            "sla_date": "2026-09-20",
+            "priority_type": "NORMAL",
+            "created_at": "2026-09-01T10:00:00Z",
+        },
+    ]
+
+    assert [
+        item["job_id"]
+        for item in sorted(
+            jobs, key=lambda item: unassigned_sort_key(item, planning_date)
+        )
+    ] == [2, 1, 3]

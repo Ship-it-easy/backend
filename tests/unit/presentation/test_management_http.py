@@ -74,6 +74,12 @@ EXPECTED_ROUTES = {
     ("GET", "/api/project/planning-config"),
     ("PATCH", "/api/project/planning-config"),
     ("GET", "/api/project/planning/readiness"),
+    ("GET", "/api/project/planning/board"),
+    ("GET", "/api/project/planning/board/{planning_date}"),
+    (
+        "GET",
+        "/api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation",
+    ),
     ("POST", "/api/project/planning/events/manual"),
     ("GET", "/api/project/planning/events/{event_id}"),
     ("GET", "/api/project/planning/current"),

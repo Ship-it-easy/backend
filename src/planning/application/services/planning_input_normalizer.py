@@ -56,6 +56,7 @@ class PlanningInputNormalizer:
 
         compatible_counts: dict[int, int] = {}
         compatible_by_job: dict[int, list[int]] = {}
+        eligible_counts: dict[int, int] = {}
         for job in jobs:
             compatible = [
                 engineer.id
@@ -64,6 +65,11 @@ class PlanningInputNormalizer:
             ]
             compatible_by_job[job.id] = compatible
             compatible_counts[job.id] = len(compatible)
+            eligible_counts[job.id] = sum(
+                1
+                for engineer in engineers
+                if engineer.id in compatible and _fits_daily_window(job, engineer)
+            )
 
         penalty_components = {
             job.id: calculate_drop_penalty_components(
@@ -89,6 +95,9 @@ class PlanningInputNormalizer:
                     job_id=job.id,
                     drop_penalty=job.drop_penalty,
                     reason_code=ReasonCode.NO_AVAILABLE_ENGINEER,
+                    diagnostic_flags={
+                        "planning_date": planning_date.isoformat(),
+                    },
                 )
                 for job in jobs_with_penalty
             )
@@ -100,6 +109,19 @@ class PlanningInputNormalizer:
                             job_id=job.id,
                             drop_penalty=job.drop_penalty,
                             reason_code=ReasonCode.NO_COMPATIBLE_ENGINEER,
+                            diagnostic_flags={
+                                "required_qualification_ids": sorted(
+                                    job.required_qualifications
+                                ),
+                                "required_equipment_type_ids": sorted(
+                                    job.required_equipment
+                                ),
+                                "required_transport": (
+                                    job.required_transport.value
+                                    if job.required_transport
+                                    else None
+                                ),
+                            },
                         )
                     )
                 elif not any(
@@ -116,6 +138,11 @@ class PlanningInputNormalizer:
                             job_id=job.id,
                             drop_penalty=job.drop_penalty,
                             reason_code=ReasonCode.DAILY_TIME_WINDOW_CONFLICT,
+                            diagnostic_flags={
+                                "window_start_min": job.window_start_min,
+                                "window_end_min": job.window_end_min,
+                                "required_minutes": job.duration_min,
+                            },
                         )
                     )
                 else:
@@ -135,6 +162,10 @@ class PlanningInputNormalizer:
                 job_id=job.id,
                 drop_penalty=job.drop_penalty,
                 reason_code=ReasonCode.DATASET_LIMIT,
+                diagnostic_flags={
+                    "max_jobs_per_run": config.max_jobs_per_run,
+                    "final_penalty": job.drop_penalty,
+                },
             )
             for job in eligible[config.max_jobs_per_run :]
         )
@@ -147,6 +178,9 @@ class PlanningInputNormalizer:
             "equipment_units": equipment_units,
             "penalty_components": {
                 str(job_id): values for job_id, values in penalty_components.items()
+            },
+            "eligible_engineer_counts": {
+                str(job_id): value for job_id, value in eligible_counts.items()
             },
         }
         return PlanningInput(

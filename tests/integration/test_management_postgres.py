@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy import func, insert, select, text
+from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from auth.domain.user_role import UserRoleEnum
@@ -19,6 +19,9 @@ from planning.application.interactors.project.planning import (
 from planning.infrastructure.adapters.admin_management_repositories_sqla import (
     SqlaAdminUserRepository,
 )
+from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
+    SqlaDynamicPlanningRepository,
+)
 from planning.infrastructure.adapters.planning_management_repository_sqla import (
     SqlaPlanningManagementRepository,
 )
@@ -31,13 +34,24 @@ from planning.infrastructure.adapters.transaction_manager_sqla import (
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     assignments,
     daily_plans,
+    engineer_schedules,
     engineers,
+    equipment_types,
     jobs,
     plan_versions,
+    planning_batch_days,
+    planning_batches,
+    planning_cancelled_job_snapshots,
+    planning_day_results,
+    planning_events,
     planning_route_jobs,
     planning_routes,
     planning_runs,
+    planning_unassigned_jobs,
+    project_plan_assignments,
+    project_plan_versions,
     projects,
+    work_type_required_equipment,
     work_types,
 )
 
@@ -371,4 +385,426 @@ async def test_publication_rolls_back_midway(pg_engine: AsyncEngine) -> None:
         )
         assert (
             await connection.scalar(select(func.count()).select_from(assignments)) == 0
+        )
+
+
+async def test_planning_board_reads_one_outcome_per_day_input(
+    pg_engine: AsyncEngine,
+) -> None:
+    planning_date = date(2026, 9, 19)
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        work_type_id = await session.scalar(
+            insert(work_types)
+            .values(
+                project_id=project_id,
+                code="REPAIR",
+                name="Диагностика линии",
+                default_service_duration_min=45,
+            )
+            .returning(work_types.c.id)
+        )
+        engineer_id = await session.scalar(
+            insert(engineers)
+            .values(
+                project_id=project_id,
+                internal_code="ENG-BOARD",
+                name="Иван Петров",
+                transport_type="CAR",
+                start_address="База",
+            )
+            .returning(engineers.c.id)
+        )
+        await session.execute(
+            insert(engineer_schedules).values(
+                engineer_id=engineer_id,
+                work_date=planning_date,
+                shift_start="08:00:00",
+                shift_end="18:00:00",
+            )
+        )
+        job_ids = []
+        for suffix, address, priority in (
+            ("A", "Ленина, 1", "NORMAL"),
+            ("B", "Ленина, 2", "EMERGENCY"),
+        ):
+            job_ids.append(
+                int(
+                    await session.scalar(
+                        insert(jobs)
+                        .values(
+                            project_id=project_id,
+                            internal_code=f"BOARD-{suffix}",
+                            status="NEW",
+                            priority_type=priority,
+                            address=address,
+                            sla_date=planning_date,
+                            work_type_id=work_type_id,
+                            service_duration_min=45,
+                        )
+                        .returning(jobs.c.id)
+                    )
+                )
+            )
+        snapshot_jobs = [
+            {
+                "id": job_id,
+                "address": f"Ленина, {index}",
+                "sla_date": planning_date.isoformat(),
+                "work_type_id": int(work_type_id),
+                "work_type_name": "Диагностика линии",
+                "service_duration_min": 45,
+                "priority_type": "NORMAL" if index == 1 else "EMERGENCY",
+            }
+            for index, job_id in enumerate(job_ids, start=1)
+        ]
+        batch_id = await session.scalar(
+            insert(planning_batches)
+            .values(
+                project_id=project_id,
+                requested_start_date=planning_date,
+                effective_start_date=planning_date,
+                initial_horizon_end=planning_date,
+                maximum_horizon_end=planning_date,
+                status="PARTIAL",
+                completion_reason="HORIZON_LIMIT",
+                idempotency_key="board-test",
+                input_hash="snapshot",
+                configuration_version="1",
+                input_snapshot={
+                    "jobs": snapshot_jobs,
+                    "engineers": [
+                        {"id": int(engineer_id), "name": "Иван Петров"}
+                    ],
+                    "schedules": [
+                        {
+                            "engineer_id": int(engineer_id),
+                            "work_date": planning_date.isoformat(),
+                            "shift_start": "08:00:00",
+                            "shift_end": "18:00:00",
+                        }
+                    ],
+                },
+            )
+            .returning(planning_batches.c.id)
+        )
+        run_id = await session.scalar(
+            insert(planning_runs)
+            .values(
+                project_id=project_id,
+                planning_batch_id=batch_id,
+                planning_date=planning_date,
+                timezone="UTC",
+                status="SUCCESS",
+                solver_status="OPTIMAL",
+                input_snapshot={
+                    "jobs": [
+                        {
+                            "id": job_id,
+                            "sla_date": planning_date.isoformat(),
+                            "priority_type": "NORMAL",
+                            "required_qualifications": [],
+                        }
+                        for job_id in job_ids
+                    ],
+                    "engineers": [
+                        {
+                            "id": int(engineer_id),
+                            "transport_type": "CAR",
+                            "qualifications": [],
+                        }
+                    ],
+                },
+                input_jobs_count=2,
+                assigned_jobs_count=1,
+                unassigned_jobs_count=1,
+                validation_errors=[],
+            )
+            .returning(planning_runs.c.id)
+        )
+        await session.execute(
+            insert(planning_batch_days).values(
+                planning_batch_id=batch_id,
+                planning_date=planning_date,
+                block_number=1,
+                status="SUCCESS",
+                planning_run_id=run_id,
+                input_jobs_count=2,
+                assigned_count=1,
+                unassigned_count=1,
+            )
+        )
+        previous_version_id = await session.scalar(
+            insert(project_plan_versions)
+            .values(
+                project_id=project_id,
+                version_number=1,
+                planning_batch_id=batch_id,
+                input_hash="published",
+                trigger_source="MANUAL",
+                is_current=False,
+                unassigned_jobs=[
+                    {
+                        "job_id": job_ids[1],
+                        "primary_reason_code": "NOT_ASSIGNED_WITHIN_HORIZON",
+                    }
+                ],
+            )
+            .returning(project_plan_versions.c.id)
+        )
+        next_batch_id = await session.scalar(
+            insert(planning_batches)
+            .values(
+                project_id=project_id,
+                requested_start_date=planning_date,
+                effective_start_date=planning_date,
+                initial_horizon_end=planning_date,
+                maximum_horizon_end=planning_date,
+                status="SUCCESS",
+                completion_reason="ALL_ELIGIBLE_ASSIGNED",
+                idempotency_key="board-test-next",
+                input_hash="snapshot-next",
+                configuration_version="1",
+                input_snapshot={"jobs": [], "engineers": [], "schedules": []},
+            )
+            .returning(planning_batches.c.id)
+        )
+        version_id = await session.scalar(
+            insert(project_plan_versions)
+            .values(
+                project_id=project_id,
+                version_number=2,
+                planning_batch_id=next_batch_id,
+                input_hash="published-next",
+                trigger_source="JOB_CREATED",
+                is_current=True,
+                unassigned_jobs=[
+                    {
+                        "job_id": job_ids[1],
+                        "primary_reason_code": "NOT_ASSIGNED_WITHIN_HORIZON",
+                    }
+                ],
+            )
+            .returning(project_plan_versions.c.id)
+        )
+        day_result_id = await session.scalar(
+            insert(planning_day_results)
+            .values(
+                plan_version_id=version_id,
+                project_id=project_id,
+                planning_date=planning_date,
+                planning_run_id=run_id,
+                input_jobs_count=2,
+                assigned_count=1,
+                unassigned_count=1,
+                solver_status="OPTIMAL",
+            )
+            .returning(planning_day_results.c.id)
+        )
+        await session.execute(
+            insert(project_plan_assignments).values(
+                plan_version_id=version_id,
+                project_id=project_id,
+                job_id=job_ids[0],
+                planning_date=planning_date,
+                engineer_id=engineer_id,
+                sequence=1,
+                planned_arrival=datetime(2026, 9, 19, 8, tzinfo=timezone.utc),
+                planned_start=datetime(2026, 9, 19, 8, tzinfo=timezone.utc),
+                planned_finish=datetime(2026, 9, 19, 8, 45, tzinfo=timezone.utc),
+                travel_from_previous_min=0,
+                waiting_before_job_min=0,
+            )
+        )
+        await session.execute(
+            insert(planning_unassigned_jobs).values(
+                planning_run_id=run_id,
+                job_id=job_ids[1],
+                drop_penalty=100,
+                primary_reason_code="NOT_ASSIGNED_WITHIN_HORIZON",
+                diagnostic_flags={"horizon_end": planning_date.isoformat()},
+            )
+        )
+        cancelled_job_id = await session.scalar(
+            insert(jobs)
+            .values(
+                project_id=project_id,
+                internal_code="BOARD-CANCELLED",
+                status="CANCELLED",
+                priority_type="NORMAL",
+                address="Старый адрес отменённой заявки",
+                sla_date=planning_date,
+                work_type_id=work_type_id,
+                service_duration_min=30,
+                cancelled_at=datetime(2026, 9, 19, 7, tzinfo=timezone.utc),
+            )
+            .returning(jobs.c.id)
+        )
+        await session.execute(
+            insert(planning_cancelled_job_snapshots).values(
+                plan_version_id=version_id,
+                project_id=project_id,
+                job_id=cancelled_job_id,
+                planning_date=planning_date,
+                engineer_id=engineer_id,
+                previous_sequence=2,
+                planned_start=datetime(2026, 9, 19, 9, tzinfo=timezone.utc),
+                planned_finish=datetime(2026, 9, 19, 9, 30, tzinfo=timezone.utc),
+                cancelled_at=datetime(2026, 9, 19, 7, tzinfo=timezone.utc),
+                job_snapshot={
+                    "id": int(cancelled_job_id),
+                    "address": "Старый адрес отменённой заявки",
+                    "work_type_name": "Диагностика линии",
+                    "service_duration_min": 30,
+                    "sla_date": planning_date.isoformat(),
+                    "priority_type": "NORMAL",
+                    "status": "CANCELLED",
+                },
+            )
+        )
+        stale_cancelled_job_id = await session.scalar(
+            insert(jobs)
+            .values(
+                project_id=project_id,
+                internal_code="BOARD-STALE-CANCELLED",
+                status="CANCELLED",
+                priority_type="NORMAL",
+                address="Отмена из прошлой версии",
+                sla_date=planning_date,
+                work_type_id=work_type_id,
+                service_duration_min=30,
+                cancelled_at=datetime(2026, 9, 19, 6, tzinfo=timezone.utc),
+            )
+            .returning(jobs.c.id)
+        )
+        await session.execute(
+            insert(planning_cancelled_job_snapshots).values(
+                plan_version_id=previous_version_id,
+                project_id=project_id,
+                job_id=stale_cancelled_job_id,
+                planning_date=planning_date,
+                engineer_id=engineer_id,
+                previous_sequence=3,
+                cancelled_at=datetime(2026, 9, 19, 6, tzinfo=timezone.utc),
+                job_snapshot={
+                    "id": int(stale_cancelled_job_id),
+                    "address": "Отмена из прошлой версии",
+                    "work_type_name": "Диагностика линии",
+                    "service_duration_min": 30,
+                    "sla_date": planning_date.isoformat(),
+                    "priority_type": "NORMAL",
+                    "status": "CANCELLED",
+                },
+            )
+        )
+        equipment_type_id = await session.scalar(
+            insert(equipment_types)
+            .values(
+                project_id=project_id,
+                code="NEW-TOOL",
+                name="Новое оборудование",
+                available_units=5,
+            )
+            .returning(equipment_types.c.id)
+        )
+        await session.execute(
+            insert(work_type_required_equipment).values(
+                work_type_id=work_type_id,
+                equipment_type_id=equipment_type_id,
+            )
+        )
+        await session.execute(
+            update(work_types)
+            .where(work_types.c.id == work_type_id)
+            .values(name="Изменённое текущее название")
+        )
+        await session.commit()
+
+        repository = SqlaDynamicPlanningRepository(session)
+        board = await repository.get_planning_board_summary(
+            project_id, planning_date, 7
+        )
+        day = board["selected_day"]
+        explanation = await repository.get_planning_job_explanation(
+            project_id, int(day_result_id), job_ids[0]
+        )
+        another_project_id = await seed_project(session)
+        foreign_explanation = await repository.get_planning_job_explanation(
+            another_project_id, int(day_result_id), job_ids[0]
+        )
+
+    assert day["counts"] == {"assigned": 1, "unassigned": 1, "cancelled": 1}
+    assert day["engineer_columns"][0]["name"] == "Иван Петров"
+    assert day["engineer_columns"][0]["jobs"][0]["job_id"] == job_ids[0]
+    assert day["engineer_columns"][0]["jobs"][0]["work_type"] == (
+        "Диагностика линии"
+    )
+    assert day["engineer_columns"][0]["jobs"][0]["required_equipment"] == []
+    assert day["engineer_columns"][0]["cancelled_jobs"][0]["job_id"] == (
+        cancelled_job_id
+    )
+    assert day["engineer_columns"][0]["active_count"] == 1
+    assert day["unassigned"]["horizon"][0]["job_id"] == job_ids[1]
+    assert day["unassigned"]["horizon"][0]["primary_reason"]["code"] == (
+        "HORIZON_EXHAUSTED"
+    )
+    assert day["unassigned"]["horizon"][0]["primary_reason"]["parameters"] == {
+        "horizon_end": planning_date.isoformat()
+    }
+    assert explanation is not None
+    assert explanation["outcome"] == "ASSIGNED"
+    assert explanation["eligible_engineers_count"] == 1
+    assert foreign_explanation is None
+    assert board["plan_version"]["number"] == 2
+    assert board["plan_version"]["status"] == "SUCCESS"
+    assert day["day_result_id"] == day_result_id
+
+
+async def test_concurrent_manual_planning_starts_reuse_one_event(
+    pg_engine: AsyncEngine,
+) -> None:
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        actor_id = uuid.uuid4()
+        await session.execute(
+            insert(users_table).values(
+                **owner_values(actor_id, f"owner-{uuid.uuid4().hex}")
+            )
+        )
+        await session.commit()
+
+    gate = asyncio.Event()
+    ready = 0
+    ready_lock = asyncio.Lock()
+
+    async def enqueue_manual(suffix: str) -> dict:
+        nonlocal ready
+        async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+            repository = SqlaDynamicPlanningRepository(session)
+            async with ready_lock:
+                ready += 1
+                if ready == 2:
+                    gate.set()
+            await gate.wait()
+            result = await repository.enqueue(
+                project_id,
+                "MANUAL",
+                actor_id,
+                f"manual-{suffix}",
+            )
+            await session.commit()
+            return result
+
+    results = await asyncio.gather(enqueue_manual("a"), enqueue_manual("b"))
+
+    assert results[0]["id"] == results[1]["id"]
+    assert sorted(result["_reused_active"] for result in results) == [False, True]
+    async with pg_engine.connect() as connection:
+        assert (
+            await connection.scalar(
+                select(func.count())
+                .select_from(planning_events)
+                .where(planning_events.c.project_id == project_id)
+            )
+            == 1
         )

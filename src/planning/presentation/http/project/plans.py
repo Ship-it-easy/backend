@@ -6,7 +6,10 @@ from fastapi import APIRouter, Header, Query, status
 
 from planning.application.interactors.dynamic_planning import (
     GetCurrentProjectPlanInteractor,
+    GetPlanningBoardDayInteractor,
+    GetPlanningBoardInteractor,
     GetPlanningEventInteractor,
+    GetPlanningJobExplanationInteractor,
     GetProjectPlanVersionInteractor,
     ListProjectPlanVersionsInteractor,
     StartDynamicPlanningInteractor,
@@ -27,6 +30,36 @@ from planning.presentation.http.project.schemas import (
 )
 
 router = APIRouter()
+
+
+@router.get("/planning/board")
+@inject
+async def planning_board(
+    interactor: FromDishka[GetPlanningBoardInteractor],
+    from_date: date | None = Query(default=None, alias="from"),
+    days: int = Query(default=7, ge=7, le=7),
+) -> dict[str, Any]:
+    return await interactor(from_date=from_date, days=days)
+
+
+@router.get("/planning/board/{planning_date}")
+@inject
+async def planning_board_day(
+    planning_date: date,
+    interactor: FromDishka[GetPlanningBoardDayInteractor],
+    plan_version_id: int | None = Query(default=None),
+) -> dict[str, Any]:
+    return await interactor(planning_date, plan_version_id)
+
+
+@router.get("/planning/day-results/{day_result_id}/jobs/{job_id}/explanation")
+@inject
+async def planning_job_explanation(
+    day_result_id: int,
+    job_id: int,
+    interactor: FromDishka[GetPlanningJobExplanationInteractor],
+) -> dict[str, Any]:
+    return await interactor(day_result_id, job_id)
 
 
 @router.post("/planning/events/manual", status_code=status.HTTP_202_ACCEPTED)

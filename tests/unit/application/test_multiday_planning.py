@@ -187,3 +187,67 @@ def test_primary_penalty_is_greater_than_all_reserve_penalties_and_travel() -> N
 
     assert ordered[0].id == 1
     assert ordered[0].drop_penalty > ordered[1].drop_penalty + 2880
+
+
+def test_sla_hierarchy_normalizes_a_common_penalty_scale() -> None:
+    engineer = Engineer(
+        id=1,
+        transport_type=TransportType.CAR,
+        coordinate=Coordinate(58.0, 56.0),
+        shift_start_min=480,
+        shift_end_min=1080,
+        qualifications=frozenset(),
+    )
+    now = datetime(2026, 9, 14, tzinfo=timezone.utc)
+
+    def adjusted(scale: int) -> list[int]:
+        jobs = [
+            Job(
+                id=1,
+                sla_date=date(2026, 9, 14),
+                duration_min=60,
+                coordinate=Coordinate(58.1, 56.1),
+                window_start_min=0,
+                window_end_min=1439,
+                required_transport=None,
+                required_qualifications=frozenset(),
+                required_equipment=frozenset(),
+                created_at=now,
+                drop_penalty=9_500 * scale,
+            ),
+            Job(
+                id=2,
+                sla_date=date(2026, 9, 25),
+                duration_min=60,
+                coordinate=Coordinate(58.2, 56.2),
+                window_start_min=0,
+                window_end_min=1439,
+                required_transport=None,
+                required_qualifications=frozenset(),
+                required_equipment=frozenset(),
+                created_at=now,
+                drop_penalty=1_250 * scale,
+            ),
+        ]
+        data = PlanningInput(
+            project_id=1,
+            planning_date=date(2026, 9, 14),
+            timezone="UTC",
+            config=config(),
+            jobs=jobs,
+            engineers=[engineer],
+            equipment_units={},
+            pre_unassigned=[],
+            input_jobs_count=2,
+            sla_critical_job_ids=frozenset({1}),
+            snapshot={},
+        )
+        decisions = {
+            1: {"priority_group": "DUE_TODAY"},
+            2: {"priority_group": "RESERVE"},
+        }
+        result = _enforce_sla_hierarchy(jobs, decisions, data)
+        assert result[0].drop_penalty > result[1].drop_penalty + 2880
+        return [item.drop_penalty for item in result]
+
+    assert adjusted(1) == adjusted(10_000)

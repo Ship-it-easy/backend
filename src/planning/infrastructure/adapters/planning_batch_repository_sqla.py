@@ -1484,6 +1484,7 @@ class SqlaPlanningBatchRepository:
                         jobs.c.created_at,
                         jobs.c.updated_at,
                         jobs.c.priority_type,
+                        work_types.c.name.label("work_type_name"),
                         work_types.c.default_service_duration_min,
                         work_types.c.required_transport,
                     )
@@ -1500,6 +1501,7 @@ class SqlaPlanningBatchRepository:
                 await self._session.execute(
                     select(
                         engineers.c.id,
+                        engineers.c.name,
                         engineers.c.transport_type,
                         engineers.c.start_address,
                         engineers.c.start_latitude,
@@ -1586,7 +1588,11 @@ class SqlaPlanningBatchRepository:
         equipment_rows = (
             (
                 await self._session.execute(
-                    select(equipment_types.c.id, equipment_types.c.available_units)
+                    select(
+                        equipment_types.c.id,
+                        equipment_types.c.name,
+                        equipment_types.c.available_units,
+                    )
                     .where(
                         equipment_types.c.project_id == project_id,
                         equipment_types.c.active.is_(True),
@@ -1621,6 +1627,7 @@ class SqlaPlanningBatchRepository:
                 "equipment_units": {
                     str(row.id): int(row.available_units) for row in equipment_rows
                 },
+                "equipment_types": [dict(row) for row in equipment_rows],
             }
         )
 

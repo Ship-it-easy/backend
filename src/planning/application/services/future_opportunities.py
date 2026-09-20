@@ -128,7 +128,10 @@ def permanent_issue(
     start = _minute(job.get("time_window_start"), start=True)
     end = _minute(job.get("time_window_end"), start=False)
     if start > end:
-        return "INVALID_TIME_WINDOW_FOR_HORIZON", {}
+        return "INVALID_TIME_WINDOW_FOR_HORIZON", {
+            "window_start_min": start,
+            "window_end_min": end,
+        }
     required_equipment = snapshot["required_equipment"].get(
         str(job["work_type_id"]), []
     )
@@ -144,7 +147,10 @@ def permanent_issue(
         if effective_start <= _date(item["work_date"]) <= maximum_end
     ]
     if not schedules:
-        return "NO_SHIFT_IN_HORIZON", {}
+        return "NO_SHIFT_IN_HORIZON", {
+            "effective_start": effective_start.isoformat(),
+            "maximum_end": maximum_end.isoformat(),
+        }
     engineers = {int(item["id"]): item for item in snapshot["engineers"]}
     qualifications = {
         int(key): set(value)
@@ -165,7 +171,10 @@ def permanent_issue(
             continue
         compatible.append(schedule)
     if not compatible:
-        return "NO_COMPATIBLE_ENGINEER_IN_HORIZON", {}
+        return "NO_COMPATIBLE_ENGINEER_IN_HORIZON", {
+            "required_qualification_ids": sorted(required),
+            "required_transport": required_transport,
+        }
     fitting_duration = [
         item
         for item in compatible
@@ -174,7 +183,9 @@ def permanent_issue(
         >= int(duration)
     ]
     if not fitting_duration:
-        return "DURATION_EXCEEDS_ALL_SHIFTS", {}
+        return "DURATION_EXCEEDS_ALL_SHIFTS", {
+            "required_minutes": int(duration),
+        }
     for schedule in fitting_duration:
         shift_start = _minute(schedule["shift_start"], start=True)
         shift_end = _minute(schedule["shift_end"], start=False)
@@ -182,7 +193,11 @@ def permanent_issue(
             shift_end, end + int(duration)
         ):
             return None
-    return "INVALID_TIME_WINDOW_FOR_HORIZON", {}
+    return "INVALID_TIME_WINDOW_FOR_HORIZON", {
+        "window_start_min": start,
+        "window_end_min": end,
+        "required_minutes": int(duration),
+    }
 
 
 def priority_group(sla_date: date, planning_date: date, block_end: date) -> str:

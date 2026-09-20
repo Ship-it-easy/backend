@@ -819,6 +819,83 @@ Index(
     postgresql_where=project_plan_versions.c.is_current.is_(True),
 )
 
+planning_day_results = Table(
+    "planning_day_results",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "plan_version_id",
+        ForeignKey("project_plan_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("planning_date", Date, nullable=False),
+    Column(
+        "planning_run_id",
+        ForeignKey("planning_runs.id", ondelete="RESTRICT"),
+        nullable=False,
+    ),
+    Column("input_job_ids_hash", String(64)),
+    Column("input_jobs_count", Integer, nullable=False, server_default="0"),
+    Column("assigned_count", Integer, nullable=False, server_default="0"),
+    Column("unassigned_count", Integer, nullable=False, server_default="0"),
+    Column("solver_status", String(64)),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    UniqueConstraint(
+        "plan_version_id",
+        "planning_date",
+        name="uq_planning_day_results_version_date",
+    ),
+)
+Index(
+    "ix_planning_day_results_project_date",
+    planning_day_results.c.project_id,
+    planning_day_results.c.planning_date,
+)
+
+planning_cancelled_job_snapshots = Table(
+    "planning_cancelled_job_snapshots",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column(
+        "plan_version_id",
+        ForeignKey("project_plan_versions.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("planning_date", Date, nullable=False),
+    Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
+    Column("previous_sequence", Integer),
+    Column("planned_start", DateTime(timezone=True)),
+    Column("planned_finish", DateTime(timezone=True)),
+    Column("cancelled_at", DateTime(timezone=True), nullable=False),
+    Column("cancelled_by_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
+    Column("cancelled_by_username", String(255)),
+    Column("job_snapshot", JSONB, nullable=False, server_default="{}"),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    UniqueConstraint(
+        "plan_version_id",
+        "job_id",
+        name="uq_planning_cancelled_snapshot_version_job",
+    ),
+)
+Index(
+    "ix_planning_cancelled_snapshots_version_date",
+    planning_cancelled_job_snapshots.c.plan_version_id,
+    planning_cancelled_job_snapshots.c.planning_date,
+)
+
 project_plan_assignments = Table(
     "project_plan_assignments",
     metadata_obj,

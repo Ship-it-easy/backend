@@ -9,6 +9,12 @@ from planning.application.errors import (
     ObjectNotFoundError,
     ProjectBlockedError,
 )
+from planning.application.interactors.dynamic_planning import (
+    GetPlanningBoardInteractor,
+)
+from planning.application.interactors.project.planning import (
+    GetPlanningConfigInteractor,
+)
 
 
 def _user(
@@ -64,3 +70,33 @@ async def test_engineer_returns_identity_scope() -> None:
     access = ProjectAccess(identity, repository)
 
     assert await access.engineer() == (user, 7, 11)
+
+
+async def test_engineer_cannot_open_planning_board() -> None:
+    identity = AsyncMock()
+    identity.get_current_user.return_value = _user(
+        UserRoleEnum.ENGINEER, project_id=7, engineer_id=11
+    )
+    access = ProjectAccess(identity, AsyncMock())
+    interactor = GetPlanningBoardInteractor(
+        access,
+        AsyncMock(),
+        AsyncMock(),
+        AsyncMock(),
+    )
+
+    with pytest.raises(AccessDeniedError):
+        await interactor(from_date=None, days=7)
+
+
+async def test_owner_can_read_scoped_planning_config() -> None:
+    identity = AsyncMock()
+    identity.get_current_user.return_value = _user(UserRoleEnum.OWNER)
+    management_repository = AsyncMock()
+    management_repository.get_config.return_value = {"version": 4}
+    interactor = GetPlanningConfigInteractor(
+        ProjectAccess(identity, AsyncMock()), management_repository
+    )
+
+    assert await interactor(7) == {"version": 4}
+    management_repository.get_config.assert_awaited_once_with(7)

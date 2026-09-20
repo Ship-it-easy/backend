@@ -101,8 +101,37 @@ Timezone должен совпадать с timezone проекта. Все аб
 - актуальная версия и diff: `GET /api/project/planning/current`;
 - история версий: `GET /api/project/planning/versions` и
   `/planning/versions/{version_id}`;
+- семидневная доска текущего плана: `GET /api/project/planning/board`;
+- результат отдельного дня: `GET /api/project/planning/board/{planning_date}`;
+- объяснение решения по заявке:
+  `GET /api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation`;
 - XLSX: `POST /api/project/jobs/import/preview` и `/import/apply`. Обязательные
   колонки: `address`, `sla_date`, `work_type`.
+
+Владелец проекта использует те же read-модели через префикс
+`/api/projects/{project_id}/planning`. Ответ доски всегда содержит семь дат от
+текущей даты проекта, идентификаторы версии/результата и ровно один итог для
+каждой заявки расчёта: назначение, перенос за горизонт или неназначение с
+безопасным кодом причины. Для давно сохранённых результатов, в которых нет
+расширенного снимка, API возвращает нейтральные подписи вместо технической
+ошибки. Если версия изменилась между запросами, ответ `409 VERSION_CHANGED`
+указывает клиенту перечитать доску целиком.
+
+Read model связывает каждую дату опубликованной версии с неизменяемым
+`planning_run` и его `input_snapshot`. Для каждого идентификатора заявки из
+`DayInput` API проверяет ровно один исход: назначение либо неназначение. Текущие
+справочники не используются для восстановления исторических требований;
+допускается показать только изменившийся операционный статус и признак
+`current_data_changed`.
+
+Публичные reason codes: `OPTIMIZER_SELECTED`, `EMERGENCY_PRIORITY`,
+`OVERDUE_PRIORITY`, `SLA_DUE_TODAY`, `HARD_CONSTRAINTS_MATCHED`,
+`NO_ELIGIBLE_ENGINEER`, `NO_QUALIFICATION`, `NO_EQUIPMENT`, `NO_SHIFT`,
+`NO_TRANSPORT`, `TIME_WINDOW_CONFLICT`, `SHIFT_CAPACITY_EXCEEDED`,
+`ROUTE_INFEASIBLE`, `DROPPED_BY_OBJECTIVE`, `TIME_LIMIT_NO_ASSIGNMENT`,
+`HORIZON_EXHAUSTED`, `CANCELLED_RECORD` и `RESULT_DATA_UNAVAILABLE`.
+Неизвестный код не выводится пользователю: API возвращает безопасный текст и
+пишет событие `unknown_planning_reason`.
 
 Ночной запуск настраивается полями `nightly_planning_enabled` и
 `nightly_planning_time` активной конфигурации проекта. Он использует тот же

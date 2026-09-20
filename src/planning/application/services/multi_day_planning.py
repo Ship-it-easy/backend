@@ -603,26 +603,34 @@ def _enforce_sla_hierarchy(
     collection of reserve or less urgent jobs cannot displace one feasible job
     from a more urgent group in the RoutingModel objective.
     """
+    positive_penalties = [item.drop_penalty for item in jobs if item.drop_penalty > 0]
+    penalty_divisor = math.gcd(*positive_penalties) if positive_penalties else 1
+    normalized_jobs = [
+        replace(item, drop_penalty=item.drop_penalty // penalty_divisor)
+        for item in jobs
+    ]
     max_travel = (
         2880 * max(1, len(data.engineers)) * max(1, data.config.travel_cost_per_minute)
     )
-    lower_priority_total = max_travel
+    lower_priority_total = 0
     adjusted_by_id = {}
     groups = sorted(
-        {decisions[item.id]["priority_group"] for item in jobs},
+        {decisions[item.id]["priority_group"] for item in normalized_jobs},
         key=_group_order,
         reverse=True,
     )
     for group in groups:
         group_jobs = [
-            item for item in jobs if decisions[item.id]["priority_group"] == group
+            item
+            for item in normalized_jobs
+            if decisions[item.id]["priority_group"] == group
         ]
         # The common cardinality component dominates every possible secondary
         # penalty difference in this group and all less urgent groups. Thus the
         # solver first minimizes the number of dropped jobs in the SLA group;
         # only then do daily/future penalties break ties inside that group.
         secondary_total = sum(max(0, item.drop_penalty) for item in group_jobs)
-        floor = lower_priority_total + secondary_total + 1
+        floor = lower_priority_total + max_travel + secondary_total + 1
         for item in group_jobs:
             penalty = floor + item.drop_penalty
             if penalty >= 2**62:

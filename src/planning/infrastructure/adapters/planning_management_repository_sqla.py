@@ -92,6 +92,18 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
     async def get_readiness_state(
         self, project_id: int, planning_date: date
     ) -> PlanningReadinessState:
+        scheduled_engineers = (
+            select(engineers.c.id)
+            .join(
+                engineer_schedules,
+                engineer_schedules.c.engineer_id == engineers.c.id,
+            )
+            .where(
+                engineers.c.project_id == project_id,
+                engineers.c.active.is_(True),
+                engineer_schedules.c.work_date == planning_date,
+            )
+        )
         checks = {
             "PLANNING_CONFIG_MISSING": await self._session.scalar(
                 select(planning_config.c.id).where(
@@ -108,28 +120,65 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
             ),
             "ENGINEERS_MISSING": await self._session.scalar(
                 select(engineers.c.id)
-                .join(
-                    engineer_schedules,
-                    engineer_schedules.c.engineer_id == engineers.c.id,
-                )
                 .where(
                     engineers.c.project_id == project_id,
                     engineers.c.active.is_(True),
-                    engineer_schedules.c.work_date == planning_date,
                 )
                 .limit(1)
+            ),
+            "SHIFTS_MISSING": await self._session.scalar(
+                scheduled_engineers.limit(1)
             ),
             "JOBS_MISSING": await self._session.scalar(
                 select(jobs.c.id)
                 .where(jobs.c.project_id == project_id, jobs.c.status == "NEW")
                 .limit(1)
             ),
+            "ENGINEER_LOCATIONS_MISSING": await self._session.scalar(
+                select(engineers.c.id)
+                .where(
+                    engineers.c.id.in_(scheduled_engineers),
+                    engineers.c.start_latitude.is_(None),
+                    engineers.c.start_longitude.is_(None),
+                    func.length(
+                        func.trim(func.coalesce(engineers.c.start_address, ""))
+                    )
+                    == 0,
+                )
+                .limit(1)
+            ),
+            "JOB_LOCATIONS_MISSING": await self._session.scalar(
+                select(jobs.c.id)
+                .where(
+                    jobs.c.project_id == project_id,
+                    jobs.c.status == "NEW",
+                    jobs.c.latitude.is_(None),
+                    jobs.c.longitude.is_(None),
+                    func.length(func.trim(func.coalesce(jobs.c.address, ""))) == 0,
+                )
+                .limit(1)
+            ),
+            "TRAVEL_PROVIDER_MISSING": await self._session.scalar(
+                select(planning_config.c.travel_provider).where(
+                    planning_config.c.project_id == project_id,
+                    planning_config.c.active.is_(True),
+                    planning_config.c.travel_provider.in_(
+                        ("VALHALLA_LOCAL", "STATIC_TEST")
+                    ),
+                )
+            ),
         }
         return PlanningReadinessState(
             has_config=checks["PLANNING_CONFIG_MISSING"] is not None,
             has_work_types=checks["WORK_TYPES_MISSING"] is not None,
             has_engineers=checks["ENGINEERS_MISSING"] is not None,
+            has_shifts=checks["SHIFTS_MISSING"] is not None,
             has_jobs=checks["JOBS_MISSING"] is not None,
+            has_engineer_locations=(
+                checks["ENGINEER_LOCATIONS_MISSING"] is None
+            ),
+            has_job_locations=checks["JOB_LOCATIONS_MISSING"] is None,
+            has_travel_provider=checks["TRAVEL_PROVIDER_MISSING"] is not None,
         )
 
     async def load_publication_state(

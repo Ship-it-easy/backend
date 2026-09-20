@@ -6,7 +6,10 @@ from fastapi import APIRouter, Header, Query, status
 
 from planning.application.interactors.dynamic_planning import (
     GetCurrentProjectPlanInteractor,
+    GetPlanningBoardDayInteractor,
+    GetPlanningBoardInteractor,
     GetPlanningEventInteractor,
+    GetPlanningJobExplanationInteractor,
     GetProjectPlanVersionInteractor,
     ListProjectPlanVersionsInteractor,
     StartDynamicPlanningInteractor,
@@ -20,15 +23,78 @@ from planning.application.interactors.planning_batches import (
     ValidateCurrentBatchDayInteractor,
 )
 from planning.application.interactors.project.planning import (
+    GetPlanningConfigInteractor,
     PublishPlanningRunInteractor,
+    UpdatePlanningConfigInteractor,
 )
 from planning.presentation.http.planning_batches.schemas import (
     StartPlanningBatchRequest,
     StartPlanningBatchResponse,
 )
-from planning.presentation.http.project.schemas import PublishRequest
+from planning.presentation.http.project.schemas import (
+    PlanningConfigPatch,
+    PublishRequest,
+)
 
 planning_batches_router = APIRouter()
+
+
+@planning_batches_router.get("/{project_id}/planning-config")
+@inject
+async def get_project_planning_config(
+    project_id: int,
+    interactor: FromDishka[GetPlanningConfigInteractor],
+) -> dict[str, Any]:
+    return await interactor(project_id)
+
+
+@planning_batches_router.patch("/{project_id}/planning-config")
+@inject
+async def update_project_planning_config(
+    project_id: int,
+    body: PlanningConfigPatch,
+    interactor: FromDishka[UpdatePlanningConfigInteractor],
+) -> dict[str, Any]:
+    return await interactor(body.model_dump(exclude_none=True), project_id)
+
+
+@planning_batches_router.get("/{project_id}/planning/board")
+@inject
+async def get_planning_board(
+    project_id: int,
+    interactor: FromDishka[GetPlanningBoardInteractor],
+    from_date: date | None = Query(default=None, alias="from"),
+    days: int = Query(default=7, ge=7, le=7),
+) -> dict[str, Any]:
+    return await interactor(
+        from_date=from_date,
+        days=days,
+        scoped_project_id=project_id,
+    )
+
+
+@planning_batches_router.get("/{project_id}/planning/board/{planning_date}")
+@inject
+async def get_planning_board_day(
+    project_id: int,
+    planning_date: date,
+    interactor: FromDishka[GetPlanningBoardDayInteractor],
+    plan_version_id: int | None = Query(default=None),
+) -> dict[str, Any]:
+    return await interactor(planning_date, plan_version_id, project_id)
+
+
+@planning_batches_router.get(
+    "/{project_id}/planning/day-results/{day_result_id}/jobs/{job_id}/explanation"
+)
+@inject
+async def get_planning_job_explanation(
+    project_id: int,
+    day_result_id: int,
+    job_id: int,
+    interactor: FromDishka[GetPlanningJobExplanationInteractor],
+) -> dict[str, Any]:
+    return await interactor(day_result_id, job_id, project_id)
 
 
 @planning_batches_router.post(
@@ -72,9 +138,7 @@ async def list_dynamic_plan_versions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    return await interactor(
-        limit=limit, offset=offset, scoped_project_id=project_id
-    )
+    return await interactor(limit=limit, offset=offset, scoped_project_id=project_id)
 
 
 @planning_batches_router.get("/{project_id}/planning/versions/{version_id}")

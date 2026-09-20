@@ -22,8 +22,14 @@ class _PlanningManagementInteractor:
 
 
 class GetPlanningConfigInteractor(_PlanningManagementInteractor):
-    async def __call__(self) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        if scoped_project_id is None:
+            _, project_id = await self._access.dispatcher()
+        else:
+            await self._access.project(scoped_project_id)
+            project_id = scoped_project_id
         return await self._repository.get_config(project_id)
 
 
@@ -37,8 +43,16 @@ class UpdatePlanningConfigInteractor(_PlanningManagementInteractor):
         super().__init__(access, repository)
         self._transaction_manager = transaction_manager
 
-    async def __call__(self, values: dict[str, Any]) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self,
+        values: dict[str, Any],
+        scoped_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        if scoped_project_id is None:
+            _, project_id = await self._access.dispatcher()
+        else:
+            await self._access.project(scoped_project_id, write=True)
+            project_id = scoped_project_id
         result = await self._repository.update_config(project_id, values)
         await self._transaction_manager.commit()
         return result
