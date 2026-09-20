@@ -7,10 +7,12 @@ class PlanningError(Exception):
         *,
         run_id: int | None = None,
         code: str | None = None,
+        details: dict | None = None,
     ):
         super().__init__(message)
         self.message = message
         self.run_id = run_id
+        self.details = details or {}
         if code is not None:
             self.code = code
 
@@ -33,6 +35,10 @@ class InvalidPlanningRequest(PlanningError):
 
 class PlanningUnavailable(PlanningError):
     code = "PLANNING_UNAVAILABLE"
+
+
+class RateLimitExceeded(PlanningError):
+    code = "RATE_LIMIT_EXCEEDED"
 
 
 class AccessDeniedError(PlanningError):

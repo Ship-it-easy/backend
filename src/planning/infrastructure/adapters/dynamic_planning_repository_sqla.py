@@ -2108,11 +2108,25 @@ class SqlaDynamicPlanningRepository:
         engineer_values = {}
         for item in engineer_rows:
             engineer_id = int(item.id)
+            saved_engineer = engineer_snapshot.get(engineer_id, {})
             engineer_values[engineer_id] = {
-                **engineer_snapshot.get(engineer_id, {}),
+                **saved_engineer,
                 "id": engineer_id,
-                "name": engineer_snapshot.get(engineer_id, {}).get("name")
-                or item.name,
+                "name": saved_engineer.get("name") or item.name,
+                "transport_type": saved_engineer.get("transport_type")
+                or item.transport_type,
+                "start_address": saved_engineer.get("start_address")
+                or item.start_address,
+                "start_latitude": (
+                    saved_engineer.get("start_latitude")
+                    if saved_engineer.get("start_latitude") is not None
+                    else item.start_latitude
+                ),
+                "start_longitude": (
+                    saved_engineer.get("start_longitude")
+                    if saved_engineer.get("start_longitude") is not None
+                    else item.start_longitude
+                ),
                 "active": item.active,
             }
         for engineer_id in engineer_ids:
@@ -2165,6 +2179,7 @@ class SqlaDynamicPlanningRepository:
                 "current_data_changed": job.get("current_data_changed", False),
                 "travel_from_previous_min": item.travel_from_previous_min,
                 "distance_from_previous_meters": (item.distance_from_previous_meters),
+                "coordinate": _coordinate(job),
                 "primary_reason": primary,
             }
             assigned_by_engineer.setdefault(int(item.engineer_id), []).append(card)
@@ -2191,6 +2206,7 @@ class SqlaDynamicPlanningRepository:
                     "required_equipment": job.get("required_equipment", []),
                     "cancelled_at": item.cancelled_at,
                     "cancelled_by": item.cancelled_by_username,
+                    "coordinate": _coordinate(job),
                     "primary_reason": reason("CANCELLED_RECORD"),
                 }
             )
@@ -2204,6 +2220,13 @@ class SqlaDynamicPlanningRepository:
                 {
                     "engineer_id": engineer_id,
                     "name": engineer.get("name") or "Имя инженера недоступно",
+                    "transport_type": engineer.get("transport_type") or "NONE",
+                    "start_address": engineer.get("start_address"),
+                    "start_coordinate": _coordinate(
+                        engineer,
+                        latitude_key="start_latitude",
+                        longitude_key="start_longitude",
+                    ),
                     "shift_start": schedule.get("shift_start"),
                     "shift_end": schedule.get("shift_end"),
                     "unavailable": not bool(engineer.get("active", True))
@@ -2313,6 +2336,7 @@ class SqlaDynamicPlanningRepository:
                 "overdue": _is_overdue(job.get("sla_date"), planning_date),
                 "created_at": job.get("created_at") or job.get("job_created_at"),
                 "required_equipment": job.get("required_equipment", []),
+                "coordinate": _coordinate(job),
                 "current_data_changed": job.get("current_data_changed", False),
                 "later_assignment_date": later,
                 "final_horizon_outcome": later is None
@@ -2357,6 +2381,7 @@ class SqlaDynamicPlanningRepository:
                         "overdue": _is_overdue(job.get("sla_date"), planning_date),
                         "created_at": job.get("created_at"),
                         "required_equipment": job.get("required_equipment", []),
+                        "coordinate": _coordinate(job),
                         "current_data_changed": job.get(
                             "current_data_changed", False
                         ),
@@ -3128,6 +3153,19 @@ def _safe_planning_error(event: Any) -> str | None:
         "SYSTEM_ERROR": "Не удалось завершить расчёт",
     }
     return labels.get(str(event.error_code), "Не удалось завершить расчёт")
+
+
+def _coordinate(
+    value: dict[str, Any],
+    *,
+    latitude_key: str = "latitude",
+    longitude_key: str = "longitude",
+) -> dict[str, Any] | None:
+    latitude = value.get(latitude_key)
+    longitude = value.get(longitude_key)
+    if latitude is None or longitude is None:
+        return None
+    return _jsonable({"latitude": latitude, "longitude": longitude})
 
 
 def _eligible_engineer_count(

@@ -223,15 +223,26 @@ class PlanningValidator:
             }
             if metrics["vehicle_fixed_costs"] != expected_fixed_costs:
                 errors.append("invalid vehicle fixed costs")
-            expected_objective = (
-                model_drop * weights["w_drop"]
-                + metrics["newly_activated_engineer_count"] * weights["w_engineer"]
+            lower_objective = (
+                metrics["newly_activated_engineer_count"] * weights["w_engineer"]
                 + actual_total_distance * weights["w_total_distance"]
                 + actual_max_distance * weights["w_max_distance"]
                 + time_units
             )
+            if metrics.get("solve_strategy") == "PHASED_DROP_THEN_ROUTE":
+                if metrics.get("business_drop_cost") != model_drop:
+                    errors.append("invalid phased business drop cost")
+                expected_objective = lower_objective
+            else:
+                expected_objective = (
+                    model_drop * weights["w_drop"] + lower_objective
+                )
             if result.objective != expected_objective:
-                errors.append("invalid lexicographic objective")
+                errors.append(
+                    "invalid lexicographic objective: "
+                    f"actual={result.objective}, expected={expected_objective}, "
+                    f"strategy={metrics.get('solve_strategy')}"
+                )
             if result.objective > metrics["maximum_objective"]:
                 errors.append("actual objective exceeds proven maximum")
         elif result.objective != expected_drop_cost + expected_travel_cost:

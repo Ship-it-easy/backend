@@ -105,8 +105,11 @@ Timezone должен совпадать с timezone проекта. Все аб
 - результат отдельного дня: `GET /api/project/planning/board/{planning_date}`;
 - объяснение решения по заявке:
   `GET /api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation`;
-- XLSX: `POST /api/project/jobs/import/preview` и `/import/apply`. Обязательные
-  колонки: `address`, `sla_date`, `work_type`.
+- CSV-пакет заявок: `POST /api/projects/{project_id}/job-imports`, просмотр
+  состояния и ошибок через `/job-imports/{batch_id}` и
+  `/job-imports/{batch_id}/issues`, атомарное создание через
+  `/job-imports/{batch_id}/apply`. Обязательные колонки: `Тип заявки ВК`,
+  `Начало`, `Окончание`, `Адрес`.
 
 Владелец проекта использует те же read-модели через префикс
 `/api/projects/{project_id}/planning`. Ответ доски всегда содержит семь дат от

@@ -358,6 +358,7 @@ class MultiDayPlanningService:
                     selected_job.drop_penalty // solver_drop_divisor
                 )
             selected_ids = {item.id for item in selected}
+            solver_penalties = {item.id: item.drop_penalty for item in selected}
             deferred = [
                 UnassignedJob(
                     job_id=item.id,
@@ -394,8 +395,12 @@ class MultiDayPlanningService:
                     "jobs": [
                         {
                             **item,
-                            "drop_penalty": decisions.get(item["id"], {}).get(
-                                "cascade_drop_penalty", item.get("drop_penalty", 0)
+                            "drop_penalty": solver_penalties.get(
+                                item["id"],
+                                decisions.get(item["id"], {}).get(
+                                    "cascade_drop_penalty",
+                                    item.get("drop_penalty", 0),
+                                ),
                             ),
                         }
                         for item in data.snapshot["jobs"]
@@ -594,13 +599,14 @@ def _order_for_daily_limit(
 def _enforce_sla_hierarchy(
     jobs: list,
     decisions: dict[int, dict[str, Any]],
-    data: PlanningInput,
+    _data: PlanningInput,
 ) -> list:
     """Separate every SLA group by a provably dominant penalty range.
 
     A penalty in a more urgent group is greater than the sum of every less
-    urgent candidate penalty and the maximum possible route cost. Therefore a
-    collection of reserve or less urgent jobs cannot displace one feasible job
+    urgent candidate penalty. W_drop separately makes one unit of this
+    BusinessDropCost greater than every possible lower-level route cost.
+    Therefore reserve or less urgent jobs cannot displace one feasible job
     from a more urgent group in the RoutingModel objective.
     """
     positive_penalties = [item.drop_penalty for item in jobs if item.drop_penalty > 0]
@@ -609,9 +615,6 @@ def _enforce_sla_hierarchy(
         replace(item, drop_penalty=item.drop_penalty // penalty_divisor)
         for item in jobs
     ]
-    max_travel = (
-        2880 * max(1, len(data.engineers)) * max(1, data.config.travel_cost_per_minute)
-    )
     lower_priority_total = 0
     adjusted_by_id = {}
     groups = sorted(
@@ -630,7 +633,15 @@ def _enforce_sla_hierarchy(
         # solver first minimizes the number of dropped jobs in the SLA group;
         # only then do daily/future penalties break ties inside that group.
         secondary_total = sum(max(0, item.drop_penalty) for item in group_jobs)
-        floor = lower_priority_total + max_travel + secondary_total + 1
+        # Travel and the remaining route criteria are already strictly below
+        # one unit of BusinessDropCost through W_drop in the routing objective.
+        # Adding a travel allowance here encoded the same priority twice and
+        # could make the otherwise exact lexicographic objective exceed int64.
+        #
+        # This is the minimal exact band for the SLA hierarchy: one additional
+        # dropped job in this group dominates every lower-priority drop and
+        # every possible redistribution of secondary penalties in this group.
+        floor = lower_priority_total + secondary_total + 1
         for item in group_jobs:
             penalty = floor + item.drop_penalty
             if penalty >= 2**62:

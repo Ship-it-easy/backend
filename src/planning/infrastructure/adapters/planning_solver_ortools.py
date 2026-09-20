@@ -213,6 +213,10 @@ class OrToolsPlanningSolver:
         distance_matrices: dict[str, list[list[int | None]]],
         forbidden_arcs: frozenset[tuple[int, int, int]] = frozenset(),
         solve_started: float | None = None,
+        objective_phase: str = "AUTO",
+        required_business_drop_cost: int | None = None,
+        initial_routes: list[list[int]] | None = None,
+        higher_phase_time_limited: bool = False,
     ) -> PlanningResult:
         solve_started = solve_started or monotonic_time.perf_counter()
         job_count, vehicle_count = len(data.jobs), len(data.engineers)
@@ -227,6 +231,15 @@ class OrToolsPlanningSolver:
         distance_callbacks: list[int] = []
         objective_ranges = _objective_ranges(data, seconds_matrices, distance_matrices)
         weights = objective_ranges["weights"]
+        if objective_phase == "AUTO":
+            phase = (
+                "DROP"
+                if objective_ranges["solve_strategy"] == "PHASED_DROP_THEN_ROUTE"
+                else "SINGLE"
+            )
+        else:
+            phase = objective_phase
+        drop_cost_expressions = []
 
         for vehicle, engineer in enumerate(data.engineers):
             profile = (
@@ -256,6 +269,8 @@ class OrToolsPlanningSolver:
                 seconds_matrix=seconds_matrix,
                 distance_matrix=distance_matrix,
             ):
+                if phase == "DROP":
+                    return 0
                 from_node = manager.IndexToNode(from_index)
                 to_node = manager.IndexToNode(to_index)
                 if to_node == end_node:
@@ -291,7 +306,8 @@ class OrToolsPlanningSolver:
             routing.SetArcCostEvaluatorOfVehicle(cost_index, vehicle)
             routing.SetFixedCostOfVehicle(
                 0
-                if engineer.id in data.fixed_active_engineer_ids
+                if phase == "DROP"
+                or engineer.id in data.fixed_active_engineer_ids
                 else weights["w_engineer"],
                 vehicle,
             )
@@ -312,7 +328,8 @@ class OrToolsPlanningSolver:
             "Distance",
         )
         distance_dimension = routing.GetDimensionOrDie("Distance")
-        distance_dimension.SetGlobalSpanCostCoefficient(weights["w_max_distance"])
+        if phase != "DROP":
+            distance_dimension.SetGlobalSpanCostCoefficient(weights["w_max_distance"])
         for vehicle, engineer in enumerate(data.engineers):
             earliest = engineer.shift_start_min
             # The published timetable is reconstructed from the beginning of
@@ -359,7 +376,16 @@ class OrToolsPlanningSolver:
                 business_drop_cost = (
                     job.drop_penalty // objective_ranges["drop_cost_divisor"]
                 )
-                routing.AddDisjunction([index], business_drop_cost * weights["w_drop"])
+                if phase == "SINGLE":
+                    disjunction_penalty = business_drop_cost * weights["w_drop"]
+                elif phase == "DROP":
+                    disjunction_penalty = business_drop_cost
+                else:
+                    disjunction_penalty = 0
+                    drop_cost_expressions.append(
+                        business_drop_cost * (1 - routing.ActiveVar(index))
+                    )
+                routing.AddDisjunction([index], disjunction_penalty)
             for vehicle in compatible:
                 not_assigned_to_vehicle = routing.solver().IsDifferentCstVar(
                     routing.VehicleVar(index), vehicle
@@ -370,6 +396,16 @@ class OrToolsPlanningSolver:
                     - job.duration_min
                     + 2880 * not_assigned_to_vehicle
                 )
+
+        if phase == "ROUTE":
+            if required_business_drop_cost is None:
+                raise RuntimeError("Missing phased BusinessDropCost target")
+            actual_drop_cost = (
+                routing.solver().Sum(drop_cost_expressions)
+                if drop_cost_expressions
+                else 0
+            )
+            routing.solver().Add(actual_drop_cost == required_business_drop_cost)
 
         self._forbid_missing_arcs(routing, manager, data, matrices, distance_matrices)
         self._forbid_time_infeasible_arcs(routing, manager, data, matrices)
@@ -403,12 +439,58 @@ class OrToolsPlanningSolver:
         )
         if remaining_ms <= 0:
             raise RuntimeError("OR-Tools solver time limit exhausted")
+        if phase == "DROP":
+            remaining_ms = max(1, remaining_ms // 2)
         parameters.time_limit.FromMilliseconds(remaining_ms)
         routing.solver().ReSeed(data.config.solver_seed)
-        assignment = routing.SolveWithParameters(parameters)
+        if initial_routes is not None:
+            routing.CloseModelWithParameters(parameters)
+            initial_assignment = routing.ReadAssignmentFromRoutes(
+                initial_routes, True
+            )
+            if initial_assignment is None:
+                raise RuntimeError("OR-Tools rejected the phased initial solution")
+            assignment = routing.SolveFromAssignmentWithParameters(
+                initial_assignment, parameters
+            )
+        else:
+            assignment = routing.SolveWithParameters(parameters)
         solver_time_ms = int((monotonic_time.perf_counter() - solve_started) * 1000)
         if assignment is None:
-            raise RuntimeError("OR-Tools did not return a feasible solution")
+            raise RuntimeError(
+                "OR-Tools did not return a feasible solution "
+                f"for objective phase {phase}"
+                + (
+                    f" with BusinessDropCost={required_business_drop_cost}"
+                    if required_business_drop_cost is not None
+                    else ""
+                )
+            )
+        if phase == "DROP":
+            phase_one_routes: list[list[int]] = []
+            for vehicle in range(vehicle_count):
+                route: list[int] = []
+                index = routing.Start(vehicle)
+                while not routing.IsEnd(assignment.Value(routing.NextVar(index))):
+                    index = assignment.Value(routing.NextVar(index))
+                    route.append(manager.IndexToNode(index))
+                phase_one_routes.append(route)
+            partial_status = (
+                routing_enums_pb2.RoutingSearchStatus.Value
+                .ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED
+            )
+            return self._solve_sync(
+                data,
+                matrices,
+                seconds_matrices,
+                distance_matrices,
+                forbidden_arcs,
+                solve_started,
+                "ROUTE",
+                int(assignment.ObjectiveValue()),
+                phase_one_routes,
+                routing.status() == partial_status,
+            )
         try:
             result = self._extract(
                 data,
@@ -425,6 +507,15 @@ class OrToolsPlanningSolver:
             invalid_arc = (error.vehicle, error.from_node, error.to_node)
             if invalid_arc in forbidden_arcs:
                 raise RuntimeError(str(error)) from error
+            if objective_ranges["solve_strategy"] == "PHASED_DROP_THEN_ROUTE":
+                return self._solve_sync(
+                    data,
+                    matrices,
+                    seconds_matrices,
+                    distance_matrices,
+                    forbidden_arcs | {invalid_arc},
+                    solve_started,
+                )
             return self._solve_sync(
                 data,
                 matrices,
@@ -432,11 +523,15 @@ class OrToolsPlanningSolver:
                 distance_matrices,
                 forbidden_arcs | {invalid_arc},
                 solve_started,
+                phase,
+                required_business_drop_cost,
+                None,
+                higher_phase_time_limited,
             )
         result.solver_time_ms = solver_time_ms
         routing_status = routing.status()
         search_status = routing_enums_pb2.RoutingSearchStatus.Value
-        if routing_status == (
+        if higher_phase_time_limited or routing_status == (
             search_status.ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED
         ):
             result.solver_status = "FEASIBLE_TIME_LIMIT"
@@ -777,6 +872,12 @@ class OrToolsPlanningSolver:
                 )
             )
         drop_cost = sum(item.drop_penalty for item in unassigned)
+        model_job_ids = {job.id for job in data.jobs}
+        business_drop_cost = sum(
+            item.drop_penalty // objective_ranges["drop_cost_divisor"]
+            for item in unassigned
+            if item.job_id in model_job_ids
+        )
         return PlanningResult(
             routes=routes,
             unassigned=unassigned,
@@ -802,6 +903,7 @@ class OrToolsPlanningSolver:
                 "total_distance_meters": total_distance,
                 "max_engineer_distance_meters": max_distance,
                 "total_travel_minutes": sum(route.total_travel_min for route in routes),
+                "business_drop_cost": business_drop_cost,
                 "vehicle_fixed_costs": {
                     str(engineer.id): (
                         0
@@ -894,12 +996,15 @@ def _objective_ranges(
     w_drop = (
         emax * w_engineer + dmax * w_total_distance + mmax * w_max_distance + tmax + 1
     )
-    maximum_objective = (
-        pmax * w_drop
-        + emax * w_engineer
+    lower_objective_maximum = (
+        emax * w_engineer
         + dmax * w_total_distance
         + mmax * w_max_distance
         + tmax
+    )
+    composite_maximum_objective = (
+        pmax * w_drop
+        + lower_objective_maximum
     )
     if not (
         w_max_distance > tmax
@@ -909,10 +1014,17 @@ def _objective_ranges(
         > emax * w_engineer + dmax * w_total_distance + mmax * w_max_distance + tmax
     ):
         raise RuntimeError("INVALID_OBJECTIVE_WEIGHTS")
-    if maximum_objective >= 2**63:
+    if lower_objective_maximum >= 2**63 or pmax >= 2**63:
         raise RuntimeError("OBJECTIVE_RANGE_OVERFLOW")
+    phased = composite_maximum_objective >= 2**63
+    maximum_objective = (
+        lower_objective_maximum if phased else composite_maximum_objective
+    )
     return {
-        "algorithm_version": "objective-range-v1",
+        "algorithm_version": "objective-range-v2",
+        "solve_strategy": (
+            "PHASED_DROP_THEN_ROUTE" if phased else "WEIGHTED_SINGLE_PASS"
+        ),
         "distance_unit_meters": data.config.distance_unit_meters,
         "time_unit_seconds": data.config.time_unit_seconds,
         "nmax": nmax,
@@ -926,6 +1038,7 @@ def _objective_ranges(
         "tmax": tmax,
         "route_time_budgets": route_budgets,
         "maximum_objective": maximum_objective,
+        "composite_maximum_objective": composite_maximum_objective,
         "int64_fraction": maximum_objective / (2**63 - 1),
         "weights": {
             "w_time": w_time,
