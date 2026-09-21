@@ -16,6 +16,7 @@ from planning.application.errors import (
     PlanningUnavailable,
     ProjectBlockedError,
     ProjectNotFound,
+    RateLimitExceeded,
 )
 
 ERROR_STATUS_BY_TYPE = {
@@ -27,6 +28,7 @@ ERROR_STATUS_BY_TYPE = {
     PlanningRunInProgress: status.HTTP_409_CONFLICT,
     PlanningRunNotFound: status.HTTP_404_NOT_FOUND,
     PlanningUnavailable: status.HTTP_503_SERVICE_UNAVAILABLE,
+    RateLimitExceeded: status.HTTP_429_TOO_MANY_REQUESTS,
     ProjectBlockedError: status.HTTP_403_FORBIDDEN,
     ProjectNotFound: status.HTTP_404_NOT_FOUND,
 }
@@ -34,6 +36,7 @@ ERROR_STATUS_BY_TYPE = {
 
 def planning_error_response(error: PlanningError) -> JSONResponse:
     content: dict[str, Any] = {"code": error.code, "message": error.message}
+    content.update(error.details)
     if error.run_id is not None:
         content["planning_run_id"] = error.run_id
     return JSONResponse(

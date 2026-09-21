@@ -42,16 +42,18 @@ class ValhallaTravelMatrixProvider:
             for i, origin in enumerate(coordinates)
             for j, destination in enumerate(coordinates)
         }
-        cache_query = select(travel_time_cache).where(
-            travel_time_cache.c.cache_key.in_(list(keys.values()))
-        )
         effective_ttl_days = 7 if cache_ttl_days is None else cache_ttl_days
-        cache_query = cache_query.where(
-            travel_time_cache.c.created_at
-            >= datetime.now(timezone.utc) - timedelta(days=effective_ttl_days)
-        )
-        cached_rows = (await self._session.execute(cache_query)).mappings()
-        cached = {row.cache_key: row for row in cached_rows}
+        cutoff = datetime.now(timezone.utc) - timedelta(days=effective_ttl_days)
+        unique_keys = sorted(set(keys.values()))
+        cached = {}
+        # PostgreSQL's bind limit applies even though Valhalla requests are blocked.
+        for offset in range(0, len(unique_keys), 5_000):
+            cache_query = select(travel_time_cache).where(
+                travel_time_cache.c.cache_key.in_(unique_keys[offset : offset + 5_000]),
+                travel_time_cache.c.created_at >= cutoff,
+            )
+            cached_rows = (await self._session.execute(cache_query)).mappings()
+            cached.update({row.cache_key: row for row in cached_rows})
         for pair, key in keys.items():
             row = cached.get(key)
             if (
@@ -105,7 +107,7 @@ class ValhallaTravelMatrixProvider:
             # because of its matrix-distance limit. Resolve only those empty
             # cells through the same provider's route endpoint. This remains a
             # real road distance; if Valhalla cannot build the route, the cell
-            # stays empty and the solver refuses publication.
+            # stays empty and that arc is forbidden in the routing model.
             for i, j in sorted(missing):
                 if times[i][j] is not None and distances[i][j] is not None:
                     continue
@@ -132,32 +134,37 @@ class ValhallaTravelMatrixProvider:
                     if seconds is not None and distance_km is not None:
                         times[i][j] = math.ceil(float(seconds))
                         distances[i][j] = math.ceil(float(distance_km) * 1000)
-                except (httpx.HTTPError, TypeError, ValueError):
-                    continue
+                except httpx.HTTPStatusError as error:
+                    # Only an explicit no-route response means an unreachable arc.
+                    # A server/network failure must not silently drop customer jobs.
+                    if error.response.status_code == 400 and error.response.json().get(
+                        "error_code"
+                    ) in {441, 442}:
+                        continue
+                    raise
 
-        values = []
+        values_by_key = {}
         for i, j in missing:
             origin, destination = coordinates[i], coordinates[j]
-            values.append(
-                {
-                    "cache_key": keys[(i, j)],
-                    "origin_latitude": Decimal(str(origin.latitude)),
-                    "origin_longitude": Decimal(str(origin.longitude)),
-                    "destination_latitude": Decimal(str(destination.latitude)),
-                    "destination_longitude": Decimal(str(destination.longitude)),
-                    "profile": profile,
-                    "duration_min": (
-                        math.ceil(times[i][j] / 60) if times[i][j] is not None else None
-                    ),
-                    "travel_time_seconds": times[i][j],
-                    "distance_meters": distances[i][j],
-                    "provider": "VALHALLA_LOCAL",
-                }
-            )
-        if values:
+            values_by_key[keys[(i, j)]] = {
+                "cache_key": keys[(i, j)],
+                "origin_latitude": Decimal(str(origin.latitude)),
+                "origin_longitude": Decimal(str(origin.longitude)),
+                "destination_latitude": Decimal(str(destination.latitude)),
+                "destination_longitude": Decimal(str(destination.longitude)),
+                "profile": profile,
+                "duration_min": (
+                    math.ceil(times[i][j] / 60) if times[i][j] is not None else None
+                ),
+                "travel_time_seconds": times[i][j],
+                "distance_meters": distances[i][j],
+                "provider": "VALHALLA_LOCAL",
+            }
+        values = list(values_by_key.values())
+        for offset in range(0, len(values), 1_000):
             await self._session.execute(
                 insert(travel_time_cache)
-                .values(values)
+                .values(values[offset : offset + 1_000])
                 .on_conflict_do_update(
                     index_elements=["cache_key"],
                     set_={
@@ -172,6 +179,7 @@ class ValhallaTravelMatrixProvider:
                     },
                 )
             )
+        if values:
             await self._session.commit()
         return TravelMatrix(times, distances, profile, "VALHALLA_LOCAL")
 

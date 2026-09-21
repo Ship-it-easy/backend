@@ -13,7 +13,9 @@ class NominatimAddressSearchProvider(AddressSearchProvider):
     def __init__(self, config: PlanningServiceConfig):
         self._config = config
 
-    async def search(self, query: str) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, *, require_house: bool = True
+    ) -> list[dict[str, Any]]:
         try:
             async with httpx.AsyncClient(
                 base_url=self._config.nominatim_url,
@@ -32,22 +34,41 @@ class NominatimAddressSearchProvider(AddressSearchProvider):
                     },
                 )
                 response.raise_for_status()
-        except httpx.HTTPError as error:
+                payload = response.json()
+        except (httpx.HTTPError, TypeError, ValueError) as error:
             raise PlanningUnavailable(
                 "Address suggestions are temporarily unavailable",
                 code="ADDRESS_PROVIDER_UNAVAILABLE",
             ) from error
 
         result = []
-        for item in response.json():
-            address = item.get("address", {})
-            if not any(address.get(key) for key in ("house_number", "building")):
-                continue
-            result.append(
-                {
-                    "display_name": item["display_name"],
-                    "latitude": float(item["lat"]),
-                    "longitude": float(item["lon"]),
-                }
-            )
+        try:
+            for item in payload:
+                address = item.get("address", {})
+                if require_house and not any(
+                    address.get(key) for key in ("house_number", "building")
+                ):
+                    continue
+                osm_id = item.get("osm_id")
+                place_id = item.get("place_id")
+                if osm_id is not None:
+                    address_key = f"{item.get('osm_type') or 'osm'}:{osm_id}"
+                elif place_id is not None:
+                    address_key = f"place:{place_id}"
+                else:
+                    address_key = item["display_name"].strip().casefold()
+                result.append(
+                    {
+                        "display_name": item["display_name"],
+                        "latitude": float(item["lat"]),
+                        "longitude": float(item["lon"]),
+                        "address": address,
+                        "address_key": address_key,
+                    }
+                )
+        except (KeyError, TypeError, ValueError) as error:
+            raise PlanningUnavailable(
+                "Address suggestions are temporarily unavailable",
+                code="ADDRESS_PROVIDER_UNAVAILABLE",
+            ) from error
         return result

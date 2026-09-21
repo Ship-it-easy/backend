@@ -82,18 +82,21 @@ class SqlaJobsRepository:
             ) from error
         return {**dict(row), "planning_event_id": int(event_id)}
 
-    async def list_jobs(self, project_id: int) -> list[dict[str, Any]]:
+    async def list_jobs(
+        self, project_id: int, import_batch_id: int | None = None
+    ) -> list[dict[str, Any]]:
         exists = await self._session.scalar(
             select(projects.c.id).where(projects.c.id == project_id)
         )
         if exists is None:
             raise ProjectNotFound("Project not found")
+        query = select(jobs).where(jobs.c.project_id == project_id)
+        if import_batch_id is not None:
+            query = query.where(jobs.c.import_batch_id == import_batch_id)
         rows = (
             (
                 await self._session.execute(
-                    select(jobs)
-                    .where(jobs.c.project_id == project_id)
-                    .order_by(jobs.c.id)
+                    query.order_by(jobs.c.id)
                 )
             )
             .mappings()

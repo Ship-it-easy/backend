@@ -105,8 +105,11 @@ Timezone должен совпадать с timezone проекта. Все аб
 - результат отдельного дня: `GET /api/project/planning/board/{planning_date}`;
 - объяснение решения по заявке:
   `GET /api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation`;
-- XLSX: `POST /api/project/jobs/import/preview` и `/import/apply`. Обязательные
-  колонки: `address`, `sla_date`, `work_type`.
+- CSV-пакет заявок: `POST /api/projects/{project_id}/job-imports`, просмотр
+  состояния и ошибок через `/job-imports/{batch_id}` и
+  `/job-imports/{batch_id}/issues`, атомарное создание через
+  `/job-imports/{batch_id}/apply`. Обязательные колонки: `Тип заявки ВК`,
+  `Начало`, `Окончание`, `Адрес`.
 
 Владелец проекта использует те же read-модели через префикс
 `/api/projects/{project_id}/planning`. Ответ доски всегда содержит семь дат от
@@ -195,3 +198,11 @@ Read model связывает каждую дату опубликованной
 ## Полезные материалы
 1. Web sessions - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 2. OAuth2 - https://auth0.com/docs и https://oauth.net/
+# Импорт заявок из CSV
+
+После миграции Alembic `e37b19a5c200` диспетчер и владелец могут загружать CSV
+через `POST /api/projects/{project_id}/job-imports`. Проверка выполняется в фоне;
+состояние и ошибки доступны через `GET` маршруты того же раздела. Применение
+проверенного пакета выполняется отдельным `POST .../{batch_id}/apply` с UUID в
+заголовке `Idempotency-Key`. Исходный файл и результаты проверки хранятся в БД;
+файл удаляется через 30 дней фоновым обслуживанием, результаты и аудит остаются.

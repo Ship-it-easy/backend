@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from planning.presentation.http.job_imports import router as job_imports_router
 from planning.presentation.http.jobs.router import jobs_router
 from planning.presentation.http.planning_batches.router import planning_batches_router
 from planning.presentation.http.planning_runs.router import planning_runs_router
@@ -8,6 +9,7 @@ from planning.presentation.http.project_scoped_engineers import (
 )
 
 planning_router = APIRouter(prefix="/api/projects", tags=["Planning"])
+planning_router.include_router(job_imports_router)
 planning_router.include_router(jobs_router)
 planning_router.include_router(project_scoped_engineers_router)
 planning_router.include_router(planning_runs_router)

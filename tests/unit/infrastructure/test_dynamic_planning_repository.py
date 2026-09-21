@@ -43,3 +43,18 @@ def test_historical_day_result_keeps_compatible_and_unassigned_results() -> None
         {10: {"planning_date": "2026-09-21", "engineer_id": 2}},
     )
     assert _historical_day_result_matches_assignments(result, [], {})
+
+
+def test_board_coordinate_reads_normalized_and_flat_snapshots():
+    from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
+        _coordinate,
+    )
+
+    coordinate = {"latitude": 58.01, "longitude": 56.24}
+    assert _coordinate({"coordinate": coordinate}) == coordinate
+    assert _coordinate(coordinate) == coordinate
+    assert (
+        _coordinate({"latitude": None, "longitude": None, "coordinate": coordinate})
+        == coordinate
+    )
+    assert _coordinate({}) is None

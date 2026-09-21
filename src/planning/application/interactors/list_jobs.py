@@ -9,6 +9,8 @@ class ListJobsInteractor:
         self._access = access
         self._repository = repository
 
-    async def __call__(self, project_id: int) -> list[dict[str, Any]]:
+    async def __call__(
+        self, project_id: int, import_batch_id: int | None = None
+    ) -> list[dict[str, Any]]:
         await self._access.project(project_id)
-        return await self._repository.list_jobs(project_id)
+        return await self._repository.list_jobs(project_id, import_batch_id)

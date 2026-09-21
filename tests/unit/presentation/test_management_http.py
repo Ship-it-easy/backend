@@ -27,6 +27,7 @@ from planning.presentation.http.base.error_handler import (
 )
 from planning.presentation.http.engineer.router import engineer_router
 from planning.presentation.http.project.router import project_router
+from planning.presentation.http.root_router import planning_router
 
 EXPECTED_ROUTES = {
     ("GET", "/api/admin/owners"),
@@ -64,8 +65,6 @@ EXPECTED_ROUTES = {
     ("PATCH", "/api/project/work-types/{item_id}"),
     ("GET", "/api/project/jobs"),
     ("POST", "/api/project/jobs"),
-    ("POST", "/api/project/jobs/import/preview"),
-    ("POST", "/api/project/jobs/import/apply"),
     ("GET", "/api/project/jobs/{job_id}"),
     ("PATCH", "/api/project/jobs/{job_id}"),
     ("POST", "/api/project/jobs/{job_id}/status"),
@@ -114,6 +113,17 @@ def test_management_paths_and_methods_are_preserved() -> None:
     }
     assert EXPECTED_ROUTES == actual
     assert len(actual) == len(set(actual))
+
+
+def test_csv_import_routes_replace_legacy_xlsx_job_routes() -> None:
+    app = FastAPI()
+    app.include_router(planning_router)
+    paths = app.openapi()["paths"]
+    assert "/api/projects/{project_id}/job-imports" in paths
+    assert "/api/projects/{project_id}/job-imports/{batch_id}/apply" in paths
+    assert "/api/projects/{project_id}/job-imports/{batch_id}/revalidate" in paths
+    assert "/api/projects/{project_id}/jobs/import/preview" not in paths
+    assert "/api/projects/{project_id}/jobs/import/apply" not in paths
 
 
 def test_admin_request_validation_happens_before_interactor() -> None:

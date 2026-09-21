@@ -100,3 +100,19 @@ async def test_owner_can_read_scoped_planning_config() -> None:
 
     assert await interactor(7) == {"version": 4}
     management_repository.get_config.assert_awaited_once_with(7)
+
+
+async def test_owner_project_scope_must_exist_and_be_active_for_write() -> None:
+    identity = AsyncMock()
+    identity.get_current_user.return_value = _user(UserRoleEnum.OWNER)
+    repository = AsyncMock()
+    access = ProjectAccess(identity, repository)
+
+    repository.get_project_status.return_value = None
+    with pytest.raises(ObjectNotFoundError):
+        await access.project(404)
+
+    repository.get_project_status.return_value = "BLOCKED"
+    assert await access.project(7) is identity.get_current_user.return_value
+    with pytest.raises(ProjectBlockedError):
+        await access.project(7, write=True)

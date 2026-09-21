@@ -26,6 +26,8 @@ class PlanningInputNormalizer:
         planning_date: date,
         timezone_name: str,
         source: dict[str, Any],
+        *,
+        snapshot_time: datetime | None = None,
     ) -> PlanningInput:
         if source["config"] is None:
             raise PlanningUnavailable("Project has no active planning configuration")
@@ -38,14 +40,13 @@ class PlanningInputNormalizer:
             config_values["travel_cache_ttl_days"] = 7
         config = PlanningConfig(**config_values)
         equipment_units = source["equipment_units"]
-        local_today = (
-            datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name)).date()
-        )
+        snapshot_time = snapshot_time or datetime.now(timezone.utc)
+        local_today = snapshot_time.astimezone(ZoneInfo(timezone_name)).date()
         engineers = await self._normalize_engineers(
             source["engineers"],
             source,
             (
-                current_minute_ceil(timezone_name)
+                current_minute_ceil(timezone_name, snapshot_time)
                 if planning_date == local_today
                 else None
             ),
@@ -150,6 +151,9 @@ class PlanningInputNormalizer:
 
         eligible.sort(
             key=lambda job: (
+                not job.mandatory,
+                _sla_group_rank(job.sla_date, planning_date),
+                job.priority_type != JobPriorityType.EMERGENCY,
                 -job.drop_penalty,
                 job.sla_date,
                 job.created_at,
@@ -169,11 +173,16 @@ class PlanningInputNormalizer:
             )
             for job in eligible[config.max_jobs_per_run :]
         )
+        source_jobs = {int(item["id"]): item for item in source["jobs"]}
         snapshot = {
+            "snapshot_time": snapshot_time,
             "project_id": project_id,
             "planning_date": planning_date,
             "timezone": timezone_name,
-            "jobs": [asdict(job) for job in jobs_with_penalty],
+            "jobs": [
+                {**source_jobs.get(job.id, {}), **asdict(job)}
+                for job in jobs_with_penalty
+            ],
             "engineers": [asdict(engineer) for engineer in engineers],
             "equipment_units": equipment_units,
             "penalty_components": {
@@ -386,9 +395,7 @@ def calculate_drop_penalty_components(
     )
     overdue_bonus = config.sla_overdue_per_day * -days if days < 0 else 0
     emergency_bonus = (
-        EMERGENCY_BONUS
-        if job.priority_type == JobPriorityType.EMERGENCY
-        else 0
+        EMERGENCY_BONUS if job.priority_type == JobPriorityType.EMERGENCY else 0
     )
     skill_scarcity_bonus = 0
     if compatible_count == 1:
@@ -452,8 +459,18 @@ def _time_to_end_minute(value: time) -> int:
     return value.hour * 60 + value.minute
 
 
-def current_minute_ceil(timezone_name: str) -> int:
-    local_now = datetime.now(timezone.utc).astimezone(ZoneInfo(timezone_name))
+def _sla_group_rank(sla_date: date, planning_date: date) -> int:
+    days = (sla_date - planning_date).days
+    for rank, upper_bound in enumerate((-1, 0, 1, 3, 6)):
+        if days <= upper_bound:
+            return rank
+    return 5
+
+
+def current_minute_ceil(timezone_name: str, instant: datetime | None = None) -> int:
+    local_now = (instant or datetime.now(timezone.utc)).astimezone(
+        ZoneInfo(timezone_name)
+    )
     return (
         local_now.hour * 60
         + local_now.minute
