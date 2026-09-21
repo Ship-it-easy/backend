@@ -3155,6 +3155,10 @@ def _safe_planning_error(event: Any) -> str | None:
         "DISTANCE_DATA_NOT_READY": "Дорожные данные ещё не готовы",
         "FAILED_VALIDATION": "Результат не прошёл проверку",
         "CANDIDATE_COMPARISON_TIMEOUT": "Расчёт превысил допустимое время",
+        "OBJECTIVE_RANGE_OVERFLOW": (
+            "Превышен числовой предел оценки маршрутов. "
+            "Необходимо изменить настройки или способ расчёта"
+        ),
         "SYSTEM_ERROR": "Не удалось завершить расчёт",
     }
     return labels.get(str(event.error_code), "Не удалось завершить расчёт")

@@ -346,7 +346,9 @@ class MultiDayPlanningService:
                     )
                 )
             ordered = _order_for_daily_limit(penalized, decisions)
-            selected = _enforce_sla_hierarchy(ordered[:daily_limit], decisions, data)
+            selected, drop_priority_stages, penalty_encoding = _prepare_sla_hierarchy(
+                ordered[:daily_limit], decisions, data
+            )
             selected_penalties = [
                 item.drop_penalty for item in selected if item.drop_penalty > 0
             ]
@@ -393,6 +395,8 @@ class MultiDayPlanningService:
                 + deferred,
                 snapshot={
                     **data.snapshot,
+                    "drop_priority_stages": drop_priority_stages,
+                    "penalty_encoding": penalty_encoding,
                     "jobs": [
                         {
                             **item,
@@ -647,6 +651,73 @@ def _enforce_sla_hierarchy(
         if lower_priority_total >= 2**62:
             raise RuntimeError("INVALID_PENALTY_BANDS")
     return [adjusted_by_id[item.id] for item in jobs]
+
+
+def _prepare_sla_hierarchy(
+    jobs: list,
+    decisions: dict[int, dict[str, Any]],
+    data: PlanningInput,
+) -> tuple[list, list[dict[str, Any]], str]:
+    """Подготовить прежние штрафы и независимые уровни на случай переполнения.
+
+    Каждый уровень кодирует две прежние цели одной SLA-категории: сначала число
+    пропусков, затем сумму вторичных баллов. Между категориями большие веса не
+    нужны: при переполнении solver рассматривает уровни последовательно.
+    """
+    optional = [item for item in jobs if not item.mandatory]
+    groups = sorted(
+        {
+            (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            for item in optional
+        },
+        key=lambda value: (_group_order(value[0]), value[1]),
+    )
+    stages: list[dict[str, Any]] = []
+    for priority_group_name, is_normal in groups:
+        group_jobs = [
+            item
+            for item in optional
+            if (
+                decisions[item.id]["priority_group"],
+                item.priority_type != "EMERGENCY",
+            )
+            == (priority_group_name, is_normal)
+        ]
+        minimum = min(item.drop_penalty for item in group_jobs)
+        differences = [item.drop_penalty - minimum for item in group_jobs]
+        divisor = math.gcd(*differences) or 1
+        secondary = [value // divisor for value in differences]
+        count_weight = sum(secondary) + 1
+        costs = {
+            str(item.id): count_weight + value
+            for item, value in zip(group_jobs, secondary, strict=True)
+        }
+        maximum = sum(costs.values())
+        if maximum >= 2**63 - 1:
+            raise RuntimeError("OBJECTIVE_RANGE_OVERFLOW")
+        stages.append(
+            {
+                "name": (
+                    f"{priority_group_name}:{'NORMAL' if is_normal else 'EMERGENCY'}"
+                ),
+                "priority_group": priority_group_name,
+                "priority_type": "NORMAL" if is_normal else "EMERGENCY",
+                "job_costs": costs,
+                "count_weight": count_weight,
+                "secondary_divisor": divisor,
+                "maximum_objective": maximum,
+            }
+        )
+
+    try:
+        adjusted = _enforce_sla_hierarchy(jobs, decisions, data)
+    except RuntimeError as error:
+        if str(error) != "INVALID_PENALTY_BANDS":
+            raise
+        # Исходные CascadeDropPenalty остаются в отчёте и помещаются в BigInteger;
+        # solver использует небольшие job_costs отдельных уровней.
+        return jobs, stages, "LEXICOGRAPHIC_STAGES_REQUIRED"
+    return adjusted, stages, "WEIGHTED_OR_LEXICOGRAPHIC"
 
 
 def _group_order(group: str) -> int:

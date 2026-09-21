@@ -1,0 +1,29 @@
+{
+  "jobs": 100,
+  "engineers": 10,
+  "priority_stages": 12,
+  "solve_strategy": "LEXICOGRAPHIC_STAGES",
+  "composite_maximum_objective": 13325470387166262589384,
+  "maximum_individual_stage": 872569154781510,
+  "completed_stage_names": [
+    "OVERDUE:EMERGENCY",
+    "OVERDUE:NORMAL",
+    "DUE_TODAY:EMERGENCY",
+    "DUE_TODAY:NORMAL",
+    "DUE_IN_1_DAY:EMERGENCY",
+    "DUE_IN_1_DAY:NORMAL",
+    "DUE_IN_2_3_DAYS:EMERGENCY",
+    "DUE_IN_2_3_DAYS:NORMAL",
+    "DUE_LATER_IN_CURRENT_BLOCK:EMERGENCY",
+    "DUE_LATER_IN_CURRENT_BLOCK:NORMAL",
+    "RESERVE:EMERGENCY",
+    "RESERVE:NORMAL",
+    "ROUTE"
+  ],
+  "all_stages_completed": true,
+  "solver_status": "FEASIBLE_TIME_LIMIT",
+  "solver_time_ms": 10000,
+  "assigned": 100,
+  "unassigned": 0,
+  "validator_errors": []
+}

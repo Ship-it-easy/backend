@@ -11,6 +11,13 @@
 - **Development**: `isort`, `ruff`, `pre-commit`
 
 
+## Как работает расчёт маршрутов
+
+- [Для продакта: маршруты и смысл валидатора](docs/ROUTING_FOR_PRODUCT.md).
+- [Для аналитика и разработчика: технический разбор и результаты ревью](docs/ROUTING_FOR_ANALYST.md).
+- [Объяснение для демо и разбор кода OR-Tools](docs/ROUTING_ALGORITHM.md).
+- [Актуальность ТЗ, состав рефакторинга и проверки](docs/refactoring/ORTOOLS_REFACTOR.md).
+
 ## API
 <p align="center">
   <img src="docs/API.png" />

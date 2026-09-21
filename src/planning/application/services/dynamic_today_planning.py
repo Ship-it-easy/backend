@@ -15,8 +15,8 @@ from planning.application.services.future_opportunities import (
 )
 from planning.application.services.multi_day_planning import (
     _daily_source,
-    _enforce_sla_hierarchy,
     _group_order,
+    _prepare_sla_hierarchy,
     _schedules_for,
 )
 from planning.application.services.planning_input_normalizer import (
@@ -759,7 +759,9 @@ def _with_sla_hierarchy(
         )
         for item in data.jobs
     ]
-    adjusted = _enforce_sla_hierarchy(penalized, decisions, data)
+    adjusted, drop_priority_stages, penalty_encoding = _prepare_sla_hierarchy(
+        penalized, decisions, data
+    )
     positive_costs = [item.drop_penalty for item in adjusted if item.drop_penalty > 0]
     divisor = math.gcd(*positive_costs) if positive_costs else 1
     penalty_components = {
@@ -781,6 +783,8 @@ def _with_sla_hierarchy(
         jobs=adjusted,
         snapshot={
             **data.snapshot,
+            "drop_priority_stages": drop_priority_stages,
+            "penalty_encoding": penalty_encoding,
             "penalty_components": penalty_components,
             "sla_hierarchy_version": "sla-emergency-count-v1",
             "jobs": [

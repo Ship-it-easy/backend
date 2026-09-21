@@ -56,7 +56,10 @@ def _config() -> PlanningConfig:
     )
 
 
-async def test_overflow_is_rejected_without_changing_objective() -> None:
+@pytest.mark.parametrize("penalty_bits", [45, 64])
+async def test_overflow_stops_without_changing_objective(
+    penalty_bits: int,
+) -> None:
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
     jobs = [
         Job(
@@ -70,7 +73,7 @@ async def test_overflow_is_rejected_without_changing_objective() -> None:
             required_qualifications=frozenset(),
             required_equipment=frozenset(),
             created_at=now,
-            drop_penalty=2**45 + index - 1,
+            drop_penalty=2**penalty_bits + index - 1,
         )
         for index in (1, 2)
     ]
