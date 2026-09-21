@@ -383,6 +383,7 @@ class MultiDayPlanningService:
                         ),
                     ),
                 ),
+                solve_deadline_monotonic=started + config.batch_total_time_limit_sec,
                 jobs=selected,
                 pre_unassigned=[
                     item
@@ -587,6 +588,7 @@ def _order_for_daily_limit(
         jobs,
         key=lambda item: (
             _group_order(decisions[item.id]["priority_group"]),
+            item.priority_type != "EMERGENCY",
             decisions[item.id].get("future_opportunity_count", 0),
             -item.drop_penalty,
             item.sla_date,
@@ -601,49 +603,41 @@ def _enforce_sla_hierarchy(
     decisions: dict[int, dict[str, Any]],
     _data: PlanningInput,
 ) -> list:
-    """Separate every SLA group by a provably dominant penalty range.
+    """Encode SLA, then emergency/normal, then count and secondary priority.
 
-    A penalty in a more urgent group is greater than the sum of every less
-    urgent candidate penalty. W_drop separately makes one unit of this
-    BusinessDropCost greater than every possible lower-level route cost.
-    Therefore reserve or less urgent jobs cannot displace one feasible job
-    from a more urgent group in the RoutingModel objective.
+    Mandatory nodes cannot be dropped and must not inflate optional penalties.
+    Within a category, subtracting a common minimum preserves all comparisons
+    at equal cardinality. Dividing differences by their GCD is also exact.
+    This removes large constant SLA/emergency bonuses without losing priority.
     """
-    positive_penalties = [item.drop_penalty for item in jobs if item.drop_penalty > 0]
-    penalty_divisor = math.gcd(*positive_penalties) if positive_penalties else 1
-    normalized_jobs = [
-        replace(item, drop_penalty=item.drop_penalty // penalty_divisor)
-        for item in jobs
-    ]
+    optional = [item for item in jobs if not item.mandatory]
     lower_priority_total = 0
-    adjusted_by_id = {}
+    adjusted_by_id = {
+        item.id: replace(item, drop_penalty=0) for item in jobs if item.mandatory
+    }
     groups = sorted(
-        {decisions[item.id]["priority_group"] for item in normalized_jobs},
-        key=_group_order,
+        {
+            (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            for item in optional
+        },
+        key=lambda value: (_group_order(value[0]), value[1]),
         reverse=True,
     )
     for group in groups:
         group_jobs = [
             item
-            for item in normalized_jobs
-            if decisions[item.id]["priority_group"] == group
+            for item in optional
+            if (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            == group
         ]
-        # The common cardinality component dominates every possible secondary
-        # penalty difference in this group and all less urgent groups. Thus the
-        # solver first minimizes the number of dropped jobs in the SLA group;
-        # only then do daily/future penalties break ties inside that group.
-        secondary_total = sum(max(0, item.drop_penalty) for item in group_jobs)
-        # Travel and the remaining route criteria are already strictly below
-        # one unit of BusinessDropCost through W_drop in the routing objective.
-        # Adding a travel allowance here encoded the same priority twice and
-        # could make the otherwise exact lexicographic objective exceed int64.
-        #
-        # This is the minimal exact band for the SLA hierarchy: one additional
-        # dropped job in this group dominates every lower-priority drop and
-        # every possible redistribution of secondary penalties in this group.
-        floor = lower_priority_total + secondary_total + 1
-        for item in group_jobs:
-            penalty = floor + item.drop_penalty
+        minimum = min(item.drop_penalty for item in group_jobs)
+        differences = [item.drop_penalty - minimum for item in group_jobs]
+        divisor = math.gcd(*differences) or 1
+        secondary = [value // divisor for value in differences]
+        secondary_weight = lower_priority_total + 1
+        floor = (sum(secondary) + 1) * secondary_weight
+        for item, value in zip(group_jobs, secondary, strict=True):
+            penalty = floor + value * secondary_weight
             if penalty >= 2**62:
                 raise RuntimeError("INVALID_PENALTY_BANDS")
             adjusted_by_id[item.id] = replace(item, drop_penalty=penalty)

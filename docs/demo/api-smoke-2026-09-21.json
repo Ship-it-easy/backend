@@ -1,0 +1,92 @@
+[
+  {
+    "check": "dispatcher_login",
+    "status": "PASS",
+    "project_id": 2
+  },
+  {
+    "check": "readiness",
+    "status": "PASS",
+    "result": {
+      "planning_date": "2026-09-21",
+      "ready": true,
+      "problems": []
+    }
+  },
+  {
+    "check": "manual_plan",
+    "status": "PASS",
+    "event_id": 104,
+    "assignments": 14,
+    "version_id": 33
+  },
+  {
+    "check": "board_and_day",
+    "status": "PASS",
+    "board_keys": [
+      "project_date",
+      "timezone",
+      "plan_version",
+      "active_run",
+      "days",
+      "selected_day",
+      "readiness"
+    ],
+    "day_keys": [
+      "date",
+      "plan_version_id",
+      "day_result_id",
+      "result_available",
+      "solver_status",
+      "counts",
+      "engineer_columns",
+      "unassigned",
+      "available_filters"
+    ]
+  },
+  {
+    "check": "urgent_insertion",
+    "status": "PASS",
+    "event_id": 105,
+    "job_id": 61,
+    "candidate_count": 2
+  },
+  {
+    "check": "cancel_job",
+    "status": "PASS",
+    "event_id": 107,
+    "job_id": 61
+  },
+  {
+    "check": "engineer_unavailable",
+    "status": "PASS",
+    "event_id": 108,
+    "engineer_id": 7
+  },
+  {
+    "check": "engineer_restored",
+    "status": "PASS",
+    "event_id": 109,
+    "engineer_id": 7
+  },
+  {
+    "check": "plan_history",
+    "status": "PASS"
+  },
+  {
+    "check": "engineer_login_and_route",
+    "status": "PASS",
+    "assignments": 0,
+    "route_state_keys": [
+      "plan_version",
+      "published_at",
+      "assignments",
+      "changes"
+    ]
+  },
+  {
+    "check": "smoke_complete",
+    "status": "PASS",
+    "completed_at": "2026-09-21T01:10:11.255273"
+  }
+]

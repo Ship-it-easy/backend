@@ -1,6 +1,6 @@
 import math
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from planning.application.services.planning_input_normalizer import is_base_compatible
@@ -37,6 +37,47 @@ class PlanningValidator:
         if any(job.mandatory and job.id not in assigned for job in data.jobs):
             errors.append("mandatory job is not assigned")
 
+        repeated_engineers = [
+            key
+            for key, count in Counter(
+                route.engineer_id for route in result.routes
+            ).items()
+            if count > 1
+        ]
+        if repeated_engineers:
+            errors.append(f"engineers have multiple routes: {repeated_engineers}")
+        expected_size = len(data.jobs) + len(data.engineers)
+        for profile in {
+            "auto"
+            if engineers[route.engineer_id].transport_type == TransportType.CAR
+            else "pedestrian"
+            for route in result.routes
+            if route.engineer_id in engineers
+        }:
+            for name, matrices in (
+                ("minutes", result.travel_matrices),
+                ("seconds", result.travel_time_seconds_matrices),
+                ("distance", result.distance_matrices),
+            ):
+                matrix = matrices.get(profile)
+                if (
+                    matrix is None
+                    or len(matrix) != expected_size
+                    or any(len(row) != expected_size for row in matrix)
+                ):
+                    errors.append(f"missing or invalid {name} matrix for {profile}")
+                elif any(
+                    value is not None and (type(value) is not int or value < 0)
+                    for row in matrix
+                    for value in row
+                ):
+                    errors.append(f"invalid {name} matrix value for {profile}")
+        if any("matrix" in error for error in errors):
+            return errors
+        midnight = datetime.combine(
+            data.planning_date, time.min, ZoneInfo(data.timezone)
+        )
+
         equipment_usage: Counter[int] = Counter()
         for values in data.preallocated_equipment_by_engineer.values():
             equipment_usage.update(values)
@@ -50,6 +91,17 @@ class PlanningValidator:
             if engineer is None:
                 errors.append(f"unknown engineer {route.engineer_id}")
                 continue
+            if not route.jobs:
+                errors.append(f"route {route.engineer_id} is empty")
+            shift_start = midnight + timedelta(minutes=engineer.shift_start_min)
+            shift_end = midnight + timedelta(minutes=engineer.shift_end_min)
+            if (
+                not shift_start
+                <= route.planned_start
+                <= route.planned_finish
+                <= shift_end
+            ):
+                errors.append(f"route {route.engineer_id} is outside engineer shift")
             expected_sequence = 1
             used_equipment: set[int] = set()
             previous_finish = route.planned_start
@@ -81,7 +133,11 @@ class PlanningValidator:
                     for value in (local_arrival, local_start, local_finish)
                 ):
                     errors.append(f"job {item.job_id} is planned on another date")
-                if not job.window_start_min <= start_min <= job.window_end_min:
+                if not (
+                    midnight + timedelta(minutes=job.window_start_min)
+                    <= item.planned_start
+                    <= midnight + timedelta(minutes=job.window_end_min)
+                ):
                     errors.append(f"job {item.job_id} starts outside its window")
                 finish_min = local_finish.hour * 60 + local_finish.minute
                 if (
@@ -96,18 +152,23 @@ class PlanningValidator:
                     errors.append(f"job {item.job_id} has broken travel sequence")
                 if item.planned_start < item.planned_arrival:
                     errors.append(f"job {item.job_id} starts before arrival")
-                if (
-                    int(
-                        (item.planned_start - item.planned_arrival).total_seconds() / 60
-                    )
-                    != item.waiting_before_job_min
+                if item.planned_start - item.planned_arrival != timedelta(
+                    minutes=item.waiting_before_job_min
                 ):
                     errors.append(f"job {item.job_id} has invalid waiting time")
-                if (
-                    int((item.planned_finish - item.planned_start).total_seconds() / 60)
-                    != job.duration_min
+                if item.planned_finish - item.planned_start != timedelta(
+                    minutes=job.duration_min
                 ):
                     errors.append(f"job {item.job_id} has invalid service duration")
+                if (
+                    min(
+                        item.travel_from_previous_min,
+                        item.waiting_before_job_min,
+                        item.distance_from_previous_meters,
+                    )
+                    < 0
+                ):
+                    errors.append(f"job {item.job_id} has negative route metrics")
                 previous_finish = item.planned_finish
                 job_index = job_indexes[item.job_id]
                 if (
@@ -190,7 +251,19 @@ class PlanningValidator:
             ]
             time_units = actual_travel_time_units
             actual_total_distance = sum(distance_units_by_route)
-            actual_max_distance = max(distance_units_by_route, default=0)
+            full_distance_units = {
+                engineer_id: sum(
+                    math.ceil(leg / data.config.distance_unit_meters) for leg in legs
+                )
+                for engineer_id, legs in data.fixed_distance_legs_by_engineer.items()
+            }
+            for route, units in zip(
+                result.routes, distance_units_by_route, strict=True
+            ):
+                full_distance_units[route.engineer_id] = (
+                    full_distance_units.get(route.engineer_id, 0) + units
+                )
+            actual_max_distance = max(full_distance_units.values(), default=0)
             actual_fixed = len(data.fixed_active_engineer_ids)
             actual_new = sum(
                 route.engineer_id not in data.fixed_active_engineer_ids
@@ -229,14 +302,7 @@ class PlanningValidator:
                 + actual_max_distance * weights["w_max_distance"]
                 + time_units
             )
-            if metrics.get("solve_strategy") == "PHASED_DROP_THEN_ROUTE":
-                if metrics.get("business_drop_cost") != model_drop:
-                    errors.append("invalid phased business drop cost")
-                expected_objective = lower_objective
-            else:
-                expected_objective = (
-                    model_drop * weights["w_drop"] + lower_objective
-                )
+            expected_objective = model_drop * weights["w_drop"] + lower_objective
             if result.objective != expected_objective:
                 errors.append(
                     "invalid lexicographic objective: "

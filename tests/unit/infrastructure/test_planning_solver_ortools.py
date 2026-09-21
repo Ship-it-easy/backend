@@ -1,7 +1,8 @@
 from datetime import date, datetime, timezone
 
+import pytest
+
 from planning.application.interfaces.travel_matrix_provider import TravelMatrix
-from planning.application.validators.planning_result import PlanningValidator
 from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job
@@ -55,8 +56,7 @@ def _config() -> PlanningConfig:
     )
 
 
-async def test_phased_objective_preserves_drop_priority_without_int64_overflow(
-) -> None:
+async def test_overflow_is_rejected_without_changing_objective() -> None:
     now = datetime(2026, 9, 20, tzinfo=timezone.utc)
     jobs = [
         Job(
@@ -97,11 +97,5 @@ async def test_phased_objective_preserves_drop_priority_without_int64_overflow(
         snapshot={},
     )
 
-    result = await OrToolsPlanningSolver(_MatrixProvider()).solve(data)
-
-    assert result.objective_metrics["solve_strategy"] == "PHASED_DROP_THEN_ROUTE"
-    assert result.objective_metrics["composite_maximum_objective"] >= 2**63
-    assert result.objective_metrics["maximum_objective"] < 2**63
-    assert [item.job_id for item in result.unassigned] == [1]
-    assert [item.job_id for route in result.routes for item in route.jobs] == [2]
-    assert PlanningValidator().validate(data, result) == []
+    with pytest.raises(RuntimeError, match="OBJECTIVE_RANGE_OVERFLOW"):
+        await OrToolsPlanningSolver(_MatrixProvider()).solve(data)

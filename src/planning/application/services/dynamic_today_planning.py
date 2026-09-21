@@ -7,6 +7,7 @@ from datetime import date, datetime, time, timedelta
 from time import monotonic
 from typing import Any
 
+from planning.application.errors import SolverNoFeasibleSolution, SolverTimeLimit
 from planning.application.interfaces.planning_solver import PlanningSolverFactory
 from planning.application.services.future_opportunities import (
     FutureOpportunityCalendar,
@@ -15,6 +16,7 @@ from planning.application.services.future_opportunities import (
 from planning.application.services.multi_day_planning import (
     _daily_source,
     _enforce_sla_hierarchy,
+    _group_order,
     _schedules_for,
 )
 from planning.application.services.planning_input_normalizer import (
@@ -61,6 +63,14 @@ class DynamicTodayPlanningService:
         urgent_ids = sorted(
             event_id_by_job,
             key=lambda job_id: (
+                _group_order(
+                    priority_group(
+                        _date(jobs_by_id[job_id]["sla_date"]),
+                        planning_date,
+                        planning_date + timedelta(days=6),
+                    )
+                ),
+                jobs_by_id[job_id].get("priority_type", "NORMAL") != "EMERGENCY",
                 _date(jobs_by_id[job_id]["sla_date"]),
                 _datetime(jobs_by_id[job_id]["created_at"]),
                 job_id,
@@ -277,6 +287,7 @@ class DynamicTodayPlanningService:
             planning_date,
             source["project"]["timezone"],
             candidate_source,
+            snapshot_time=context["snapshot_time"],
         )
         data = replace(
             data,
@@ -305,6 +316,7 @@ class DynamicTodayPlanningService:
             + opportunity_calendar.get(item.id, planning_date, data.config).bonus
             for item in data.jobs
         }
+        data = _with_event_snapshot(data, context, assignments, released_assignment_ids)
         data = _with_sla_hierarchy(data, cascade_penalties, planning_date)
         result = await self._solver_factory.create(data.config.travel_provider).solve(
             data
@@ -379,6 +391,7 @@ class DynamicTodayPlanningService:
                         "longitude": job["longitude"],
                         "sla_date": _date(job["sla_date"]),
                         "work_type_id": int(job["work_type_id"]),
+                        "priority_type": job.get("priority_type", "NORMAL"),
                     }
                 )
         return sorted(
@@ -417,6 +430,7 @@ class DynamicTodayPlanningService:
             planning_date,
             source["project"]["timezone"],
             common_source,
+            snapshot_time=context["snapshot_time"],
         )
         daily_penalties = {item.id: item.drop_penalty for item in common_data.jobs}
         opportunity_calendar = FutureOpportunityCalendar(
@@ -430,7 +444,15 @@ class DynamicTodayPlanningService:
         candidates: list[
             tuple[tuple[Any, ...], int, list[dict[str, Any]], Any, Any]
         ] = []
-        event_deadline = context.get("event_deadline_monotonic")
+        event_deadline = context.get("event_deadline_monotonic") or (
+            monotonic() + common_data.config.event_time_limit_sec
+        )
+        context["event_deadline_monotonic"] = event_deadline
+        for item in assignments:
+            item.setdefault(
+                "priority_type",
+                jobs_by_id.get(int(item["job_id"]), {}).get("priority_type", "NORMAL"),
+            )
         candidate_engineer_ids = sorted(schedule_by_engineer)
         await self._repository.set_candidate_progress(
             event_id,
@@ -494,6 +516,7 @@ class DynamicTodayPlanningService:
                     planning_date,
                     source["project"]["timezone"],
                     candidate_source,
+                    snapshot_time=context["snapshot_time"],
                 )
                 data = replace(
                     data,
@@ -519,6 +542,7 @@ class DynamicTodayPlanningService:
                         ),
                     ),
                 )
+                data = _with_event_snapshot(data, context, assignments, mutable_ids)
                 data = _with_sla_hierarchy(data, cascade_penalties, planning_date)
                 if int(new_job["id"]) not in {item.id for item in data.jobs}:
                     raise CandidateRejected("NEW_JOB_INCOMPATIBLE")
@@ -526,10 +550,12 @@ class DynamicTodayPlanningService:
                     result = await self._solver_factory.create(
                         data.config.travel_provider
                     ).solve(data)
-                except RuntimeError as error:
-                    if str(error) == "OR-Tools did not return a feasible solution":
-                        raise CandidateRejected("NO_FEASIBLE_ROUTE") from error
-                    raise
+                except SolverNoFeasibleSolution as error:
+                    raise CandidateRejected("NO_FEASIBLE_ROUTE") from error
+                except SolverTimeLimit as error:
+                    raise CandidateComparisonTimeout(
+                        "CANDIDATE_COMPARISON_TIMEOUT"
+                    ) from error
                 if monotonic() >= event_deadline:
                     raise CandidateComparisonTimeout("CANDIDATE_COMPARISON_TIMEOUT")
                 errors = self._validator.validate(data, result)
@@ -674,6 +700,7 @@ def _replace_route(
                 "longitude": job["longitude"],
                 "sla_date": _date(job["sla_date"]),
                 "work_type_id": int(job["work_type_id"]),
+                "priority_type": job.get("priority_type", "NORMAL"),
             }
         )
     return sorted(
@@ -683,6 +710,29 @@ def _replace_route(
             int(item["engineer_id"]),
             int(item["sequence"]),
         ),
+    )
+
+
+def _with_event_snapshot(data, context, assignments, mutable_ids):
+    fixed_legs: dict[int, list[int]] = defaultdict(list)
+    for item in assignments:
+        if int(item["job_id"]) not in mutable_ids:
+            fixed_legs[int(item["engineer_id"])].append(
+                int(item.get("distance_from_previous_meters") or 0)
+            )
+    legs = {key: tuple(values) for key, values in fixed_legs.items()}
+    return replace(
+        data,
+        fixed_active_engineer_ids=frozenset(
+            int(item["engineer_id"])
+            for item in assignments
+            if int(item["job_id"]) not in mutable_ids
+            and item.get("status") in {"NEW", "IN_PROGRESS"}
+        ),
+        fixed_distance_legs_by_engineer=legs,
+        travel_snapshot=context.setdefault("travel_snapshot", {}),
+        solve_deadline_monotonic=context.get("event_deadline_monotonic"),
+        snapshot={**data.snapshot, "fixed_distance_legs_by_engineer": legs},
     )
 
 
@@ -729,7 +779,17 @@ def _with_sla_hierarchy(
     return replace(
         data,
         jobs=adjusted,
-        snapshot={**data.snapshot, "penalty_components": penalty_components},
+        snapshot={
+            **data.snapshot,
+            "penalty_components": penalty_components,
+            "sla_hierarchy_version": "sla-emergency-count-v1",
+            "jobs": [
+                {**item, "drop_penalty": adjusted_by_id[item["id"]].drop_penalty}
+                if item["id"] in adjusted_by_id
+                else item
+                for item in data.snapshot.get("jobs", [])
+            ],
+        },
     )
 
 
@@ -754,12 +814,19 @@ def _candidate_score(
             if _sla_group(_date(before_by_id[job_id]["sla_date"]), planning_date)
             == group
         }
-        vector.extend(
-            (
-                len(group_ids),
-                sum(daily_penalties.get(job_id, 0) for job_id in group_ids),
+        for emergency in (True, False):
+            category_ids = {
+                job_id
+                for job_id in group_ids
+                if (before_by_id[job_id].get("priority_type", "NORMAL") == "EMERGENCY")
+                == emergency
+            }
+            vector.extend(
+                (
+                    len(category_ids),
+                    sum(daily_penalties.get(job_id, 0) for job_id in category_ids),
+                )
             )
-        )
     common = [job_id for job_id in mutable_ids if job_id in after_by_id]
     used_engineers = len(
         {

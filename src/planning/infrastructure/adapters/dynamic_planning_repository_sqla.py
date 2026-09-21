@@ -334,6 +334,7 @@ class SqlaDynamicPlanningRepository:
                         select(
                             project_plan_assignments,
                             jobs.c.status,
+                jobs.c.priority_type,
                             jobs.c.address,
                             jobs.c.latitude,
                             jobs.c.longitude,
@@ -1726,6 +1727,7 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.sla_date,
@@ -1839,6 +1841,7 @@ class SqlaDynamicPlanningRepository:
                         select(
                             planning_unassigned_jobs,
                             jobs.c.status,
+                jobs.c.priority_type,
                             jobs.c.address,
                             jobs.c.sla_date,
                             jobs.c.priority_type,
@@ -2036,7 +2039,7 @@ class SqlaDynamicPlanningRepository:
                 }
                 for equipment_id in required_equipment_ids
             ]
-            snapshot_updated_at = source_batch_jobs.get(job_id, {}).get("updated_at")
+            snapshot_updated_at = saved.get("updated_at")
             value["current_data_changed"] = bool(
                 used_current_projection
                 or (
@@ -2827,6 +2830,7 @@ class SqlaDynamicPlanningRepository:
                         project_plan_assignments,
                         jobs.c.address,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.priority_type,
                         jobs.c.latitude,
                         jobs.c.longitude,
@@ -2910,6 +2914,7 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.latitude,
@@ -3161,6 +3166,12 @@ def _coordinate(
     latitude_key: str = "latitude",
     longitude_key: str = "longitude",
 ) -> dict[str, Any] | None:
+    # Normalized solver snapshots store coordinates as an embedded value;
+    # source snapshots and database projections use flat columns.
+    if latitude_key == "latitude" and longitude_key == "longitude":
+        nested = value.get("coordinate")
+        if isinstance(nested, dict):
+            value = {**value, **nested}
     latitude = value.get(latitude_key)
     longitude = value.get(longitude_key)
     if latitude is None or longitude is None:

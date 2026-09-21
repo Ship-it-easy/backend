@@ -1,0 +1,16 @@
+{
+  "project_id": 3,
+  "status": "PASS",
+  "plan_version_number": 2,
+  "assigned_jobs": 14,
+  "routes": 3,
+  "checks": [
+    "dispatcher login on HTTP",
+    "calculate via UI",
+    "all map coordinates displayed",
+    "saved explanation without false changed-data warning",
+    "local creation date around midnight"
+  ],
+  "frontend_tests_passed": 10,
+  "frontend_build": "PASS"
+}

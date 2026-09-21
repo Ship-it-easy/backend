@@ -37,6 +37,14 @@ class PlanningUnavailable(PlanningError):
     code = "PLANNING_UNAVAILABLE"
 
 
+class SolverNoFeasibleSolution(RuntimeError):
+    """A candidate could not produce a feasible route (not a provider failure)."""
+
+
+class SolverTimeLimit(RuntimeError):
+    """The search budget ended before a feasible result was found."""
+
+
 class RateLimitExceeded(PlanningError):
     code = "RATE_LIMIT_EXCEEDED"
 
