@@ -1,0 +1,527 @@
+{
+  "missing_irrelevant_arc": {
+    "error": "DISTANCE_DATA_NOT_READY",
+    "feasible_route": [
+      1,
+      2
+    ],
+    "starts": [
+      485,
+      540
+    ],
+    "missing_arc": "2 -> 1"
+  },
+  "validator_early_departure": {
+    "shift_start": "08:00",
+    "route_start": "2030-01-01T07:50:00+00:00",
+    "first_job_start": "2030-01-01T08:10:00+00:00",
+    "validation": []
+  },
+  "last_service_respected": {
+    "routes": [],
+    "dropped": [
+      1
+    ],
+    "status": "OPTIMAL",
+    "objective": 2,
+    "strategy": "WEIGHTED_SINGLE_PASS",
+    "solver_ms": 0,
+    "validation": []
+  },
+  "equipment_one_unit_two_engineers": {
+    "routes": [
+      {
+        "engineer": 1,
+        "jobs": [
+          1
+        ],
+        "distance": 100,
+        "travel": 1
+      }
+    ],
+    "dropped": [
+      2
+    ],
+    "status": "FEASIBLE",
+    "objective": 5953,
+    "strategy": "WEIGHTED_SINGLE_PASS",
+    "solver_ms": 1,
+    "validation": []
+  },
+  "candidate_failure": {
+    "error_type": "RuntimeError",
+    "error": "OR-Tools did not return a feasible solution for objective phase SINGLE",
+    "saved_candidates": 0,
+    "progress_engineers": [
+      null,
+      1
+    ],
+    "engineer_2_alone": {
+      "routes": [
+        {
+          "engineer": 2,
+          "jobs": [
+            1
+          ],
+          "distance": 3000,
+          "travel": 5
+        }
+      ],
+      "dropped": [],
+      "status": "OPTIMAL",
+      "objective": 1087211,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "solver_ms": 0,
+      "validation": []
+    }
+  },
+  "coarse_time_unit": {
+    "routes": [
+      {
+        "engineer": 1,
+        "jobs": [
+          1,
+          2
+        ],
+        "distance": 200,
+        "travel": 2
+      }
+    ],
+    "dropped": [],
+    "status": "FEASIBLE",
+    "objective": 1764,
+    "strategy": "WEIGHTED_SINGLE_PASS",
+    "solver_ms": 0,
+    "validation": [
+      "actual travel time exceeds Tmax"
+    ],
+    "tmax": 1,
+    "actual_time_units": 2
+  },
+  "emergency_vs_cardinality": {
+    "original_penalties": [
+      1009000,
+      9000,
+      9000
+    ],
+    "adjusted_penalties": [
+      2037,
+      1037,
+      1037
+    ],
+    "raw": {
+      "routes": [
+        {
+          "engineer": 1,
+          "jobs": [
+            1
+          ],
+          "distance": 100,
+          "travel": 1
+        }
+      ],
+      "dropped": [
+        2,
+        3
+      ],
+      "status": "FEASIBLE",
+      "objective": 143509,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "solver_ms": 0,
+      "validation": []
+    },
+    "adjusted": {
+      "routes": [
+        {
+          "engineer": 1,
+          "jobs": [
+            1
+          ],
+          "distance": 100,
+          "travel": 1
+        }
+      ],
+      "dropped": [
+        2,
+        3
+      ],
+      "status": "FEASIBLE",
+      "objective": 15950037,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "solver_ms": 0,
+      "validation": []
+    },
+    "exact_adjusted": [
+      [
+        2037,
+        1,
+        20,
+        20,
+        2
+      ],
+      [
+        2,
+        3
+      ]
+    ]
+  },
+  "quality_vs_exhaustive": {
+    "found_counterexample": true,
+    "seed": 0,
+    "points": [
+      [
+        27,
+        12
+      ],
+      [
+        24,
+        28
+      ],
+      [
+        13,
+        1
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        15,
+        12
+      ],
+      [
+        29,
+        25
+      ],
+      [
+        26,
+        9
+      ]
+    ],
+    "jobs": [
+      {
+        "id": 1,
+        "duration": 30,
+        "window": [
+          540,
+          780
+        ],
+        "penalty": 1000
+      },
+      {
+        "id": 2,
+        "duration": 45,
+        "window": [
+          510,
+          720
+        ],
+        "penalty": 1000
+      },
+      {
+        "id": 3,
+        "duration": 15,
+        "window": [
+          540,
+          780
+        ],
+        "penalty": 4000
+      },
+      {
+        "id": 4,
+        "duration": 45,
+        "window": [
+          510,
+          720
+        ],
+        "penalty": 1000
+      },
+      {
+        "id": 5,
+        "duration": 45,
+        "window": [
+          480,
+          780
+        ],
+        "penalty": 2000
+      },
+      {
+        "id": 6,
+        "duration": 30,
+        "window": [
+          480,
+          720
+        ],
+        "penalty": 2000
+      }
+    ],
+    "minutes": [
+      [
+        0,
+        19,
+        25,
+        23,
+        12,
+        15,
+        4
+      ],
+      [
+        19,
+        0,
+        38,
+        28,
+        25,
+        8,
+        21
+      ],
+      [
+        25,
+        38,
+        0,
+        20,
+        13,
+        40,
+        21
+      ],
+      [
+        23,
+        28,
+        20,
+        0,
+        11,
+        30,
+        25
+      ],
+      [
+        12,
+        25,
+        13,
+        11,
+        0,
+        27,
+        14
+      ],
+      [
+        15,
+        8,
+        40,
+        30,
+        27,
+        0,
+        19
+      ],
+      [
+        4,
+        21,
+        21,
+        25,
+        14,
+        19,
+        0
+      ]
+    ],
+    "result": {
+      "routes": [
+        {
+          "engineer": 1,
+          "jobs": [
+            1,
+            6,
+            2,
+            5,
+            3
+          ],
+          "distance": 6500,
+          "travel": 65
+        }
+      ],
+      "dropped": [
+        4
+      ],
+      "status": "FEASIBLE",
+      "objective": 4544224488,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "solver_ms": 1,
+      "validation": []
+    },
+    "actual_score": [
+      1000,
+      1,
+      650,
+      650,
+      65
+    ],
+    "exhaustive_score": [
+      0,
+      1,
+      890,
+      890,
+      89
+    ],
+    "exhaustive_route": [
+      6,
+      2,
+      1,
+      5,
+      4,
+      3
+    ],
+    "guided_local_search": {
+      "routes": [
+        {
+          "engineer": 1,
+          "jobs": [
+            6,
+            2,
+            1,
+            5,
+            4,
+            3
+          ],
+          "distance": 8900,
+          "travel": 89
+        }
+      ],
+      "dropped": [],
+      "status": "FEASIBLE",
+      "objective": 1904522110,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "solver_ms": 1999,
+      "validation": [],
+      "wall_ms": 2000
+    },
+    "exhaustive_timetable": [
+      {
+        "job": 6,
+        "start": 499,
+        "finish": 529
+      },
+      {
+        "job": 2,
+        "start": 537,
+        "finish": 582
+      },
+      {
+        "job": 1,
+        "start": 601,
+        "finish": 631
+      },
+      {
+        "job": 5,
+        "start": 643,
+        "finish": 688
+      },
+      {
+        "job": 4,
+        "start": 699,
+        "finish": 744
+      },
+      {
+        "job": 3,
+        "start": 764,
+        "finish": 779
+      }
+    ]
+  },
+  "quality_with_sla_hierarchy": {
+    "routes": [
+      {
+        "engineer": 1,
+        "jobs": [
+          1,
+          6,
+          2,
+          5,
+          3
+        ],
+        "distance": 6500,
+        "travel": 65
+      }
+    ],
+    "dropped": [
+      4
+    ],
+    "status": "FEASIBLE",
+    "objective": 4544224488,
+    "strategy": "WEIGHTED_SINGLE_PASS",
+    "solver_ms": 1,
+    "validation": [],
+    "equal_original_penalty": 9000,
+    "exact": [
+      [
+        0,
+        1,
+        890,
+        890,
+        89
+      ],
+      [
+        6,
+        2,
+        1,
+        5,
+        4,
+        3
+      ]
+    ]
+  },
+  "synthetic_scaling": [
+    {
+      "jobs": 10,
+      "engineers": 3,
+      "pmax": 21599,
+      "maximum_objective": 7786858175798399,
+      "composite_maximum": 7786858175798399,
+      "strategy": "WEIGHTED_SINGLE_PASS",
+      "assigned": 10,
+      "used_engineers": 1,
+      "solver_ms": 9,
+      "validation": [],
+      "status": "FEASIBLE",
+      "wall_ms": 10
+    },
+    {
+      "jobs": 100,
+      "engineers": 10,
+      "pmax": 6249918419,
+      "maximum_objective": 1081190619777410,
+      "composite_maximum": 6757353170078057308810619,
+      "strategy": "PHASED_DROP_THEN_ROUTE",
+      "assigned": 100,
+      "used_engineers": 7,
+      "solver_ms": 2150,
+      "validation": [],
+      "status": "FEASIBLE_TIME_LIMIT",
+      "wall_ms": 2191
+    },
+    {
+      "jobs": 100,
+      "engineers": 30,
+      "pmax": 6249918419,
+      "maximum_objective": 3046991746645430,
+      "composite_maximum": 19043449842947252415739019,
+      "strategy": "PHASED_DROP_THEN_ROUTE",
+      "assigned": 100,
+      "used_engineers": 8,
+      "solver_ms": 2859,
+      "validation": [],
+      "status": "FEASIBLE_TIME_LIMIT",
+      "wall_ms": 2945
+    }
+  ],
+  "cache_statement_sizes": {
+    "unique_points": 110,
+    "cold_cache": true,
+    "statements": [
+      {
+        "operation": "SELECT",
+        "bind_parameters": 12101
+      },
+      {
+        "operation": "INSERT",
+        "bind_parameters": 121000
+      }
+    ],
+    "postgres_parameter_limit": 65535,
+    "note": "SQL compiled from actual provider; not sent to PostgreSQL"
+  }
+}

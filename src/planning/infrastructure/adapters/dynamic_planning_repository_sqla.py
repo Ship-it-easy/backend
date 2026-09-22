@@ -334,6 +334,7 @@ class SqlaDynamicPlanningRepository:
                         select(
                             project_plan_assignments,
                             jobs.c.status,
+                jobs.c.priority_type,
                             jobs.c.address,
                             jobs.c.latitude,
                             jobs.c.longitude,
@@ -1531,6 +1532,7 @@ class SqlaDynamicPlanningRepository:
         version_value = None
         if version is not None:
             batch_status = None
+            batch_completion_reason = None
             feasible_time_limit = False
             if version.planning_batch_id is not None:
                 batch_row = (
@@ -1538,6 +1540,7 @@ class SqlaDynamicPlanningRepository:
                         await self._session.execute(
                             select(
                                 planning_batches.c.status,
+                                planning_batches.c.completion_reason,
                                 planning_batches.c.metrics,
                             ).where(
                                 planning_batches.c.id == version.planning_batch_id
@@ -1549,15 +1552,12 @@ class SqlaDynamicPlanningRepository:
                 )
                 if batch_row is not None:
                     batch_status = str(batch_row.status)
+                    batch_completion_reason = batch_row.completion_reason
                     feasible_time_limit = bool(
                         (version.metrics or {}).get("feasible_time_limit")
                         or (batch_row.metrics or {}).get("feasible_time_limit")
                     )
-            status_value = (
-                "FEASIBLE_TIME_LIMIT"
-                if feasible_time_limit
-                else "PARTIAL" if batch_status == "PARTIAL" else "SUCCESS"
-            )
+            status_value = _published_plan_status(batch_status, feasible_time_limit)
             version_value = {
                 "id": int(version.id),
                 "number": int(version.version_number),
@@ -1565,6 +1565,9 @@ class SqlaDynamicPlanningRepository:
                 "trigger": version.trigger_source,
                 "initiator": actor_name,
                 "status": status_value,
+                "completion_reason": batch_completion_reason,
+                "optimization_limited": feasible_time_limit,
+                "unassigned_count": len(version.unassigned_jobs or []),
             }
         active_run = None
         if event is not None:
@@ -1726,6 +1729,7 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.sla_date,
@@ -1839,6 +1843,7 @@ class SqlaDynamicPlanningRepository:
                         select(
                             planning_unassigned_jobs,
                             jobs.c.status,
+                jobs.c.priority_type,
                             jobs.c.address,
                             jobs.c.sla_date,
                             jobs.c.priority_type,
@@ -2036,7 +2041,7 @@ class SqlaDynamicPlanningRepository:
                 }
                 for equipment_id in required_equipment_ids
             ]
-            snapshot_updated_at = source_batch_jobs.get(job_id, {}).get("updated_at")
+            snapshot_updated_at = saved.get("updated_at")
             value["current_data_changed"] = bool(
                 used_current_projection
                 or (
@@ -2108,11 +2113,25 @@ class SqlaDynamicPlanningRepository:
         engineer_values = {}
         for item in engineer_rows:
             engineer_id = int(item.id)
+            saved_engineer = engineer_snapshot.get(engineer_id, {})
             engineer_values[engineer_id] = {
-                **engineer_snapshot.get(engineer_id, {}),
+                **saved_engineer,
                 "id": engineer_id,
-                "name": engineer_snapshot.get(engineer_id, {}).get("name")
-                or item.name,
+                "name": saved_engineer.get("name") or item.name,
+                "transport_type": saved_engineer.get("transport_type")
+                or item.transport_type,
+                "start_address": saved_engineer.get("start_address")
+                or item.start_address,
+                "start_latitude": (
+                    saved_engineer.get("start_latitude")
+                    if saved_engineer.get("start_latitude") is not None
+                    else item.start_latitude
+                ),
+                "start_longitude": (
+                    saved_engineer.get("start_longitude")
+                    if saved_engineer.get("start_longitude") is not None
+                    else item.start_longitude
+                ),
                 "active": item.active,
             }
         for engineer_id in engineer_ids:
@@ -2165,6 +2184,7 @@ class SqlaDynamicPlanningRepository:
                 "current_data_changed": job.get("current_data_changed", False),
                 "travel_from_previous_min": item.travel_from_previous_min,
                 "distance_from_previous_meters": (item.distance_from_previous_meters),
+                "coordinate": _coordinate(job),
                 "primary_reason": primary,
             }
             assigned_by_engineer.setdefault(int(item.engineer_id), []).append(card)
@@ -2191,6 +2211,7 @@ class SqlaDynamicPlanningRepository:
                     "required_equipment": job.get("required_equipment", []),
                     "cancelled_at": item.cancelled_at,
                     "cancelled_by": item.cancelled_by_username,
+                    "coordinate": _coordinate(job),
                     "primary_reason": reason("CANCELLED_RECORD"),
                 }
             )
@@ -2204,6 +2225,13 @@ class SqlaDynamicPlanningRepository:
                 {
                     "engineer_id": engineer_id,
                     "name": engineer.get("name") or "Имя инженера недоступно",
+                    "transport_type": engineer.get("transport_type") or "NONE",
+                    "start_address": engineer.get("start_address"),
+                    "start_coordinate": _coordinate(
+                        engineer,
+                        latitude_key="start_latitude",
+                        longitude_key="start_longitude",
+                    ),
                     "shift_start": schedule.get("shift_start"),
                     "shift_end": schedule.get("shift_end"),
                     "unavailable": not bool(engineer.get("active", True))
@@ -2313,6 +2341,7 @@ class SqlaDynamicPlanningRepository:
                 "overdue": _is_overdue(job.get("sla_date"), planning_date),
                 "created_at": job.get("created_at") or job.get("job_created_at"),
                 "required_equipment": job.get("required_equipment", []),
+                "coordinate": _coordinate(job),
                 "current_data_changed": job.get("current_data_changed", False),
                 "later_assignment_date": later,
                 "final_horizon_outcome": later is None
@@ -2357,6 +2386,7 @@ class SqlaDynamicPlanningRepository:
                         "overdue": _is_overdue(job.get("sla_date"), planning_date),
                         "created_at": job.get("created_at"),
                         "required_equipment": job.get("required_equipment", []),
+                        "coordinate": _coordinate(job),
                         "current_data_changed": job.get(
                             "current_data_changed", False
                         ),
@@ -2802,6 +2832,7 @@ class SqlaDynamicPlanningRepository:
                         project_plan_assignments,
                         jobs.c.address,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.priority_type,
                         jobs.c.latitude,
                         jobs.c.longitude,
@@ -2885,6 +2916,7 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
+                jobs.c.priority_type,
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.latitude,
@@ -3116,6 +3148,13 @@ def _planning_phase(state: str, current_day: Any | None) -> str:
     return "Публикация"
 
 
+def _published_plan_status(
+    batch_status: str | None, _feasible_time_limit: bool = False
+) -> str:
+    """Expose publication outcome separately from solver search quality."""
+    return "PARTIAL" if batch_status == "PARTIAL" else "SUCCESS"
+
+
 def _safe_planning_error(event: Any) -> str | None:
     if event.state != "FAILED":
         return None
@@ -3125,9 +3164,32 @@ def _safe_planning_error(event: Any) -> str | None:
         "DISTANCE_DATA_NOT_READY": "Дорожные данные ещё не готовы",
         "FAILED_VALIDATION": "Результат не прошёл проверку",
         "CANDIDATE_COMPARISON_TIMEOUT": "Расчёт превысил допустимое время",
+        "OBJECTIVE_RANGE_OVERFLOW": (
+            "Превышен числовой предел оценки маршрутов. "
+            "Необходимо изменить настройки или способ расчёта"
+        ),
         "SYSTEM_ERROR": "Не удалось завершить расчёт",
     }
     return labels.get(str(event.error_code), "Не удалось завершить расчёт")
+
+
+def _coordinate(
+    value: dict[str, Any],
+    *,
+    latitude_key: str = "latitude",
+    longitude_key: str = "longitude",
+) -> dict[str, Any] | None:
+    # Normalized solver snapshots store coordinates as an embedded value;
+    # source snapshots and database projections use flat columns.
+    if latitude_key == "latitude" and longitude_key == "longitude":
+        nested = value.get("coordinate")
+        if isinstance(nested, dict):
+            value = {**value, **nested}
+    latitude = value.get(latitude_key)
+    longitude = value.get(longitude_key)
+    if latitude is None or longitude is None:
+        return None
+    return _jsonable({"latitude": latitude, "longitude": longitude})
 
 
 def _eligible_engineer_count(

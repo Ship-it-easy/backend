@@ -89,6 +89,14 @@ class PlanningInput:
         default_factory=dict
     )
     fixed_active_engineer_ids: frozenset[int] = frozenset()
+    fixed_distance_legs_by_engineer: dict[int, tuple[int, ...]] = field(
+        default_factory=dict
+    )
+    # Event-local state: shared by candidate inputs, never persisted as a deadline.
+    travel_snapshot: dict[
+        tuple[str, float, float, float, float], tuple[int | None, int | None]
+    ] = field(default_factory=dict, repr=False)
+    solve_deadline_monotonic: float | None = None
 
 
 @dataclass

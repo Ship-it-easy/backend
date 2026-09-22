@@ -1,0 +1,234 @@
+{
+  "date": "2026-09-21",
+  "python_version": "3.12.7",
+  "ortools_version": "9.15.6755",
+  "comparison": "All PlanningResult fields except solver_time_ms; or exception type and message. Each solution also checked with PlanningValidator.",
+  "baseline_sha256": "0e1b6548254caacc2c732c1cf1f822875f691ae33bf5a3934f5cd9172f734991",
+  "refactored_sha256": {
+    "src/planning/infrastructure/adapters/planning_solver_ortools.py": "771deff866a1aeea53b4aeff94fd4bb8c2a99205089bd4a70a42750d75ee9eed",
+    "src/planning/infrastructure/adapters/ortools_routing/__init__.py": "3ffb8512cadf52051aa0166ab9f8a2098ec2383f17a5ab0455ea641a966335c2",
+    "src/planning/infrastructure/adapters/ortools_routing/model.py": "3ad485a66475ea28fe962fe414b8567c715ded152f6160620f0d89090a5cc88e",
+    "src/planning/infrastructure/adapters/ortools_routing/objective.py": "5d62130419f19ced1dba2a08c16ea2918746a445cdce3632afcf3504c5bc4f56",
+    "src/planning/infrastructure/adapters/ortools_routing/result.py": "e0cf09dc8a1dd3b521d3f685b7fa49bc2be836eb2406b8c99d48f19957cd18e4",
+    "src/planning/infrastructure/adapters/ortools_routing/travel.py": "3e5e2bd8dcf48458f1ab91f2a6579238674be92ba00d06b8bab04667dcb91b68"
+  },
+  "special_cases": 12,
+  "generated_cases": 20,
+  "generated_random_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "matched": 32,
+  "cases": [
+    {
+      "case": "demo",
+      "equal": true,
+      "before_seconds": 1.002,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "empty",
+      "equal": true,
+      "before_seconds": 0.0,
+      "after_seconds": 0.0
+    },
+    {
+      "case": "empty_fixed",
+      "equal": true,
+      "before_seconds": 0.0,
+      "after_seconds": 0.0
+    },
+    {
+      "case": "mandatory",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "mandatory_incompatible",
+      "equal": true,
+      "before_seconds": 0.0,
+      "after_seconds": 0.0
+    },
+    {
+      "case": "missing_reverse",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "coarse_time",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "equipment",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "allocated",
+      "equal": true,
+      "before_seconds": 0.001,
+      "after_seconds": 0.001
+    },
+    {
+      "case": "outside_route",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "overflow",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "timezone",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_0",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_1",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_2",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_3",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_4",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_5",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_6",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_7",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_8",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_9",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_10",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_11",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_12",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_13",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.001
+    },
+    {
+      "case": "seed_14",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_15",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_16",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_17",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_18",
+      "equal": true,
+      "before_seconds": 1.0,
+      "after_seconds": 1.0
+    },
+    {
+      "case": "seed_19",
+      "equal": true,
+      "before_seconds": 1.001,
+      "after_seconds": 1.001
+    }
+  ]
+}

@@ -2,22 +2,27 @@
 
 import asyncio
 import hashlib
+import json
 import logging
 import uuid
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import monotonic
 
-from sqlalchemy import case, delete, func, insert, select, update
+from sqlalchemy import case, delete, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from auth.infrastructure.persistence_sqla.mappings.user import users_table
 from planning.application.access import ProjectAccess
 from planning.application.errors import (
     ConflictError,
     InvalidPlanningRequest,
     ObjectNotFoundError,
     PlanningUnavailable,
+    RateLimitExceeded,
 )
 from planning.application.interfaces.planning_batch_repository import (
     PlanningBatchExecutor,
@@ -35,11 +40,45 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     job_planning_state,
     jobs,
     planning_events,
+    projects,
     work_types,
 )
 
 logger = logging.getLogger(__name__)
 RULES_VERSION = "csv-v1"
+VALIDATION_LOCK_NAMESPACE = 1_873_420_119
+UPLOADS_PER_MINUTE = 10
+
+
+def _payload_digest(rows) -> str:
+    fields = (
+        "row_number",
+        "normalized_address",
+        "canonical_address_key",
+        "latitude",
+        "longitude",
+        "sla_date",
+        "time_window_start",
+        "time_window_end",
+        "work_type_id",
+        "work_type_name",
+        "work_type_duration_min",
+    )
+    payload = []
+    for row in sorted(rows, key=lambda item: int(item["row_number"])):
+        item = {}
+        for field in fields:
+            value = row.get(field)
+            if hasattr(value, "isoformat"):
+                value = value.isoformat()
+            elif value is not None:
+                value = str(value)
+            item[field] = value
+        payload.append(item)
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _batch_dict(row):
@@ -84,7 +123,9 @@ class JobImportExecutor:
                 await session.execute(
                     select(
                         job_import_batches.c.id, job_import_batches.c.project_id
-                    ).where(job_import_batches.c.status.in_(("UPLOADED", "VALIDATING")))
+                    ).where(
+                        job_import_batches.c.status.in_(("UPLOADED", "VALIDATING"))
+                    )
                 )
             ).all()
             await session.commit()
@@ -103,7 +144,8 @@ class JobImportExecutor:
                     ids = (
                         await session.execute(
                             select(
-                                job_import_batches.c.id, job_import_batches.c.project_id
+                                job_import_batches.c.id,
+                                job_import_batches.c.project_id,
                             ).where(
                                 job_import_batches.c.status.in_(
                                     ("UPLOADED", "VALIDATING")
@@ -133,14 +175,16 @@ class JobImportExecutor:
                     job_import_batches.c.source_file_expires_at
                     <= datetime.now(timezone.utc),
                     job_import_batches.c.source_bytes.is_not(None),
-                )
+                ).with_for_update(skip_locked=True)
             )
         ).all()
+        if not expired:
+            return
+        expired_ids = [batch_id for batch_id, _ in expired]
         await session.execute(
             update(job_import_batches)
             .where(
-                job_import_batches.c.source_file_expires_at
-                <= datetime.now(timezone.utc),
+                job_import_batches.c.id.in_(expired_ids),
                 job_import_batches.c.source_bytes.is_not(None),
             )
             .values(
@@ -164,9 +208,55 @@ class JobImportExecutor:
     async def _validate(self, batch_id, project_id):
         lock = self._project_locks.setdefault(project_id, asyncio.Lock())
         async with lock:
-            await self._validate_inner(batch_id)
+            waiting_logged = False
+            while True:
+                async with self._validation_lock(project_id) as acquired:
+                    if acquired:
+                        await self._validate_inner(batch_id)
+                        return
+                if not waiting_logged:
+                    logger.info(
+                        "job_import_validation_queued batch_id=%s project_id=%s",
+                        batch_id,
+                        project_id,
+                    )
+                    waiting_logged = True
+                await asyncio.sleep(0.25)
+
+    @asynccontextmanager
+    async def _validation_lock(self, project_id: int):
+        engine = self._sessionmaker.kw.get("bind")
+        if not isinstance(engine, AsyncEngine):
+            raise TypeError(
+                "Job import executor requires an AsyncEngine-bound sessionmaker"
+            )
+        async with engine.connect() as connection:
+            acquired = bool(
+                await connection.scalar(
+                    select(
+                        func.pg_try_advisory_lock(
+                            VALIDATION_LOCK_NAMESPACE, int(project_id)
+                        )
+                    )
+                )
+            )
+            try:
+                yield acquired
+            finally:
+                if acquired:
+                    await connection.execute(
+                        select(
+                            func.pg_advisory_unlock(
+                                VALIDATION_LOCK_NAMESPACE, int(project_id)
+                            )
+                        )
+                    )
 
     async def _validate_inner(self, batch_id):
+        started = monotonic()
+        address_requests = 0
+        address_retries = 0
+        address_cache_hits = 0
         try:
             async with self._sessionmaker() as session:
                 async with session.begin():
@@ -181,7 +271,10 @@ class JobImportExecutor:
                         .mappings()
                         .one_or_none()
                     )
-                    if batch is None or batch["status"] in ("APPLIED", "EXPIRED"):
+                    if batch is None or batch["status"] not in (
+                        "UPLOADED",
+                        "VALIDATING",
+                    ):
                         return
                     if batch["source_bytes"] is None:
                         await session.execute(
@@ -192,6 +285,30 @@ class JobImportExecutor:
                         return
                     content = batch["source_bytes"]
                     project_id = batch["project_id"]
+                    project_status = await session.scalar(
+                        select(projects.c.status).where(projects.c.id == project_id)
+                    )
+                    if project_status != "ACTIVE":
+                        await session.execute(
+                            update(job_import_batches)
+                            .where(job_import_batches.c.id == batch_id)
+                            .values(
+                                status="HAS_ERRORS",
+                                stage="DONE",
+                                error_count=1,
+                                package_issues=[issue("PROJECT_BLOCKED")],
+                                validation_finished_at=datetime.now(timezone.utc),
+                            )
+                        )
+                        await session.execute(
+                            insert(job_import_audit).values(
+                                batch_id=batch_id,
+                                project_id=project_id,
+                                event_type="JOB_IMPORT_HAS_ERRORS",
+                                details={"category": "PROJECT_BLOCKED"},
+                            )
+                        )
+                        return
                     await session.execute(
                         update(job_import_batches)
                         .where(job_import_batches.c.id == batch_id)
@@ -203,6 +320,10 @@ class JobImportExecutor:
                             error_count=0,
                             warning_count=0,
                             package_issues=[],
+                            technical_error_category=None,
+                            normalized_payload_sha256=None,
+                            validation_finished_at=None,
+                            metrics={},
                         )
                     )
                     await session.execute(
@@ -220,7 +341,7 @@ class JobImportExecutor:
                     )
             encoding, delimiter, parsed_rows, package_issues = parse_csv(content)
             if not parsed_rows and not package_issues:
-                package_issues = [issue("MALFORMED_CSV")]
+                package_issues = [issue("NO_DATA_ROWS")]
             if parsed_rows:
                 async with self._sessionmaker() as session:
                     catalog = (
@@ -236,7 +357,7 @@ class JobImportExecutor:
                     )
                     provider = create_address_search_provider(self._config)
                     cache = {}
-                    for row in parsed_rows:
+                    for processed_count, row in enumerate(parsed_rows, start=1):
                         raw = row["raw_required_values_json"]
                         name = raw["Тип заявки ВК"].strip().casefold()
                         matches = [
@@ -281,20 +402,27 @@ class JobImportExecutor:
                                 )
                             else:
                                 row["work_type_id"] = matches[0]["id"]
+                                row["work_type_name"] = matches[0]["name"]
                                 row["work_type_duration_min"] = matches[0][
                                     "default_service_duration_min"
                                 ]
                         address = raw["Адрес"]
                         if address:
                             if address not in cache:
+                                address_requests += 1
                                 for attempt in range(3):
                                     try:
-                                        cache[address] = await provider.search(address)
+                                        cache[address] = await provider.search(
+                                            address, require_house=False
+                                        )
                                         break
                                     except PlanningUnavailable:
                                         if attempt == 2:
                                             raise
+                                        address_retries += 1
                                         await asyncio.sleep(0.5 * (2**attempt))
+                            else:
+                                address_cache_hits += 1
                             found = cache[address]
                             if not found:
                                 row["issues_json"].append(
@@ -330,13 +458,16 @@ class JobImportExecutor:
                                     details.get(k)
                                     for k in ("city", "town", "village", "hamlet")
                                 ) or not any(
-                                        details.get(k)
-                                        for k in (
-                                            "road",
-                                            "pedestrian",
-                                            "street",
-                                            "locality",
-                                        )
+                                    details.get(k)
+                                    for k in (
+                                        "road",
+                                        "pedestrian",
+                                        "street",
+                                        "locality",
+                                    )
+                                ) or not any(
+                                    details.get(k)
+                                    for k in ("house_number", "building")
                                 ):
                                     row["issues_json"].append(
                                         issue(
@@ -372,7 +503,7 @@ class JobImportExecutor:
                             .values(
                                 stage="VALIDATING_ROWS",
                                 total_rows=len(parsed_rows),
-                                processed_rows=row["row_number"] - 1,
+                                processed_rows=processed_count,
                             )
                         )
                         await session.commit()
@@ -411,12 +542,18 @@ class JobImportExecutor:
                                 )
                     for row in parsed_rows:
                         if row.get("canonical_address_key") and row.get("work_type_id"):
+                            address_hash = hashlib.sha256(
+                                row["canonical_address_key"].encode("utf-8")
+                            ).hexdigest()
                             existing = await session.scalar(
                                 select(jobs.c.id)
                                 .where(
                                     jobs.c.project_id == project_id,
                                     jobs.c.status.notin_(("CANCELLED", "COMPLETED")),
-                                    jobs.c.address == row["normalized_address"],
+                                    or_(
+                                        jobs.c.address_hash == address_hash,
+                                        jobs.c.address == row["normalized_address"],
+                                    ),
                                     jobs.c.sla_date == row["sla_date"],
                                     jobs.c.time_window_start
                                     == row["time_window_start"],
@@ -459,6 +596,20 @@ class JobImportExecutor:
                 for x in row["issues_json"]
             )
             async with self._sessionmaker() as session:
+                stored_rows = (
+                    (
+                        await session.execute(
+                            select(job_import_rows)
+                            .where(job_import_rows.c.batch_id == batch_id)
+                            .order_by(job_import_rows.c.row_number)
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                normalized_payload_sha256 = (
+                    _payload_digest(stored_rows) if stored_rows else None
+                )
                 await session.execute(
                     update(job_import_batches)
                     .where(job_import_batches.c.id == batch_id)
@@ -469,11 +620,20 @@ class JobImportExecutor:
                         source_delimiter=delimiter,
                         validation_rules_version=RULES_VERSION,
                         address_provider_version=self.address_provider_version,
+                        normalized_payload_sha256=normalized_payload_sha256,
                         total_rows=len(parsed_rows),
                         processed_rows=len(parsed_rows),
                         error_count=errors,
                         warning_count=warnings,
                         package_issues=package_issues,
+                        metrics={
+                            "validation_duration_ms": int(
+                                (monotonic() - started) * 1000
+                            ),
+                            "address_requests": address_requests,
+                            "address_retries": address_retries,
+                            "address_cache_hits": address_cache_hits,
+                        },
                         validation_finished_at=datetime.now(timezone.utc),
                     )
                 )
@@ -492,13 +652,37 @@ class JobImportExecutor:
                     )
                 )
                 await session.commit()
+                logger.info(
+                    "job_import_validated batch_id=%s project_id=%s rows=%s "
+                    "errors=%s warnings=%s encoding=%s delimiter=%s",
+                    batch_id,
+                    project_id,
+                    len(parsed_rows),
+                    errors,
+                    warnings,
+                    encoding,
+                    delimiter,
+                )
         except PlanningUnavailable:
-            await self._technical_error(batch_id, "ADDRESS_SERVICE_UNAVAILABLE")
+            await self._technical_error(
+                batch_id,
+                "ADDRESS_SERVICE_UNAVAILABLE",
+                {
+                    "validation_duration_ms": int((monotonic() - started) * 1000),
+                    "address_requests": address_requests,
+                    "address_retries": address_retries,
+                    "address_cache_hits": address_cache_hits,
+                },
+            )
         except Exception:
             logger.exception("job_import_validation_failed batch_id=%s", batch_id)
-            await self._technical_error(batch_id, "VALIDATION_FAILED")
+            await self._technical_error(
+                batch_id,
+                "VALIDATION_FAILED",
+                {"validation_duration_ms": int((monotonic() - started) * 1000)},
+            )
 
-    async def _technical_error(self, batch_id, category):
+    async def _technical_error(self, batch_id, category, metrics=None):
         async with self._sessionmaker() as session:
             project_id = await session.scalar(
                 select(job_import_batches.c.project_id).where(
@@ -513,6 +697,7 @@ class JobImportExecutor:
                     stage="DONE",
                     technical_error_category=category,
                     package_issues=[issue(category)],
+                    metrics=metrics or {},
                     validation_finished_at=datetime.now(timezone.utc),
                 )
             )
@@ -565,6 +750,21 @@ class JobImportService:
             raise InvalidPlanningRequest("Требуется файл CSV", code="INVALID_FILE_TYPE")
         if len(content) > 10 * 1024 * 1024:
             raise InvalidPlanningRequest("Файл больше 10 МБ", code="FILE_TOO_LARGE")
+        recent_uploads = await self.session.scalar(
+            select(func.count())
+            .select_from(job_import_batches)
+            .where(
+                job_import_batches.c.project_id == project_id,
+                job_import_batches.c.created_by == user.id,
+                job_import_batches.c.created_at
+                >= datetime.now(timezone.utc) - timedelta(minutes=1),
+            )
+        )
+        if int(recent_uploads or 0) >= UPLOADS_PER_MINUTE:
+            raise RateLimitExceeded(
+                "Слишком много загрузок. Повторите через минуту.",
+                code="JOB_IMPORT_RATE_LIMIT",
+            )
         digest = hashlib.sha256(content).hexdigest()
         existing = (
             (
@@ -580,8 +780,13 @@ class JobImportService:
             .mappings()
             .all()
         )
-        if any(row["status"] == "APPLIED" for row in existing):
-            raise ConflictError("Этот файл уже применён", code="FILE_ALREADY_APPLIED")
+        applied = next((row for row in existing if row["status"] == "APPLIED"), None)
+        if applied:
+            raise ConflictError(
+                "Этот файл уже применён",
+                code="FILE_ALREADY_APPLIED",
+                details={"batch_id": int(applied["id"])},
+            )
         reusable = next((row for row in existing if row["status"] != "EXPIRED"), None)
         if reusable:
             # A previous validation may have been performed by an older
@@ -645,7 +850,9 @@ class JobImportService:
             )
             if row["status"] == "APPLIED":
                 raise ConflictError(
-                    "Этот файл уже применён", code="FILE_ALREADY_APPLIED"
+                    "Этот файл уже применён",
+                    code="FILE_ALREADY_APPLIED",
+                    details={"batch_id": int(row["id"])},
                 ) from error
             return _batch_dict(row)
         self.executor.schedule(int(batch_id), project_id)
@@ -654,6 +861,22 @@ class JobImportService:
     async def get(self, project_id, batch_id):
         await self._authorized(project_id)
         data = _batch_dict(await self._batch(project_id, batch_id))
+        metadata = (
+            await self.session.execute(
+                select(
+                    users_table.c.username.label("created_by_name"),
+                    projects.c.name.label("project_name"),
+                )
+                .select_from(job_import_batches)
+                .join(
+                    users_table,
+                    users_table.c.id == job_import_batches.c.created_by,
+                )
+                .join(projects, projects.c.id == job_import_batches.c.project_id)
+                .where(job_import_batches.c.id == batch_id)
+            )
+        ).mappings().one()
+        data.update(dict(metadata))
         summary = (
             (
                 await self.session.execute(
@@ -680,7 +903,16 @@ class JobImportService:
         rows = (
             (
                 await self.session.execute(
-                    select(job_import_batches)
+                    select(
+                        job_import_batches,
+                        users_table.c.username.label("created_by_name"),
+                        projects.c.name.label("project_name"),
+                    )
+                    .join(
+                        users_table,
+                        users_table.c.id == job_import_batches.c.created_by,
+                    )
+                    .join(projects, projects.c.id == job_import_batches.c.project_id)
                     .where(job_import_batches.c.project_id == project_id)
                     .order_by(job_import_batches.c.id.desc())
                     .limit(limit)
@@ -754,19 +986,36 @@ class JobImportService:
     async def apply(
         self, project_id, batch_id, acknowledge_warnings=False, idempotency_key=None
     ):
+        apply_started = monotonic()
         user = await self._authorized(project_id, write=True)
         batch = await self._batch(project_id, batch_id, lock=True)
         if batch["status"] == "APPLIED":
             if idempotency_key and batch["apply_idempotency_key"] == idempotency_key:
                 return _batch_dict(batch)
             raise ConflictError("Пакет уже применён", code="IMPORT_ALREADY_APPLIED")
+        if batch["status"] == "HAS_ERRORS":
+            raise InvalidPlanningRequest(
+                "Пакет содержит ошибки", code="IMPORT_HAS_ERRORS"
+            )
         if batch["status"] != "READY_TO_APPLY":
-            raise ConflictError("Пакет не готов к применению", code="IMPORT_HAS_ERRORS")
+            raise ConflictError(
+                "Пакет не готов к применению", code="IMPORT_NOT_READY"
+            )
         if (
             batch["source_bytes"] is None
             or hashlib.sha256(batch["source_bytes"]).hexdigest()
             != batch["content_sha256"]
         ):
+            await self.session.execute(
+                update(job_import_batches)
+                .where(job_import_batches.c.id == batch_id)
+                .values(
+                    status="EXPIRED"
+                    if batch["source_bytes"] is None
+                    else "STALE_VALIDATION"
+                )
+            )
+            await self.session.commit()
             raise ConflictError("Исходный файл изменился", code="STALE_VALIDATION")
         if (batch["validation_rules_version"], batch["address_provider_version"]) != (
             RULES_VERSION,
@@ -813,7 +1062,11 @@ class JobImportService:
             .limit(1)
         )
         if duplicate:
-            raise ConflictError("Этот файл уже применён", code="FILE_ALREADY_APPLIED")
+            raise ConflictError(
+                "Этот файл уже применён",
+                code="FILE_ALREADY_APPLIED",
+                details={"batch_id": int(duplicate)},
+            )
         rows = (
             (
                 await self.session.execute(
@@ -829,6 +1082,20 @@ class JobImportService:
             any(i["severity"] == "ERROR" for i in row["issues_json"]) for row in rows
         ):
             raise ConflictError("Проверка устарела", code="STALE_VALIDATION")
+        if (
+            not batch["normalized_payload_sha256"]
+            or _payload_digest(rows) != batch["normalized_payload_sha256"]
+        ):
+            await self.session.execute(
+                update(job_import_batches)
+                .where(job_import_batches.c.id == batch_id)
+                .values(status="STALE_VALIDATION")
+            )
+            await self.session.commit()
+            raise ConflictError(
+                "Результаты проверки изменились, повторите проверку",
+                code="STALE_VALIDATION",
+            )
         ids = {row["work_type_id"] for row in rows}
         catalog = (
             (
@@ -847,6 +1114,7 @@ class JobImportService:
         if len(current) != len(ids) or any(
             current[row["work_type_id"]]["default_service_duration_min"]
             != row["work_type_duration_min"]
+            or current[row["work_type_id"]]["name"] != row["work_type_name"]
             for row in rows
             if row["work_type_id"] in current
         ):
@@ -859,6 +1127,11 @@ class JobImportService:
             raise ConflictError(
                 "Справочник изменился, повторите проверку", code="STALE_VALIDATION"
             )
+        await self.session.execute(
+            update(job_import_batches)
+            .where(job_import_batches.c.id == batch_id)
+            .values(status="APPLYING")
+        )
         inserted = []
         for row in rows:
             job_id = await self.session.scalar(
@@ -925,6 +1198,10 @@ class JobImportService:
                 if batch["warning_count"]
                 else None,
                 applied_at=datetime.now(timezone.utc),
+                metrics={
+                    **(batch["metrics"] or {}),
+                    "apply_duration_ms": int((monotonic() - apply_started) * 1000),
+                },
             )
         )
         await self.session.execute(
@@ -950,4 +1227,12 @@ class JobImportService:
         )
         await self.session.commit()
         self.planning_executor.schedule_project(project_id)
+        logger.info(
+            "job_import_applied batch_id=%s project_id=%s created_count=%s "
+            "planning_event_id=%s",
+            batch_id,
+            project_id,
+            len(inserted),
+            event_id,
+        )
         return await self.get(project_id, batch_id)

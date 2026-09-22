@@ -37,8 +37,11 @@ class ProjectAccess:
     async def project(self, project_id: int, *, write: bool = False) -> User:
         user = await self.user()
         if user.role is UserRoleEnum.OWNER:
-            if write:
-                await self._active_project(project_id)
+            project_status = await self.repository.get_project_status(project_id)
+            if project_status is None:
+                raise ObjectNotFoundError("Project not found")
+            if write and project_status != "ACTIVE":
+                raise ProjectBlockedError("Project is blocked")
             return user
         if not is_dispatcher(user.role) or user.project_id != project_id:
             # Do not reveal the existence of another tenant's data.

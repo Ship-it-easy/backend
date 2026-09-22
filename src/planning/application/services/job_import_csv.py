@@ -56,6 +56,13 @@ def _records(source: str, delimiter: str):
     return result
 
 
+def _headers(cells: list[str]) -> list[str]:
+    headers = [cell.strip() for cell in cells]
+    if headers:
+        headers[0] = headers[0].lstrip("\ufeff")
+    return [HEADER_ALIASES.get(header, header) for header in headers]
+
+
 def parse_csv(content: bytes):
     """Return encoding, delimiter, numbered rows and package/row issues."""
     decoded = []
@@ -78,8 +85,7 @@ def parse_csv(content: bytes):
             continue
         if not records:
             continue
-        headers = [cell.strip().lstrip("\ufeff") for cell in records[0][1]]
-        headers = [HEADER_ALIASES.get(header, header) for header in headers]
+        headers = _headers(records[0][1])
         if all(header in headers for header in HEADERS):
             candidates.append((delimiter, records, headers))
     if len(candidates) != 1:
@@ -92,8 +98,7 @@ def parse_csv(content: bytes):
                 except csv.Error:
                     continue
                 if records and len(records[0][1]) > 1:
-                    headers = [cell.strip().lstrip("\ufeff") for cell in records[0][1]]
-                    headers = [HEADER_ALIASES.get(header, header) for header in headers]
+                    headers = _headers(records[0][1])
                     missing = [h for h in HEADERS if h not in headers]
                     if missing:
                         return (
@@ -114,6 +119,8 @@ def parse_csv(content: bytes):
         )
     if len(records) - 1 > 1000:
         return encoding, delimiter, [], [issue("ROW_LIMIT_EXCEEDED")]
+    if len(records) == 1:
+        return encoding, delimiter, [], [issue("NO_DATA_ROWS")]
     rows = []
     problems = []
     for number, cells in records[1:]:

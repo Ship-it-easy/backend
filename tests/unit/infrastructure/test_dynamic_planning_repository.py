@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     _historical_day_result_matches_assignments,
+    _published_plan_status,
     _same_instant,
 )
 
@@ -43,3 +44,23 @@ def test_historical_day_result_keeps_compatible_and_unassigned_results() -> None
         {10: {"planning_date": "2026-09-21", "engineer_id": 2}},
     )
     assert _historical_day_result_matches_assignments(result, [], {})
+
+
+def test_partial_publication_is_not_hidden_by_solver_quality() -> None:
+    assert _published_plan_status("PARTIAL", True) == "PARTIAL"
+    assert _published_plan_status("SUCCESS", True) == "SUCCESS"
+
+
+def test_board_coordinate_reads_normalized_and_flat_snapshots():
+    from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
+        _coordinate,
+    )
+
+    coordinate = {"latitude": 58.01, "longitude": 56.24}
+    assert _coordinate({"coordinate": coordinate}) == coordinate
+    assert _coordinate(coordinate) == coordinate
+    assert (
+        _coordinate({"latitude": None, "longitude": None, "coordinate": coordinate})
+        == coordinate
+    )
+    assert _coordinate({}) is None

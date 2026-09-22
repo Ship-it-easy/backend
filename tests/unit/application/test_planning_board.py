@@ -57,13 +57,16 @@ def test_unassigned_reason_maps_saved_legacy_codes_without_guessing() -> None:
     }
 
 
-def test_time_limit_and_horizon_have_explicit_outcomes() -> None:
+def test_time_limit_does_not_replace_saved_job_reason() -> None:
     assert (
         unassigned_reason(
             "NOT_SELECTED_BY_OPTIMIZER", solver_status="FEASIBLE_TIME_LIMIT"
         )["code"]
-        == "TIME_LIMIT_NO_ASSIGNMENT"
+        == "DROPPED_BY_OBJECTIVE"
     )
+
+
+def test_horizon_has_explicit_outcome() -> None:
     assert (
         unassigned_reason(
             "NOT_ASSIGNED_WITHIN_HORIZON",

@@ -412,6 +412,8 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                 name="Иван Петров",
                 transport_type="CAR",
                 start_address="База",
+                start_latitude=58.010455,
+                start_longitude=56.229443,
             )
             .returning(engineers.c.id)
         )
@@ -438,6 +440,8 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                             status="NEW",
                             priority_type=priority,
                             address=address,
+                            latitude=58.010000 + len(job_ids) / 1000,
+                            longitude=56.230000 + len(job_ids) / 1000,
                             sla_date=planning_date,
                             work_type_id=work_type_id,
                             service_duration_min=45,
@@ -450,6 +454,8 @@ async def test_planning_board_reads_one_outcome_per_day_input(
             {
                 "id": job_id,
                 "address": f"Ленина, {index}",
+                "latitude": str(58.010000 + (index - 1) / 1000),
+                "longitude": str(56.230000 + (index - 1) / 1000),
                 "sla_date": planning_date.isoformat(),
                 "work_type_id": int(work_type_id),
                 "work_type_name": "Диагностика линии",
@@ -474,7 +480,14 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                 input_snapshot={
                     "jobs": snapshot_jobs,
                     "engineers": [
-                        {"id": int(engineer_id), "name": "Иван Петров"}
+                        {
+                            "id": int(engineer_id),
+                            "name": "Иван Петров",
+                            "transport_type": "CAR",
+                            "start_address": "База",
+                            "start_latitude": "58.010455",
+                            "start_longitude": "56.229443",
+                        }
                     ],
                     "schedules": [
                         {
@@ -735,7 +748,17 @@ async def test_planning_board_reads_one_outcome_per_day_input(
 
     assert day["counts"] == {"assigned": 1, "unassigned": 1, "cancelled": 1}
     assert day["engineer_columns"][0]["name"] == "Иван Петров"
+    assert day["engineer_columns"][0]["transport_type"] == "CAR"
+    assert day["engineer_columns"][0]["start_address"] == "База"
+    assert day["engineer_columns"][0]["start_coordinate"] == {
+        "latitude": "58.010455",
+        "longitude": "56.229443",
+    }
     assert day["engineer_columns"][0]["jobs"][0]["job_id"] == job_ids[0]
+    assert day["engineer_columns"][0]["jobs"][0]["coordinate"] == {
+        "latitude": "58.01",
+        "longitude": "56.23",
+    }
     assert day["engineer_columns"][0]["jobs"][0]["work_type"] == (
         "Диагностика линии"
     )

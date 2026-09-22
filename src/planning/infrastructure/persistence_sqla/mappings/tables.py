@@ -140,6 +140,7 @@ job_import_batches = Table(
     Column("source_delimiter", String(1)),
     Column("validation_rules_version", String(32)),
     Column("address_provider_version", String(32)),
+    Column("normalized_payload_sha256", String(64)),
     Column("status", String(32), nullable=False, server_default="UPLOADED"),
     Column("stage", String(64)),
     Column("total_rows", Integer, nullable=False, server_default="0"),
@@ -163,6 +164,7 @@ job_import_batches = Table(
     Column("source_file_expires_at", DateTime(timezone=True), nullable=False),
     Column("technical_error_category", String(64)),
     Column("package_issues", JSONB, nullable=False, server_default="[]"),
+    Column("metrics", JSONB, nullable=False, server_default="{}"),
 )
 Index(
     "uq_job_import_live_hash",
@@ -191,6 +193,7 @@ job_import_rows = Table(
     Column("time_window_start", Time),
     Column("time_window_end", Time),
     Column("work_type_id", ForeignKey("work_types.id")),
+    Column("work_type_name", String(255)),
     Column("work_type_duration_min", Integer),
     Column("severity", String(16)),
     Column("issues_json", JSONB, nullable=False, server_default="[]"),

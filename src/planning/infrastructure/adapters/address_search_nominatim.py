@@ -9,9 +9,10 @@ from planning.application.interfaces.project_management_repositories import (
 )
 from planning.entrypoint.config import PlanningServiceConfig
 
-
 _APARTMENT_SUFFIX = re.compile(r",?\s*кв\.?\s*[\w/-]+\s*$", re.IGNORECASE)
-_MOSCOW_PREFIX = re.compile(r"^\s*(?:г\.\s*)?(?:город\s+)?москва\s*,?\s*", re.IGNORECASE)
+_MOSCOW_PREFIX = re.compile(
+    r"^\s*(?:г\.\s*)?(?:город\s+)?москва\s*,?\s*", re.IGNORECASE
+)
 _ADDRESS_ABBREVIATIONS = (
     (re.compile(r"\bпр-кт\.?\s*", re.IGNORECASE), "проспект "),
     (re.compile(r"\bпросп\.\s*", re.IGNORECASE), "проспект "),
@@ -65,7 +66,9 @@ def address_search_queries(address: str) -> tuple[str, ...]:
     )
 
 
-def _search_results(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _search_results(
+    items: list[dict[str, Any]], *, require_house: bool
+) -> list[dict[str, Any]]:
     """Collapse OSM building, entrance and POI records for the same address."""
 
     result: list[dict[str, Any]] = []
@@ -81,7 +84,7 @@ def _search_results(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             or ""
         ).casefold()
         city = str(address.get("city") or address.get("town") or "").casefold()
-        if not house_number or not road:
+        if not road or (require_house and not house_number):
             continue
         key = (house_number, road, city)
         if key in seen:
@@ -117,7 +120,9 @@ class NominatimAddressSearchProvider(AddressSearchProvider):
     def __init__(self, config: PlanningServiceConfig):
         self._config = config
 
-    async def search(self, query: str) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, *, require_house: bool = True
+    ) -> list[dict[str, Any]]:
         try:
             async with httpx.AsyncClient(
                 base_url=self._config.nominatim_url,
@@ -137,10 +142,12 @@ class NominatimAddressSearchProvider(AddressSearchProvider):
                         },
                     )
                     response.raise_for_status()
-                    result = _search_results(response.json())
+                    result = _search_results(
+                        response.json(), require_house=require_house
+                    )
                     if result:
                         return result
-        except httpx.HTTPError as error:
+        except (httpx.HTTPError, TypeError, ValueError) as error:
             raise PlanningUnavailable(
                 "Address suggestions are temporarily unavailable",
                 code="ADDRESS_PROVIDER_UNAVAILABLE",

@@ -1,0 +1,4959 @@
+{
+  "date": "2026-09-21",
+  "comparison": "Exact ordered errors or exception type/message; neither implementation may mutate PlanningInput or PlanningResult.",
+  "baseline_sha256": "101b53d25ea67aedde164ea218e4fc2a513ba69f445dbc73f3d7541e18af4c5c",
+  "refactored_sha256": {
+    "src/planning/application/validators/planning_result.py": "282e393fc73faa5d9bf53cf0dae317750cc9bbea2d70613eecf4dad552f92656",
+    "src/planning/application/validators/planning_result_objective.py": "9158a0be32365f99c22ae404c82bdbdb47594fca26ff66d6ba5ad498f21da64d",
+    "src/planning/application/validators/planning_result_routes.py": "daa543aeab3217a87439a228f65a08ddbf89349e39d4cd556429b145f4b00b90"
+  },
+  "ast_equivalent_blocks": [
+    "job_coverage",
+    "unique_engineer_routes",
+    "matrix_checks",
+    "visit_times",
+    "costs_and_objective"
+  ],
+  "characterization_tests_on_original": 64,
+  "unit_tests_in_comparison": 193,
+  "compared_unit_calls": 96,
+  "compared_mixed_cases": 250,
+  "all_matched": true,
+  "unit_calls": [
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_valid_result_is_accepted_without_mutation_and_validator_can_be_reused",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_valid_result_is_accepted_without_mutation_and_validator_can_be_reused",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_valid_result_is_accepted_without_mutation_and_validator_can_be_reused",
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_valid_result_is_accepted_without_mutation_and_validator_can_be_reused",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[sequence-9-invalid sequence for job 1]",
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[travel_from_previous_min-9-job 1 has broken travel sequence]",
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[travel_from_previous_min-9-job 1 has invalid travel time]",
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[travel_from_previous_min--1-job 1 has negative route metrics]",
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has negative route metrics",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[waiting_before_job_min-5-job 1 has invalid waiting time]",
+      "equal": true,
+      "errors": [
+        "job 1 has invalid waiting time",
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[waiting_before_job_min--1-job 1 has negative route metrics]",
+      "equal": true,
+      "errors": [
+        "job 1 has invalid waiting time",
+        "job 1 has negative route metrics",
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[distance_from_previous_meters-1-job 1 has invalid distance]",
+      "equal": true,
+      "errors": [
+        "job 1 has invalid distance",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=59865489, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_values[distance_from_previous_meters--1-job 1 has negative route metrics]",
+      "equal": true,
+      "errors": [
+        "job 1 has negative route metrics",
+        "job 1 has invalid distance",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=59837527, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_arrival-1-job 1 has broken travel sequence]",
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_arrival-1-job 1 starts before arrival]",
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_start--20-job 1 starts outside its window]",
+      "equal": true,
+      "errors": [
+        "job 1 starts outside its window",
+        "job 1 is outside engineer shift",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_start--20-job 1 is outside engineer shift]",
+      "equal": true,
+      "errors": [
+        "job 1 starts outside its window",
+        "job 1 is outside engineer shift",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_start-60-job 1 starts outside its window]",
+      "equal": true,
+      "errors": [
+        "job 1 starts outside its window",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_finish-1-job 1 has invalid service duration]",
+      "equal": true,
+      "errors": [
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_finish-300-job 1 is outside engineer shift]",
+      "equal": true,
+      "errors": [
+        "job 1 is outside engineer shift",
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_rejects_incorrect_visit_times[planned_start-1440-job 1 is planned on another date]",
+      "equal": true,
+      "errors": [
+        "job 1 is planned on another date",
+        "job 1 starts outside its window",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_recomputes_route_totals[total_travel_min-route 1 has invalid travel total]",
+      "equal": true,
+      "errors": [
+        "route 1 has invalid travel total",
+        "invalid travel cost"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_recomputes_route_totals[total_service_min-route 1 has invalid service total]",
+      "equal": true,
+      "errors": [
+        "route 1 has invalid service total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_recomputes_route_totals[total_waiting_min-route 1 has invalid waiting total]",
+      "equal": true,
+      "errors": [
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_recomputes_route_totals[total_distance_meters-route 1 has invalid distance total]",
+      "equal": true,
+      "errors": [
+        "route 1 has invalid distance total"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_route_boundaries_and_equipment",
+      "equal": true,
+      "errors": [
+        "route 1 is outside engineer shift",
+        "job 1 has broken travel sequence",
+        "route 1 has invalid finish",
+        "route 1 has invalid equipment assignment"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_detects_duplicate_jobs_routes_and_overlap_in_original_order",
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "jobs both assigned and unassigned: [1]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid drop cost",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_missing_and_unknown_jobs_are_detected",
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_pre_unassigned_jobs_are_part_of_required_coverage",
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_pre_unassigned_jobs_are_part_of_required_coverage",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_pre_unassigned_jobs_are_part_of_required_coverage",
+      "equal": true,
+      "errors": [
+        "jobs unassigned more than once: [99]",
+        "invalid drop cost"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_unknown_engineer_is_reported",
+      "equal": true,
+      "errors": [
+        "unknown engineer 999",
+        "invalid lexicographic objective: actual=68226127, expected=68226107, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_empty_route_is_reported",
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_all_engineer_compatibility_requirements[qualification]",
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_all_engineer_compatibility_requirements[transport]",
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 1 has invalid travel time",
+        "job 1 has invalid distance",
+        "job 2 is incompatible with engineer",
+        "job 2 has invalid travel time",
+        "job 2 has invalid distance",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_all_engineer_compatibility_requirements[owner]",
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_equipment_inventory_is_checked_across_engineers",
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_preallocated_equipment_is_not_counted_twice_for_same_engineer",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_preallocated_equipment_is_not_counted_twice_for_same_engineer",
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[missing-travel_matrices-minutes]",
+      "equal": true,
+      "errors": [
+        "missing or invalid minutes matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[missing-travel_time_seconds_matrices-seconds]",
+      "equal": true,
+      "errors": [
+        "missing or invalid seconds matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[missing-distance_matrices-distance]",
+      "equal": true,
+      "errors": [
+        "missing or invalid distance matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[short-travel_matrices-minutes]",
+      "equal": true,
+      "errors": [
+        "missing or invalid minutes matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[short-travel_time_seconds_matrices-seconds]",
+      "equal": true,
+      "errors": [
+        "missing or invalid seconds matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[short-distance_matrices-distance]",
+      "equal": true,
+      "errors": [
+        "missing or invalid distance matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[negative-travel_matrices-minutes]",
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[negative-travel_time_seconds_matrices-seconds]",
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[negative-distance_matrices-distance]",
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[float-travel_matrices-minutes]",
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[float-travel_time_seconds_matrices-seconds]",
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[float-distance_matrices-distance]",
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[bool-travel_matrices-minutes]",
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[bool-travel_time_seconds_matrices-seconds]",
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_matrix_errors_stop_validation_before_route_access[bool-distance_matrices-distance]",
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_selected_arc_must_have_all_three_road_values",
+      "equal": true,
+      "errors": [
+        "job 1 has invalid travel time",
+        "job 1 has invalid distance",
+        "job 1 has no raw travel time",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[emax-0-actual used engineers exceed Emax]",
+      "equal": true,
+      "errors": [
+        "actual used engineers exceed Emax"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[dmax-0-actual total distance exceeds Dmax]",
+      "equal": true,
+      "errors": [
+        "actual total distance exceeds Dmax"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[mmax-0-actual maximum distance exceeds Mmax]",
+      "equal": true,
+      "errors": [
+        "actual maximum distance exceeds Mmax"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[tmax-0-actual travel time exceeds Tmax]",
+      "equal": true,
+      "errors": [
+        "actual travel time exceeds Tmax"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[pmax--1-actual drop cost exceeds Pmax]",
+      "equal": true,
+      "errors": [
+        "actual drop cost exceeds Pmax"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[fixed_active_engineer_count-1-invalid fixed active engineer count]",
+      "equal": true,
+      "errors": [
+        "invalid fixed active engineer count"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[newly_activated_engineer_count-0-invalid newly activated engineer count]",
+      "equal": true,
+      "errors": [
+        "invalid newly activated engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=17894465, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[used_engineer_count-0-invalid used engineer count]",
+      "equal": true,
+      "errors": [
+        "invalid used engineer count"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[vehicle_fixed_costs-value8-invalid vehicle fixed costs]",
+      "equal": true,
+      "errors": [
+        "invalid vehicle fixed costs"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_objective_bounds_and_engineer_counts[maximum_objective-0-actual objective exceeds proven maximum]",
+      "equal": true,
+      "errors": [
+        "actual objective exceeds proven maximum"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_final_costs[drop_cost]",
+      "equal": true,
+      "errors": [
+        "invalid drop cost"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_final_costs[travel_cost]",
+      "equal": true,
+      "errors": [
+        "invalid travel cost"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_checks_final_costs[objective]",
+      "equal": true,
+      "errors": [
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_legacy_result_without_objective_metrics_uses_old_cost_formula",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_legacy_result_without_objective_metrics_uses_old_cost_formula",
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_dropped_mandatory_job_is_rejected",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_dropped_mandatory_job_is_rejected",
+      "equal": true,
+      "errors": [
+        "mandatory job is not assigned"
+      ]
+    },
+    {
+      "test": "tests/unit/application/validators/test_planning_result.py::test_partial_objective_metadata_keeps_existing_exception_contract",
+      "equal": true,
+      "exception": "KeyError",
+      "message": "'weights'"
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_demo_use_case_has_exact_timetable_and_profile_specific_travel",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_window_limits_start_not_finish_and_no_return_trip_is_required",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_mandatory_job_cannot_be_dropped_to_serve_higher_penalty_optional_job",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_preallocated_equipment_stays_with_its_engineer",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_empty_input_keeps_fixed_distance_and_pre_unassigned_without_io",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_travel_rounding_and_timezone_are_preserved",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_one_solver_can_run_independent_inputs_concurrently",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_contract.py::test_one_solver_can_run_independent_inputs_concurrently",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_emergency_outweighs_two_normal_jobs_in_same_sla_group",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_earlier_sla_group_outweighs_later_emergency",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_guided_search_matches_exhaustive_optimum_on_six_job_regression",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_unreachable_reverse_arc_does_not_block_feasible_forward_route",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_coarse_time_units_remain_within_proven_bound",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_final_service_must_finish_before_shift_end",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_equipment_is_allocated_per_engineer_not_per_job",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_full_day_maximum_includes_frozen_and_outside_routes[fixed0]",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_full_day_maximum_includes_frozen_and_outside_routes[fixed1]",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_full_day_maximum_includes_frozen_and_outside_routes[fixed2]",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_validator_rejects_early_departure_missing_matrix_and_second_route",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_validator_rejects_early_departure_missing_matrix_and_second_route",
+      "equal": true,
+      "errors": [
+        "route 1 is outside engineer shift",
+        "job 1 has broken travel sequence"
+      ]
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_validator_rejects_early_departure_missing_matrix_and_second_route",
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1]",
+        "engineers have multiple routes: [1]",
+        "route 1 is outside engineer shift",
+        "job 1 has broken travel sequence",
+        "route 1 is outside engineer shift",
+        "job 1 has broken travel sequence",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=483, expected=724, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_validator_rejects_early_departure_missing_matrix_and_second_route",
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1]",
+        "engineers have multiple routes: [1]",
+        "missing or invalid minutes matrix for auto"
+      ]
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_infeasible_first_candidate_does_not_abort_second_engineer",
+      "equal": true,
+      "errors": []
+    },
+    {
+      "test": "tests/unit/infrastructure/test_routing_regressions.py::test_urgent_insert_preserves_executing_job_and_next_stop",
+      "equal": true,
+      "errors": []
+    }
+  ],
+  "mixed_cases": [
+    {
+      "seed": 0,
+      "operations": [
+        12,
+        0,
+        7,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3"
+      ]
+    },
+    {
+      "seed": 1,
+      "operations": [
+        9,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "actual total distance exceeds Dmax"
+      ]
+    },
+    {
+      "seed": 2,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 starts outside its window",
+        "job 1 is outside engineer shift",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "seed": 3,
+      "operations": [
+        9,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "actual total distance exceeds Dmax",
+        "invalid used engineer count"
+      ]
+    },
+    {
+      "seed": 4,
+      "operations": [
+        4,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 5,
+      "operations": [
+        4,
+        12,
+        13,
+        10,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226126, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 6,
+      "operations": [
+        13,
+        7,
+        0,
+        10,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 7,
+      "operations": [
+        2,
+        1,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 1 starts outside its window",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "job 3 has negative route metrics",
+        "job 3 has invalid distance",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108887, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 8,
+      "operations": [
+        5,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 9,
+      "operations": [
+        9,
+        2,
+        5,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 10,
+      "operations": [
+        0,
+        9,
+        7,
+        10,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual used engineers exceed Emax",
+        "invalid lexicographic objective: actual=68226126, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 11,
+      "operations": [
+        13,
+        7,
+        12,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226126, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 12,
+      "operations": [
+        4,
+        2,
+        7,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 13,
+      "operations": [
+        4,
+        10,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "engineers have multiple routes: [1]",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226126, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 14,
+      "operations": [
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "actual total distance exceeds Dmax"
+      ]
+    },
+    {
+      "seed": 15,
+      "operations": [
+        0,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid travel total",
+        "invalid travel cost"
+      ]
+    },
+    {
+      "seed": 16,
+      "operations": [
+        7,
+        6,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer"
+      ]
+    },
+    {
+      "seed": 17,
+      "operations": [
+        6,
+        5,
+        10,
+        0,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid sequence for job 1",
+        "job 1 is incompatible with engineer",
+        "job 1 has invalid travel time",
+        "job 2 is incompatible with engineer",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226126, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 18,
+      "operations": [
+        1,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 starts outside its window",
+        "job 3 is outside engineer shift",
+        "job 3 starts before arrival",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "route 2 has invalid distance total"
+      ]
+    },
+    {
+      "seed": 19,
+      "operations": [
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 20,
+      "operations": [
+        4,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=83886102, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 21,
+      "operations": [
+        6,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 22,
+      "operations": [
+        3,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 23,
+      "operations": [
+        13,
+        0,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 24,
+      "operations": [
+        13,
+        3,
+        10,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226126, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 25,
+      "operations": [
+        12,
+        3,
+        13,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 26,
+      "operations": [
+        10,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "actual used engineers exceed Emax",
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 27,
+      "operations": [
+        11,
+        4,
+        1,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 28,
+      "operations": [
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 29,
+      "operations": [
+        1,
+        4,
+        8,
+        6,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "invalid sequence for job 1",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "unknown or ineligible job 999",
+        "route 2 has invalid finish",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003342, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 30,
+      "operations": [
+        12,
+        9,
+        10,
+        0,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3",
+        "equipment 1 capacity exceeded",
+        "actual travel time exceeds Tmax"
+      ]
+    },
+    {
+      "seed": 31,
+      "operations": [
+        7
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 32,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "seed": 33,
+      "operations": [
+        2,
+        10,
+        10,
+        4,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2, 3]",
+        "engineers have multiple routes: [1, 2]",
+        "job 1 has invalid waiting time",
+        "route 1 has invalid waiting total",
+        "job 1 has invalid waiting time",
+        "route 1 has invalid waiting total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226129, expected=86120592, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 34,
+      "operations": [
+        5,
+        6,
+        1,
+        1,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 1 has broken travel sequence",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid travel time",
+        "job 2 is incompatible with engineer",
+        "job 3 starts before arrival",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration"
+      ]
+    },
+    {
+      "seed": 35,
+      "operations": [
+        5,
+        13,
+        4,
+        4,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 36,
+      "operations": [
+        0,
+        1,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 1 is planned on another date",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "seed": 37,
+      "operations": [
+        1,
+        7,
+        7,
+        11,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 38,
+      "operations": [
+        6,
+        1,
+        5,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 39,
+      "operations": [
+        4,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 40,
+      "operations": [
+        9,
+        4,
+        2,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "engineers have multiple routes: [1]",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "job 3 has invalid waiting time",
+        "route 2 has invalid waiting total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count"
+      ]
+    },
+    {
+      "seed": 41,
+      "operations": [
+        5,
+        9,
+        4,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "engineers have multiple routes: [2]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 42,
+      "operations": [
+        0
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 43,
+      "operations": [
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 44,
+      "operations": [
+        8,
+        2,
+        0,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 45,
+      "operations": [
+        6,
+        4,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2, 3]",
+        "engineers have multiple routes: [1, 2]",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=86120592, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 46,
+      "operations": [
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer"
+      ]
+    },
+    {
+      "seed": 47,
+      "operations": [
+        1,
+        9,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid finish",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual total distance exceeds Dmax",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 48,
+      "operations": [
+        5,
+        4,
+        11,
+        2,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "job 1 has negative route metrics",
+        "job 1 has invalid distance",
+        "route 1 has invalid distance total",
+        "job 1 has invalid distance",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 49,
+      "operations": [
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 50,
+      "operations": [
+        13,
+        5,
+        12,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 51,
+      "operations": [
+        13,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 52,
+      "operations": [
+        0,
+        6,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "invalid sequence for job 3"
+      ]
+    },
+    {
+      "seed": 53,
+      "operations": [
+        13,
+        7,
+        8,
+        11,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 54,
+      "operations": [
+        7,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 55,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "seed": 56,
+      "operations": [
+        0,
+        4,
+        11,
+        1,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "invalid sequence for job 3",
+        "job 3 is planned on another date",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish",
+        "invalid sequence for job 3",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 57,
+      "operations": [
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid travel time"
+      ]
+    },
+    {
+      "seed": 58,
+      "operations": [
+        3,
+        3,
+        4,
+        7,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "route 1 has invalid service total",
+        "route 2 has invalid distance total",
+        "route 2 has invalid distance total",
+        "route 2 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=70460617, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 59,
+      "operations": [
+        1,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 60,
+      "operations": [
+        4,
+        4,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=101780567, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 61,
+      "operations": [
+        2,
+        5,
+        5,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid waiting time",
+        "job 1 has no raw travel time",
+        "route 1 has invalid waiting total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 62,
+      "operations": [
+        2,
+        4,
+        2,
+        0,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=52568632, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 63,
+      "operations": [
+        7,
+        7,
+        11,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is planned on another date",
+        "job 1 starts outside its window",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 64,
+      "operations": [
+        1,
+        0,
+        11,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 3 is planned on another date",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 65,
+      "operations": [
+        4,
+        8,
+        7,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343362, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 66,
+      "operations": [
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 67,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration"
+      ]
+    },
+    {
+      "seed": 68,
+      "operations": [
+        11,
+        9,
+        7,
+        13
+      ],
+      "equal": true,
+      "exception": "KeyError",
+      "message": "'weights'"
+    },
+    {
+      "seed": 69,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time"
+      ]
+    },
+    {
+      "seed": 70,
+      "operations": [
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 71,
+      "operations": [
+        8,
+        4,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 72,
+      "operations": [
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 73,
+      "operations": [
+        1,
+        7,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish"
+      ]
+    },
+    {
+      "seed": 74,
+      "operations": [
+        8,
+        5,
+        13,
+        5,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 75,
+      "operations": [
+        9,
+        0,
+        1,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "invalid sequence for job 3",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid waiting time",
+        "invalid sequence for job 3",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid waiting time",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual maximum distance exceeds Mmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 76,
+      "operations": [
+        7,
+        4,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 77,
+      "operations": [
+        5,
+        13,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 78,
+      "operations": [
+        1,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 79,
+      "operations": [
+        7,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total"
+      ]
+    },
+    {
+      "seed": 80,
+      "operations": [
+        6,
+        5,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 81,
+      "operations": [
+        13,
+        5,
+        2,
+        5,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 82,
+      "operations": [
+        12,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 83,
+      "operations": [
+        13,
+        1,
+        0,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 is planned on another date",
+        "job 1 starts outside its window",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 84,
+      "operations": [
+        12,
+        7,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid lexicographic objective: actual=68226126, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 85,
+      "operations": [
+        11,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 86,
+      "operations": [
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 87,
+      "operations": [
+        11,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 88,
+      "operations": [
+        3,
+        8,
+        13,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226126, expected=67108872, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 89,
+      "operations": [
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 90,
+      "operations": [
+        11,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 91,
+      "operations": [
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "invalid used engineer count"
+      ]
+    },
+    {
+      "seed": 92,
+      "operations": [
+        8,
+        12,
+        9,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual used engineers exceed Emax",
+        "invalid lexicographic objective: actual=68226127, expected=51450142, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 93,
+      "operations": [
+        9,
+        1,
+        6,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid waiting time",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 94,
+      "operations": [
+        2,
+        6,
+        10,
+        4,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "job 1 is incompatible with engineer",
+        "job 1 has invalid waiting time",
+        "job 2 is incompatible with engineer",
+        "route 1 has invalid waiting total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226128, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 95,
+      "operations": [
+        8,
+        7,
+        12,
+        9,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [999, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003327, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 96,
+      "operations": [
+        5,
+        13,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 has invalid travel time",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 97,
+      "operations": [
+        6,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 98,
+      "operations": [
+        9,
+        6,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "actual total distance exceeds Dmax"
+      ]
+    },
+    {
+      "seed": 99,
+      "operations": [
+        6,
+        9,
+        3,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "route 1 has invalid travel total",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 100,
+      "operations": [
+        7,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 101,
+      "operations": [
+        13,
+        8,
+        7,
+        8,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual total distance exceeds Dmax",
+        "invalid lexicographic objective: actual=68226127, expected=51450142, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 102,
+      "operations": [
+        10,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226126, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 103,
+      "operations": [
+        11,
+        11,
+        9,
+        6
+      ],
+      "equal": true,
+      "exception": "KeyError",
+      "message": "'weights'"
+    },
+    {
+      "seed": 104,
+      "operations": [
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 105,
+      "operations": [
+        5,
+        8,
+        4,
+        13,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 106,
+      "operations": [
+        0,
+        12,
+        12,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3",
+        "route 2 has invalid waiting total",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 107,
+      "operations": [
+        9,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded",
+        "actual maximum distance exceeds Mmax"
+      ]
+    },
+    {
+      "seed": 108,
+      "operations": [
+        11,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 109,
+      "operations": [
+        3,
+        1,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "route 2 has invalid distance total",
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 110,
+      "operations": [
+        12,
+        6,
+        11,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 111,
+      "operations": [
+        5,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 112,
+      "operations": [
+        13,
+        11,
+        6,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 113,
+      "operations": [
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid lexicographic objective: actual=68226126, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 114,
+      "operations": [
+        9,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "actual total distance exceeds Dmax",
+        "invalid lexicographic objective: actual=68226126, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 115,
+      "operations": [
+        3,
+        12,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid travel total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 116,
+      "operations": [
+        8,
+        0,
+        7,
+        4,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [999]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343362, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 117,
+      "operations": [
+        2,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 118,
+      "operations": [
+        4,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 119,
+      "operations": [
+        2,
+        6,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has negative route metrics",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total"
+      ]
+    },
+    {
+      "seed": 120,
+      "operations": [
+        3,
+        5,
+        11,
+        5,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 121,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 2 has invalid service total"
+      ]
+    },
+    {
+      "seed": 122,
+      "operations": [
+        3,
+        12,
+        7,
+        4,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "route 2 has invalid travel total",
+        "route 2 has invalid travel total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 123,
+      "operations": [
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 124,
+      "operations": [
+        8,
+        2,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 125,
+      "operations": [
+        3,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has negative route metrics",
+        "job 3 has invalid distance",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108887, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 126,
+      "operations": [
+        0,
+        10,
+        7,
+        10,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226129, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 127,
+      "operations": [
+        9
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 128,
+      "operations": [
+        6,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total"
+      ]
+    },
+    {
+      "seed": 129,
+      "operations": [
+        13,
+        0,
+        10,
+        13,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226128, expected=50331662, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 130,
+      "operations": [
+        6,
+        12,
+        10,
+        5,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 131,
+      "operations": [
+        5,
+        0,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto",
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 132,
+      "operations": [
+        2,
+        0,
+        13,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 133,
+      "operations": [
+        5,
+        12,
+        8,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 134,
+      "operations": [
+        8,
+        11,
+        0,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 is incompatible with engineer",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 135,
+      "operations": [
+        10,
+        4,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226128, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 136,
+      "operations": [
+        6,
+        6,
+        12,
+        6,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 137,
+      "operations": [
+        2
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 138,
+      "operations": [
+        6,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 139,
+      "operations": [
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 140,
+      "operations": [
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3"
+      ]
+    },
+    {
+      "seed": 141,
+      "operations": [
+        12,
+        9,
+        9,
+        4,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226128, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 142,
+      "operations": [
+        11,
+        2,
+        5,
+        4,
+        9
+      ],
+      "equal": true,
+      "exception": "KeyError",
+      "message": "'weights'"
+    },
+    {
+      "seed": 143,
+      "operations": [
+        13,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 144,
+      "operations": [
+        0,
+        13,
+        12,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 145,
+      "operations": [
+        8,
+        7,
+        5,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [999, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003327, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 146,
+      "operations": [
+        2,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total"
+      ]
+    },
+    {
+      "seed": 147,
+      "operations": [
+        10,
+        7,
+        10,
+        13,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 148,
+      "operations": [
+        11,
+        13,
+        5,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 has no raw travel time",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 149,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 starts outside its window",
+        "job 3 is outside engineer shift",
+        "job 3 starts before arrival",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration"
+      ]
+    },
+    {
+      "seed": 150,
+      "operations": [
+        6,
+        3,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "route 2 has invalid distance total"
+      ]
+    },
+    {
+      "seed": 151,
+      "operations": [
+        13,
+        5,
+        1,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 152,
+      "operations": [
+        10,
+        3,
+        10,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 153,
+      "operations": [
+        1,
+        13,
+        9,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 is planned on another date",
+        "job 1 starts outside its window",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid distance total",
+        "actual maximum distance exceeds Mmax",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 154,
+      "operations": [
+        13,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 155,
+      "operations": [
+        8,
+        10,
+        12,
+        12,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 156,
+      "operations": [
+        6,
+        12,
+        2,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "job 2 is incompatible with engineer",
+        "route 1 has invalid travel total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 157,
+      "operations": [
+        7,
+        0,
+        5,
+        1,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 158,
+      "operations": [
+        13,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 159,
+      "operations": [
+        2,
+        9,
+        12,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 160,
+      "operations": [
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 161,
+      "operations": [
+        3,
+        0,
+        11,
+        7,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 162,
+      "operations": [
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 163,
+      "operations": [
+        9,
+        2,
+        5,
+        2,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 164,
+      "operations": [
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 165,
+      "operations": [
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3"
+      ]
+    },
+    {
+      "seed": 166,
+      "operations": [
+        10,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3",
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 167,
+      "operations": [
+        13,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 168,
+      "operations": [
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 169,
+      "operations": [
+        8,
+        8,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [999]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226112, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 170,
+      "operations": [
+        13,
+        5,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [1]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 171,
+      "operations": [
+        6,
+        1,
+        6,
+        5,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 172,
+      "operations": [
+        3,
+        11,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "route 1 has invalid waiting total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 173,
+      "operations": [
+        7,
+        6,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 174,
+      "operations": [
+        7
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 175,
+      "operations": [
+        3,
+        9,
+        8,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 has invalid service total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual maximum distance exceeds Mmax",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 176,
+      "operations": [
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1"
+      ]
+    },
+    {
+      "seed": 177,
+      "operations": [
+        7,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 2 has invalid travel total",
+        "invalid travel cost"
+      ]
+    },
+    {
+      "seed": 178,
+      "operations": [
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 179,
+      "operations": [
+        1,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "job 1 has broken travel sequence",
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 180,
+      "operations": [
+        1,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "job 3 has broken travel sequence",
+        "job 3 starts before arrival",
+        "job 3 has invalid waiting time"
+      ]
+    },
+    {
+      "seed": 181,
+      "operations": [
+        11,
+        0,
+        13,
+        12,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 182,
+      "operations": [
+        5,
+        5,
+        0,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 183,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 starts before arrival",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration"
+      ]
+    },
+    {
+      "seed": 184,
+      "operations": [
+        0,
+        5,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 185,
+      "operations": [
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid waiting time",
+        "route 1 has invalid waiting total"
+      ]
+    },
+    {
+      "seed": 186,
+      "operations": [
+        10,
+        1,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 3 is planned on another date",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish",
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 187,
+      "operations": [
+        13,
+        12,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "actual travel time exceeds Tmax",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 188,
+      "operations": [
+        4,
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "route 1 has invalid waiting total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 189,
+      "operations": [
+        13,
+        2,
+        8,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226126, expected=67108872, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 190,
+      "operations": [
+        2
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 191,
+      "operations": [
+        12,
+        12,
+        12,
+        0,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 192,
+      "operations": [
+        13,
+        1,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "engineers have multiple routes: [2]",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 193,
+      "operations": [
+        7,
+        8,
+        8,
+        0,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [999]",
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=68226112, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 194,
+      "operations": [
+        1,
+        12,
+        11,
+        11,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 has invalid waiting time",
+        "job 1 has invalid service duration",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 195,
+      "operations": [
+        6,
+        10,
+        6,
+        10,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 196,
+      "operations": [
+        11,
+        12,
+        12,
+        10,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 197,
+      "operations": [
+        0,
+        0,
+        1,
+        7,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "job 1 has invalid service duration",
+        "job 2 has broken travel sequence",
+        "equipment 1 capacity exceeded",
+        "actual used engineers exceed Emax"
+      ]
+    },
+    {
+      "seed": 198,
+      "operations": [
+        9
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 199,
+      "operations": [
+        11,
+        13,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 200,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid service total"
+      ]
+    },
+    {
+      "seed": 201,
+      "operations": [
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 202,
+      "operations": [
+        10,
+        13,
+        3,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "route 2 has invalid travel total",
+        "invalid travel cost",
+        "invalid lexicographic objective: actual=68226128, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 203,
+      "operations": [
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3"
+      ]
+    },
+    {
+      "seed": 204,
+      "operations": [
+        13,
+        9,
+        6,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "actual used engineers exceed Emax",
+        "invalid lexicographic objective: actual=68226127, expected=50331662, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 205,
+      "operations": [
+        7,
+        13,
+        7,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 206,
+      "operations": [
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish"
+      ]
+    },
+    {
+      "seed": 207,
+      "operations": [
+        10,
+        0,
+        11,
+        13,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 208,
+      "operations": [
+        8,
+        0,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid sequence for job 3",
+        "actual total distance exceeds Dmax",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 209,
+      "operations": [
+        10,
+        9,
+        10,
+        5,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "invalid distance matrix value for auto"
+      ]
+    },
+    {
+      "seed": 210,
+      "operations": [
+        0,
+        11,
+        10,
+        0
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 1",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 211,
+      "operations": [
+        5,
+        10,
+        6,
+        9,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 212,
+      "operations": [
+        9,
+        9,
+        8,
+        2
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "actual total distance exceeds Dmax",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 213,
+      "operations": [
+        6,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 214,
+      "operations": [
+        11,
+        6,
+        10,
+        6,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 215,
+      "operations": [
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid lexicographic objective: actual=68226126, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 216,
+      "operations": [
+        10,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "invalid lexicographic objective: actual=68226128, expected=68226127, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 217,
+      "operations": [
+        3,
+        1,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid waiting total",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid waiting time",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 218,
+      "operations": [
+        2,
+        5,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has invalid travel time",
+        "job 1 has invalid distance",
+        "route 1 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 219,
+      "operations": [
+        8,
+        5,
+        5
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 220,
+      "operations": [
+        11,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 221,
+      "operations": [
+        6,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer"
+      ]
+    },
+    {
+      "seed": 222,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 2 has invalid waiting total"
+      ]
+    },
+    {
+      "seed": 223,
+      "operations": [
+        5,
+        13,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 224,
+      "operations": [
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 225,
+      "operations": [
+        2,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has invalid travel time",
+        "route 1 has invalid travel total",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 226,
+      "operations": [
+        0,
+        5,
+        7,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 3 is planned on another date",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 227,
+      "operations": [
+        13,
+        1,
+        13,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 228,
+      "operations": [
+        9,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "equipment 1 capacity exceeded",
+        "actual used engineers exceed Emax"
+      ]
+    },
+    {
+      "seed": 229,
+      "operations": [
+        2,
+        12,
+        13,
+        9,
+        7
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "actual travel time exceeds Tmax",
+        "invalid lexicographic objective: actual=68226127, expected=51450147, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 230,
+      "operations": [
+        4,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "actual total distance exceeds Dmax",
+        "actual maximum distance exceeds Mmax",
+        "actual travel time exceeds Tmax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226126, expected=85003347, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 231,
+      "operations": [
+        2
+      ],
+      "equal": true,
+      "errors": []
+    },
+    {
+      "seed": 232,
+      "operations": [
+        1,
+        13,
+        13
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 is planned on another date",
+        "job 1 has broken travel sequence",
+        "job 1 has invalid waiting time",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 233,
+      "operations": [
+        8,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 234,
+      "operations": [
+        4,
+        13,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "engineers have multiple routes: [1]",
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "route 1 is empty",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid waiting total",
+        "route 1 has invalid equipment assignment",
+        "route 1 has invalid distance total",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count"
+      ]
+    },
+    {
+      "seed": 235,
+      "operations": [
+        11,
+        3,
+        4
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "route 1 has invalid travel total",
+        "route 1 has invalid travel total",
+        "equipment 1 capacity exceeded",
+        "invalid travel cost",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 236,
+      "operations": [
+        7,
+        6,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "equipment 1 capacity exceeded"
+      ]
+    },
+    {
+      "seed": 237,
+      "operations": [
+        7,
+        12,
+        0,
+        11,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 238,
+      "operations": [
+        1,
+        1,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 has broken travel sequence",
+        "job 1 has invalid waiting time",
+        "job 3 is planned on another date",
+        "job 3 has invalid service duration",
+        "route 2 has invalid finish"
+      ]
+    },
+    {
+      "seed": 239,
+      "operations": [
+        3
+      ],
+      "equal": true,
+      "errors": [
+        "route 1 has invalid distance total"
+      ]
+    },
+    {
+      "seed": 240,
+      "operations": [
+        0,
+        2,
+        1,
+        7,
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "invalid sequence for job 2",
+        "job 2 has broken travel sequence",
+        "route 1 has invalid travel total",
+        "route 1 has invalid service total",
+        "route 1 has invalid distance total",
+        "job 3 has broken travel sequence",
+        "job 3 has invalid travel time",
+        "route 2 has invalid travel total",
+        "invalid lexicographic objective: actual=68226127, expected=68226117, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 241,
+      "operations": [
+        12,
+        5,
+        10,
+        13,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "job 1 has invalid travel time",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 242,
+      "operations": [
+        0,
+        9,
+        11
+      ],
+      "equal": true,
+      "errors": [
+        "invalid sequence for job 3",
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 243,
+      "operations": [
+        5,
+        9,
+        4,
+        0,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [1, 2]",
+        "engineers have multiple routes: [1]",
+        "invalid minutes matrix value for auto"
+      ]
+    },
+    {
+      "seed": 244,
+      "operations": [
+        6,
+        1,
+        2,
+        9
+      ],
+      "equal": true,
+      "errors": [
+        "job 1 is incompatible with engineer",
+        "job 2 is incompatible with engineer",
+        "job 3 is planned on another date",
+        "job 3 has broken travel sequence",
+        "job 3 starts before arrival",
+        "job 3 has invalid waiting time",
+        "route 2 has invalid waiting total",
+        "actual used engineers exceed Emax"
+      ]
+    },
+    {
+      "seed": 245,
+      "operations": [
+        4,
+        1
+      ],
+      "equal": true,
+      "errors": [
+        "jobs assigned more than once: [3]",
+        "engineers have multiple routes: [2]",
+        "job 3 is planned on another date",
+        "job 3 starts outside its window",
+        "job 3 has invalid waiting time",
+        "job 3 has invalid service duration",
+        "invalid travel cost",
+        "actual used engineers exceed Emax",
+        "invalid newly activated engineer count",
+        "invalid used engineer count",
+        "invalid lexicographic objective: actual=68226127, expected=69343372, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 246,
+      "operations": [
+        8
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "unknown or ineligible job 999",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "invalid lexicographic objective: actual=68226127, expected=68226122, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    },
+    {
+      "seed": 247,
+      "operations": [
+        5,
+        13,
+        9,
+        6
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "invalid seconds matrix value for auto"
+      ]
+    },
+    {
+      "seed": 248,
+      "operations": [
+        11,
+        11,
+        11,
+        10
+      ],
+      "equal": true,
+      "errors": [
+        "invalid objective"
+      ]
+    },
+    {
+      "seed": 249,
+      "operations": [
+        9,
+        13,
+        12
+      ],
+      "equal": true,
+      "errors": [
+        "assigned and unassigned jobs do not exactly cover the input",
+        "route 2 is empty",
+        "route 2 has invalid travel total",
+        "route 2 has invalid service total",
+        "route 2 has invalid distance total",
+        "equipment 1 capacity exceeded",
+        "actual travel time exceeds Tmax",
+        "invalid lexicographic objective: actual=68226127, expected=67108882, strategy=WEIGHTED_SINGLE_PASS"
+      ]
+    }
+  ]
+}

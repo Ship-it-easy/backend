@@ -1,0 +1,29 @@
+{
+  "scope": "saved 16-job fixture only; not production routing",
+  "status": "OPTIMAL",
+  "subset_count": 65536,
+  "constraint_count": 34,
+  "original_pmax": 31687199,
+  "normalized_penalties": [
+    26112,
+    16320,
+    13056,
+    19584,
+    816,
+    1632,
+    204,
+    408,
+    68,
+    34,
+    68,
+    6,
+    8,
+    5,
+    8,
+    6
+  ],
+  "normalized_pmax": 78335,
+  "verified_all_subset_order_and_ties": true,
+  "normalized_objective_bound": 4140856563423528959,
+  "int64_max": 9223372036854775807
+}

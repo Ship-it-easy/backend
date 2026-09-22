@@ -1,0 +1,47 @@
+[
+  {
+    "check": "dispatcher_login",
+    "status": "PASS",
+    "project_id": 3
+  },
+  {
+    "check": "readiness",
+    "status": "PASS",
+    "result": {
+      "planning_date": "2026-09-21",
+      "ready": true,
+      "problems": []
+    }
+  },
+  {
+    "check": "manual_plan",
+    "status": "PASS",
+    "event_id": 116,
+    "assignments": 14,
+    "version_id": 42
+  },
+  {
+    "check": "board_and_day",
+    "status": "PASS",
+    "board_keys": [
+      "project_date",
+      "timezone",
+      "plan_version",
+      "active_run",
+      "days",
+      "selected_day",
+      "readiness"
+    ],
+    "day_keys": [
+      "date",
+      "plan_version_id",
+      "day_result_id",
+      "result_available",
+      "solver_status",
+      "counts",
+      "engineer_columns",
+      "unassigned",
+      "available_filters"
+    ]
+  }
+]

@@ -18,9 +18,7 @@ REASON_TEXTS: dict[str, str] = {
     "TIME_WINDOW_CONFLICT": "Невозможно соблюсти временное окно",
     "SHIFT_CAPACITY_EXCEEDED": ("Работа не помещается в доступный остаток смены"),
     "ROUTE_INFEASIBLE": "Не найден допустимый маршрут с учётом дороги",
-    "DROPPED_BY_OBJECTIVE": (
-        "Solver оставил заявку неназначенной в рамках целевой функции"
-    ),
+    "DROPPED_BY_OBJECTIVE": "Заявка не вошла в маршрут выбранного дня",
     "TIME_LIMIT_NO_ASSIGNMENT": "Расчёт завершён по лимиту времени",
     "HORIZON_EXHAUSTED": "Заявка не назначена до конца горизонта",
     "CANCELLED_RECORD": "Заявка отменена и исключена из активного маршрута",
@@ -96,12 +94,10 @@ def unassigned_reason(
     diagnostic_flags: dict[str, Any] | None = None,
     final_horizon: bool = False,
 ) -> dict[str, Any]:
-    if solver_status == "FEASIBLE_TIME_LIMIT" and saved_code in {
-        None,
-        "NOT_SELECTED_BY_OPTIMIZER",
-    }:
-        code = "TIME_LIMIT_NO_ASSIGNMENT"
-    elif final_horizon and saved_code in {
+    # FEASIBLE_TIME_LIMIT describes the quality of the whole solver result,
+    # not the proven cause of one dropped job. Keep it in technical diagnostics
+    # and preserve the saved per-job reason shown to the dispatcher.
+    if final_horizon and saved_code in {
         None,
         "NOT_ASSIGNED_WITHIN_HORIZON",
     }:

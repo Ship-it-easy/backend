@@ -1,9 +1,10 @@
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
 from typing import Any
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, insert, select, update
@@ -539,10 +540,12 @@ def _jsonable(value: Any) -> Any:
         return {str(key): _jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_jsonable(item) for item in value]
-    if isinstance(value, (datetime, date)):
+    if isinstance(value, (datetime, date, time)):
         return value.isoformat().replace("+00:00", "Z")
     if isinstance(value, Enum):
         return value.value
+    if isinstance(value, UUID):
+        return str(value)
     if hasattr(value, "as_tuple"):
         return str(value)
     return value

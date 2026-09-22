@@ -17,7 +17,6 @@ from planning.application.interactors.engineer import (
     assignments as engineer_assignments,
 )
 from planning.application.interactors.get_planning_run import GetPlanningRunInteractor
-from planning.application.interactors.job_import import ProjectJobImportInteractor
 from planning.application.interactors.job_status.change_job_status import (
     ChangeJobStatusInteractor,
 )
@@ -55,7 +54,6 @@ class PlanningInteractorProvider(Provider):
     validator = provide(PlanningValidator)
     batch_validator = provide(PlanningBatchValidator)
     create_job = provide(CreateJobInteractor)
-    project_job_import = provide(ProjectJobImportInteractor)
     start_dynamic_planning = provide(StartDynamicPlanningInteractor)
     get_planning_event = provide(GetPlanningEventInteractor)
     get_current_project_plan = provide(GetCurrentProjectPlanInteractor)

@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from dishka.integrations.fastapi import FromDishka, inject
@@ -7,6 +8,13 @@ from pydantic import BaseModel
 from planning.application.interfaces.job_imports import JobImportOperations
 
 router = APIRouter()
+CSV_CONTENT_TYPES = {
+    "text/csv",
+    "application/csv",
+    "application/vnd.ms-excel",
+    "text/plain",
+    "application/octet-stream",
+}
 
 
 class ApplyBody(BaseModel):
@@ -26,10 +34,20 @@ async def upload(
         raise HTTPException(
             415, detail={"code": "INVALID_FILE_TYPE", "message": "Требуется файл CSV"}
         )
+    if file.content_type and file.content_type.lower() not in CSV_CONTENT_TYPES:
+        raise HTTPException(
+            415,
+            detail={"code": "INVALID_FILE_TYPE", "message": "Требуется файл CSV"},
+        )
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(
             413, detail={"code": "FILE_TOO_LARGE", "message": "Файл больше 10 МБ"}
+        )
+    if content.startswith((b"PK\x03\x04", b"\xd0\xcf\x11\xe0")):
+        raise HTTPException(
+            415,
+            detail={"code": "INVALID_FILE_TYPE", "message": "Требуется файл CSV"},
         )
     return await service.upload(project_id, filename, content)
 
@@ -57,8 +75,8 @@ async def issues(
     project_id: int,
     batch_id: int,
     service: FromDishka[JobImportOperations],
-    severity: str | None = None,
-    query: str = "",
+    severity: Literal["ERROR", "WARNING"] | None = None,
+    query: str = Query("", max_length=100),
     page: int = Query(1, ge=1),
 ):
     return await service.issues(project_id, batch_id, severity, query, page)
