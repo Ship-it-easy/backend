@@ -1532,6 +1532,7 @@ class SqlaDynamicPlanningRepository:
         version_value = None
         if version is not None:
             batch_status = None
+            batch_completion_reason = None
             feasible_time_limit = False
             if version.planning_batch_id is not None:
                 batch_row = (
@@ -1539,6 +1540,7 @@ class SqlaDynamicPlanningRepository:
                         await self._session.execute(
                             select(
                                 planning_batches.c.status,
+                                planning_batches.c.completion_reason,
                                 planning_batches.c.metrics,
                             ).where(
                                 planning_batches.c.id == version.planning_batch_id
@@ -1550,15 +1552,12 @@ class SqlaDynamicPlanningRepository:
                 )
                 if batch_row is not None:
                     batch_status = str(batch_row.status)
+                    batch_completion_reason = batch_row.completion_reason
                     feasible_time_limit = bool(
                         (version.metrics or {}).get("feasible_time_limit")
                         or (batch_row.metrics or {}).get("feasible_time_limit")
                     )
-            status_value = (
-                "FEASIBLE_TIME_LIMIT"
-                if feasible_time_limit
-                else "PARTIAL" if batch_status == "PARTIAL" else "SUCCESS"
-            )
+            status_value = _published_plan_status(batch_status, feasible_time_limit)
             version_value = {
                 "id": int(version.id),
                 "number": int(version.version_number),
@@ -1566,6 +1565,9 @@ class SqlaDynamicPlanningRepository:
                 "trigger": version.trigger_source,
                 "initiator": actor_name,
                 "status": status_value,
+                "completion_reason": batch_completion_reason,
+                "optimization_limited": feasible_time_limit,
+                "unassigned_count": len(version.unassigned_jobs or []),
             }
         active_run = None
         if event is not None:
@@ -3144,6 +3146,13 @@ def _planning_phase(state: str, current_day: Any | None) -> str:
             return "Подготовка данных"
         return "Проверка результата"
     return "Публикация"
+
+
+def _published_plan_status(
+    batch_status: str | None, _feasible_time_limit: bool = False
+) -> str:
+    """Expose publication outcome separately from solver search quality."""
+    return "PARTIAL" if batch_status == "PARTIAL" else "SUCCESS"
 
 
 def _safe_planning_error(event: Any) -> str | None:
