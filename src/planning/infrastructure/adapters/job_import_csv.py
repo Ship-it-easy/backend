@@ -24,8 +24,9 @@ from planning.application.interfaces.planning_batch_repository import (
 )
 from planning.application.services.job_import_csv import issue, parse_csv
 from planning.entrypoint.config import PlanningServiceConfig
-from planning.infrastructure.adapters.address_search_nominatim import (
-    NominatimAddressSearchProvider,
+from planning.infrastructure.adapters.geocoder_factory import (
+    address_provider_version,
+    create_address_search_provider,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     job_import_audit,
@@ -39,7 +40,6 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
 
 logger = logging.getLogger(__name__)
 RULES_VERSION = "csv-v1"
-ADDRESS_PROVIDER_VERSION = "nominatim-v1"
 
 
 def _batch_dict(row):
@@ -62,6 +62,10 @@ class JobImportExecutor:
         self._tasks = {}
         self._project_locks = {}
         self._maintenance_task = None
+
+    @property
+    def address_provider_version(self) -> str:
+        return address_provider_version(self._config)
 
     def schedule(self, batch_id: int, project_id: int):
         task = self._tasks.get(batch_id)
@@ -230,7 +234,7 @@ class JobImportExecutor:
                         .mappings()
                         .all()
                     )
-                    provider = NominatimAddressSearchProvider(self._config)
+                    provider = create_address_search_provider(self._config)
                     cache = {}
                     for row in parsed_rows:
                         raw = row["raw_required_values_json"]
@@ -326,8 +330,13 @@ class JobImportExecutor:
                                     details.get(k)
                                     for k in ("city", "town", "village", "hamlet")
                                 ) or not any(
-                                    details.get(k)
-                                    for k in ("road", "pedestrian", "street", "locality")
+                                        details.get(k)
+                                        for k in (
+                                            "road",
+                                            "pedestrian",
+                                            "street",
+                                            "locality",
+                                        )
                                 ):
                                     row["issues_json"].append(
                                         issue(
@@ -459,7 +468,7 @@ class JobImportExecutor:
                         source_encoding=encoding,
                         source_delimiter=delimiter,
                         validation_rules_version=RULES_VERSION,
-                        address_provider_version=ADDRESS_PROVIDER_VERSION,
+                        address_provider_version=self.address_provider_version,
                         total_rows=len(parsed_rows),
                         processed_rows=len(parsed_rows),
                         error_count=errors,
@@ -579,7 +588,12 @@ class JobImportService:
             # application image (for example before a parser compatibility
             # fix). Re-run failed reusable batches when the same file is
             # uploaded instead of returning stale issues forever.
-            if reusable["status"] in ("HAS_ERRORS", "FAILED_VALIDATION", "TECHNICAL_ERROR", "STALE_VALIDATION"):
+            if reusable["status"] in (
+                "HAS_ERRORS",
+                "FAILED_VALIDATION",
+                "TECHNICAL_ERROR",
+                "STALE_VALIDATION",
+            ):
                 await self.session.execute(
                     update(job_import_batches)
                     .where(job_import_batches.c.id == reusable["id"])
@@ -756,7 +770,7 @@ class JobImportService:
             raise ConflictError("Исходный файл изменился", code="STALE_VALIDATION")
         if (batch["validation_rules_version"], batch["address_provider_version"]) != (
             RULES_VERSION,
-            ADDRESS_PROVIDER_VERSION,
+            self.executor.address_provider_version,
         ):
             await self.session.execute(
                 update(job_import_batches)

@@ -24,7 +24,7 @@ from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
     StaleDynamicSnapshot,
 )
-from planning.infrastructure.adapters.geocoder_nominatim import NominatimGeocoder
+from planning.infrastructure.adapters.geocoder_factory import create_geocoder
 from planning.infrastructure.adapters.planning_batch_repository_sqla import (
     SqlaPlanningBatchRepository,
 )
@@ -431,7 +431,11 @@ class InProcessPlanningBatchExecutor:
         context["event_deadline_monotonic"] = event_started + event_limit
         event_id_by_job: dict[int, int] = {}
         for event in events:
-            if event.get("event_type") not in {"JOB_CREATED", "IMPORT", "JOBS_IMPORTED"}:
+            if event.get("event_type") not in {
+                "JOB_CREATED",
+                "IMPORT",
+                "JOBS_IMPORTED",
+            }:
                 continue
             for job_id in event.get("job_ids") or []:
                 event_id_by_job[int(job_id)] = int(event["id"])
@@ -442,7 +446,7 @@ class InProcessPlanningBatchExecutor:
             if job_id in jobs_by_id
             and date.fromisoformat(jobs_by_id[job_id]["sla_date"]) <= planning_date
         }
-        geocoder = NominatimGeocoder(session, self._config)
+        geocoder = create_geocoder(session, self._config)
         matrix_factory = TravelMatrixProviderFactory(
             StaticTravelMatrixProvider(),
             ValhallaTravelMatrixProvider(session, self._config),
@@ -686,7 +690,7 @@ class InProcessPlanningBatchExecutor:
                 return
             async with self._sessionmaker() as session:
                 repository = SqlaPlanningBatchRepository(session)
-                geocoder = NominatimGeocoder(session, self._config)
+                geocoder = create_geocoder(session, self._config)
                 matrix_factory = TravelMatrixProviderFactory(
                     StaticTravelMatrixProvider(),
                     ValhallaTravelMatrixProvider(session, self._config),

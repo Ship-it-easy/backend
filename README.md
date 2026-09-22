@@ -199,6 +199,13 @@ Read model связывает каждую дату опубликованной
 значение `STATIC_TEST`. Для дорожных матриц OpenStreetMap используется
 `VALHALLA_LOCAL`.
 
+По умолчанию адреса по-прежнему геокодируются через Nominatim. Чтобы целиком
+переключить геокодирование планов, адресные подсказки и CSV-импорт на Yandex,
+укажите `USE_YANDEX_GEOCODER=true` и заполните `YANDEX_GEOCODER_API_KEY`.
+Необязательный `YANDEX_GEOCODER_BBOX` задаётся в формате
+`долгота,широта~долгота,широта`; если он пуст, границы автоматически
+преобразуются из `NOMINATIM_VIEWBOX`.
+
 ## Полезные материалы
 1. Web sessions - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
 2. OAuth2 - https://auth0.com/docs и https://oauth.net/
