@@ -92,11 +92,6 @@ class UpdateProjectJobInteractor(_ProjectJobsInteractor):
 
     async def __call__(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]:
         _, project_id = await self._access.dispatcher()
-        if "priority_type" in values:
-            raise ConflictError(
-                "Job priority type is immutable",
-                code="PRIORITY_TYPE_IMMUTABLE",
-            )
         current = await self._repository.load_job_for_update(project_id, job_id)
         if current.status != "NEW":
             raise InvalidJobStatusError("Only NEW jobs may be edited")

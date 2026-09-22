@@ -25,6 +25,11 @@ from planning.domain.entities.planning import (
     PlanningResult,
 )
 from planning.domain.enums import ReasonCode
+from planning.domain.priority import (
+    work_priority,
+    work_priority_bonus,
+    work_priority_rank,
+)
 
 
 class MultiDayPlanningService:
@@ -333,8 +338,8 @@ class MultiDayPlanningService:
                     "future_opportunity_bonus": opportunity.bonus,
                     "daily_drop_penalty": daily_penalty,
                     "cascade_drop_penalty": daily_penalty + opportunity.bonus,
-                    "emergency_bonus": (
-                        1_000_000 if item.get("priority_type") == "EMERGENCY" else 0
+                    "priority_bonus": work_priority_bonus(
+                        item.get("priority", "LOW")
                     ),
                 }
             penalized = []
@@ -592,7 +597,7 @@ def _order_for_daily_limit(
         jobs,
         key=lambda item: (
             _group_order(decisions[item.id]["priority_group"]),
-            item.priority_type != "EMERGENCY",
+            work_priority_rank(item.priority),
             decisions[item.id].get("future_opportunity_count", 0),
             -item.drop_penalty,
             item.sla_date,
@@ -607,12 +612,12 @@ def _enforce_sla_hierarchy(
     decisions: dict[int, dict[str, Any]],
     _data: PlanningInput,
 ) -> list:
-    """Encode SLA, then emergency/normal, then count and secondary priority.
+    """Encode SLA, then work priority, then count and secondary priority.
 
     Mandatory nodes cannot be dropped and must not inflate optional penalties.
     Within a category, subtracting a common minimum preserves all comparisons
     at equal cardinality. Dividing differences by their GCD is also exact.
-    This removes large constant SLA/emergency bonuses without losing priority.
+    This removes large constant SLA/priority bonuses without losing priority.
     """
     optional = [item for item in jobs if not item.mandatory]
     lower_priority_total = 0
@@ -621,17 +626,23 @@ def _enforce_sla_hierarchy(
     }
     groups = sorted(
         {
-            (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            (
+                decisions[item.id]["priority_group"],
+                work_priority(item.priority).value,
+            )
             for item in optional
         },
-        key=lambda value: (_group_order(value[0]), value[1]),
+        key=lambda value: (_group_order(value[0]), work_priority_rank(value[1])),
         reverse=True,
     )
     for group in groups:
         group_jobs = [
             item
             for item in optional
-            if (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            if (
+                decisions[item.id]["priority_group"],
+                work_priority(item.priority).value,
+            )
             == group
         ]
         minimum = min(item.drop_penalty for item in group_jobs)
@@ -667,21 +678,24 @@ def _prepare_sla_hierarchy(
     optional = [item for item in jobs if not item.mandatory]
     groups = sorted(
         {
-            (decisions[item.id]["priority_group"], item.priority_type != "EMERGENCY")
+            (
+                decisions[item.id]["priority_group"],
+                work_priority(item.priority).value,
+            )
             for item in optional
         },
-        key=lambda value: (_group_order(value[0]), value[1]),
+        key=lambda value: (_group_order(value[0]), work_priority_rank(value[1])),
     )
     stages: list[dict[str, Any]] = []
-    for priority_group_name, is_normal in groups:
+    for priority_group_name, priority in groups:
         group_jobs = [
             item
             for item in optional
             if (
                 decisions[item.id]["priority_group"],
-                item.priority_type != "EMERGENCY",
+                work_priority(item.priority).value,
             )
-            == (priority_group_name, is_normal)
+            == (priority_group_name, priority)
         ]
         minimum = min(item.drop_penalty for item in group_jobs)
         differences = [item.drop_penalty - minimum for item in group_jobs]
@@ -697,11 +711,9 @@ def _prepare_sla_hierarchy(
             raise RuntimeError("OBJECTIVE_RANGE_OVERFLOW")
         stages.append(
             {
-                "name": (
-                    f"{priority_group_name}:{'NORMAL' if is_normal else 'EMERGENCY'}"
-                ),
+                "name": f"{priority_group_name}:{priority}",
                 "priority_group": priority_group_name,
-                "priority_type": "NORMAL" if is_normal else "EMERGENCY",
+                "priority": priority,
                 "job_costs": costs,
                 "count_weight": count_weight,
                 "secondary_divisor": divisor,

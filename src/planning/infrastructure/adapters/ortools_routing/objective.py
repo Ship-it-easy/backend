@@ -5,6 +5,7 @@ import math
 from planning.application.services.planning_input_normalizer import is_base_compatible
 from planning.domain.entities.planning import PlanningInput
 from planning.domain.enums import TransportType
+from planning.domain.priority import work_priority, work_priority_rank
 
 
 def calculate_objective_ranges(
@@ -223,11 +224,11 @@ def _validate_drop_priority_stages(
     try:
         for stage in stages:
             group = str(stage["priority_group"])
-            priority_type = str(stage["priority_type"])
+            priority = str(stage["priority"])
             name = str(stage["name"])
-            if priority_type not in {"EMERGENCY", "NORMAL"}:
+            if priority not in {"CRITICAL", "HIGH", "MEDIUM", "LOW"}:
                 raise ValueError
-            if name != f"{group}:{priority_type}":
+            if name != f"{group}:{priority}":
                 raise ValueError
             costs = {
                 int(job_id): int(cost)
@@ -245,15 +246,12 @@ def _validate_drop_priority_stages(
                 job = optional_jobs.get(job_id)
                 if job is None:
                     raise ValueError
-                actual_type = (
-                    "EMERGENCY" if str(job.priority_type) == "EMERGENCY" else "NORMAL"
-                )
-                if actual_type != priority_type:
+                if work_priority(job.priority).value != priority:
                     raise ValueError
             described_ids.extend(costs)
             names.append(name)
             order_keys.append(
-                (group_order[group], 0 if priority_type == "EMERGENCY" else 1)
+                (group_order[group], work_priority_rank(priority))
             )
     except (KeyError, TypeError, ValueError):
         raise RuntimeError("OBJECTIVE_RANGE_OVERFLOW") from None
@@ -282,7 +280,7 @@ def penalty_metrics(data: PlanningInput) -> dict[str, int]:
         "original_daily_penalty_sum": sum(
             int(value.get("daily_drop_penalty_v2", 0)) for value in components.values()
         ),
-        "emergency_bonus_sum": sum(
-            int(value.get("emergency_bonus", 0)) for value in components.values()
+        "priority_bonus_sum": sum(
+            int(value.get("priority_bonus", 0)) for value in components.values()
         ),
     }

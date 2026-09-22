@@ -1116,7 +1116,6 @@ class JobImportService:
                     external_id=None,
                     internal_code=f"JOB-{uuid.uuid4().hex[:12].upper()}",
                     status="NEW",
-                    priority_type="NORMAL",
                     address=row["normalized_address"],
                     address_hash=hashlib.sha256(
                         row["canonical_address_key"].encode("utf-8")

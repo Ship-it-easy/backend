@@ -426,9 +426,9 @@ async def test_planning_board_reads_one_outcome_per_day_input(
             )
         )
         job_ids = []
-        for suffix, address, priority in (
-            ("A", "Ленина, 1", "NORMAL"),
-            ("B", "Ленина, 2", "EMERGENCY"),
+        for suffix, address in (
+            ("A", "Ленина, 1"),
+            ("B", "Ленина, 2"),
         ):
             job_ids.append(
                 int(
@@ -438,7 +438,6 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                             project_id=project_id,
                             internal_code=f"BOARD-{suffix}",
                             status="NEW",
-                            priority_type=priority,
                             address=address,
                             latitude=58.010000 + len(job_ids) / 1000,
                             longitude=56.230000 + len(job_ids) / 1000,
@@ -460,7 +459,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                 "work_type_id": int(work_type_id),
                 "work_type_name": "Диагностика линии",
                 "service_duration_min": 45,
-                "priority_type": "NORMAL" if index == 1 else "EMERGENCY",
+                "priority": "LOW",
             }
             for index, job_id in enumerate(job_ids, start=1)
         ]
@@ -515,7 +514,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                         {
                             "id": job_id,
                             "sla_date": planning_date.isoformat(),
-                            "priority_type": "NORMAL",
+                            "priority": "LOW",
                             "required_qualifications": [],
                         }
                         for job_id in job_ids
@@ -644,7 +643,6 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                 project_id=project_id,
                 internal_code="BOARD-CANCELLED",
                 status="CANCELLED",
-                priority_type="NORMAL",
                 address="Старый адрес отменённой заявки",
                 sla_date=planning_date,
                 work_type_id=work_type_id,
@@ -670,7 +668,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                     "work_type_name": "Диагностика линии",
                     "service_duration_min": 30,
                     "sla_date": planning_date.isoformat(),
-                    "priority_type": "NORMAL",
+                    "priority": "LOW",
                     "status": "CANCELLED",
                 },
             )
@@ -681,7 +679,6 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                 project_id=project_id,
                 internal_code="BOARD-STALE-CANCELLED",
                 status="CANCELLED",
-                priority_type="NORMAL",
                 address="Отмена из прошлой версии",
                 sla_date=planning_date,
                 work_type_id=work_type_id,
@@ -705,7 +702,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
                     "work_type_name": "Диагностика линии",
                     "service_duration_min": 30,
                     "sla_date": planning_date.isoformat(),
-                    "priority_type": "NORMAL",
+                    "priority": "LOW",
                     "status": "CANCELLED",
                 },
             )

@@ -106,7 +106,6 @@ def run(manifest_path: Path, output: Path, full: bool = True):
                 "time_window_start": "08:00:00",
                 "time_window_end": "15:00:00",
                 "work_type_id": manifest["work_type_ids"][1],
-                "priority_type": "EMERGENCY",
             },
         )
         event = wait_event(c, job)
@@ -118,7 +117,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             for x in current["assignments"]
         ), (job, current)
         record(
-            "urgent_insertion",
+            "due_today_insertion",
             event_id=event["id"],
             job_id=job_id,
             candidate_count=event.get("candidate_total"),

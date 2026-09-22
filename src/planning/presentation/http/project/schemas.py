@@ -25,6 +25,7 @@ class EquipmentPatch(NamedPatch):
 
 
 class WorkTypeCreate(NamedCreate):
+    priority: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"] = "LOW"
     default_service_duration_min: int = Field(gt=0)
     required_transport: Literal["CAR"] | None = None
     qualification_ids: list[int] = Field(default_factory=list)
@@ -32,6 +33,7 @@ class WorkTypeCreate(NamedCreate):
 
 
 class WorkTypePatch(NamedPatch):
+    priority: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"] | None = None
     default_service_duration_min: int | None = Field(default=None, gt=0)
     required_transport: Literal["CAR"] | None = None
     qualification_ids: list[int] | None = None
@@ -105,7 +107,6 @@ class JobCreate(BaseModel):
     time_window_start: time | None = None
     time_window_end: time | None = None
     work_type_id: int
-    priority_type: Literal["NORMAL", "EMERGENCY"] = "NORMAL"
 
     @model_validator(mode="after")
     def validate_values(self) -> "JobCreate":
@@ -129,7 +130,6 @@ class JobPatch(BaseModel):
     time_window_start: time | None = None
     time_window_end: time | None = None
     work_type_id: int | None = None
-    priority_type: Literal["NORMAL", "EMERGENCY"] | None = None
 
 
 class JobStatusChange(BaseModel):

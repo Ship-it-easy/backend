@@ -15,7 +15,6 @@ class CreateJobRequest(BaseModel):
     service_duration_min: int | None = Field(default=None, gt=0)
     time_window_start: time | None = None
     time_window_end: time | None = None
-    priority_type: str = Field(default="NORMAL", pattern="^(NORMAL|EMERGENCY)$")
 
     @model_validator(mode="after")
     def validate_time_window(self) -> "CreateJobRequest":
@@ -34,7 +33,7 @@ class JobResponse(BaseModel):
     project_id: int
     external_id: str | None
     status: str
-    priority_type: str
+    priority: str
     address: str
     latitude: float | None
     longitude: float | None

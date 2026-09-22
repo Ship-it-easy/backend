@@ -440,7 +440,7 @@ class InProcessPlanningBatchExecutor:
             for job_id in event.get("job_ids") or []:
                 event_id_by_job[int(job_id)] = int(event["id"])
         jobs_by_id = {int(item["id"]): item for item in context["source"]["jobs"]}
-        urgent = {
+        due_today = {
             job_id: event_id
             for job_id, event_id in event_id_by_job.items()
             if job_id in jobs_by_id
@@ -518,8 +518,8 @@ class InProcessPlanningBatchExecutor:
                 planning_date=planning_date,
                 context=context,
                 # New jobs from coalesced create/import events must enter today only
-                # through the urgent-candidate branch below. Otherwise a full
-                # manual/nightly solve can assign the same urgent job before the
+                # through the due-today candidate branch below. Otherwise a full
+                # manual/nightly solve can assign the same job before the
                 # per-engineer comparison and create a duplicate assignment.
                 excluded_job_ids=set(event_id_by_job),
                 cancelled_job_ids=cancelled_job_ids,
@@ -535,10 +535,10 @@ class InProcessPlanningBatchExecutor:
             context = {**context, "today_assignments": today_assignments}
         else:
             today_assignments = context["today_assignments"]
-        if urgent:
-            today_assignments, _ = await today_service.insert_urgent_jobs(
+        if due_today:
+            today_assignments, _ = await today_service.insert_due_jobs(
                 project_id=project_id,
-                event_id_by_job=urgent,
+                event_id_by_job=due_today,
                 planning_date=planning_date,
                 context=context,
             )

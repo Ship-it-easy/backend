@@ -147,7 +147,6 @@ async def test_csv_validation_and_atomic_apply(monkeypatch):
             assert job["work_type_id"] == work_type_id
             assert job["service_duration_min"] == 45
             assert job["status"] == "NEW"
-            assert job["priority_type"] == "NORMAL"
             assert job["external_id"] is None
             assert (
                 await session.scalar(

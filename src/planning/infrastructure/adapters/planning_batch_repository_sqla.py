@@ -494,7 +494,7 @@ class SqlaPlanningBatchRepository:
                     future_opportunity_bonus=bindparam("future_opportunity_bonus"),
                     daily_drop_penalty=bindparam("daily_drop_penalty"),
                     cascade_drop_penalty=bindparam("cascade_drop_penalty"),
-                    emergency_bonus=bindparam("emergency_bonus"),
+                    priority_bonus=bindparam("priority_bonus"),
                     solver_drop_cost=bindparam("solver_drop_cost", required=False),
                 ),
                 [
@@ -1483,7 +1483,7 @@ class SqlaPlanningBatchRepository:
                         jobs.c.service_duration_min,
                         jobs.c.created_at,
                         jobs.c.updated_at,
-                        jobs.c.priority_type,
+                        work_types.c.priority.label("priority"),
                         work_types.c.name.label("work_type_name"),
                         work_types.c.default_service_duration_min,
                         work_types.c.required_transport,

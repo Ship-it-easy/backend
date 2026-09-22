@@ -102,6 +102,7 @@ async def prepare(day: date, suffix: str = "") -> dict:
                 project_id=project_id,
                 code="INSTALL",
                 name="Подключение интернета",
+                priority="LOW",
                 default_service_duration_min=90,
                 required_transport="CAR",
             )
@@ -110,6 +111,7 @@ async def prepare(day: date, suffix: str = "") -> dict:
                 project_id=project_id,
                 code="REPAIR",
                 name="Диагностика линии",
+                priority="CRITICAL",
                 default_service_duration_min=60,
             )
             for work_id in (install_id, repair_id):
@@ -172,7 +174,6 @@ async def prepare(day: date, suffix: str = "") -> dict:
                         internal_code=f"DEMO-JOB-{stamp}-{i}",
                         external_id=f"ДЕМО-{i + 1:02}",
                         status="NEW",
-                        priority_type="EMERGENCY" if i in (0, 6) else "NORMAL",
                         address=address,
                         latitude=lat,
                         longitude=lon,

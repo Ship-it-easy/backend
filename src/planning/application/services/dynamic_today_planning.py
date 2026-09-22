@@ -26,6 +26,7 @@ from planning.application.services.today_route_protection import (
     TodayRouteProtectionService,
 )
 from planning.application.validators.planning_result import PlanningValidator
+from planning.domain.priority import WORK_PRIORITY_ORDER, work_priority_rank
 
 
 class CandidateComparisonTimeout(RuntimeError):
@@ -50,7 +51,7 @@ class DynamicTodayPlanningService:
         self._repository = repository
         self._protection = TodayRouteProtectionService()
 
-    async def insert_urgent_jobs(
+    async def insert_due_jobs(
         self,
         *,
         project_id: int,
@@ -60,7 +61,7 @@ class DynamicTodayPlanningService:
     ) -> tuple[list[dict[str, Any]], set[int]]:
         assignments = [_typed_assignment(item) for item in context["today_assignments"]]
         jobs_by_id = {int(item["id"]): item for item in context["source"]["jobs"]}
-        urgent_ids = sorted(
+        due_job_ids = sorted(
             event_id_by_job,
             key=lambda job_id: (
                 _group_order(
@@ -70,14 +71,14 @@ class DynamicTodayPlanningService:
                         planning_date + timedelta(days=6),
                     )
                 ),
-                jobs_by_id[job_id].get("priority_type", "NORMAL") != "EMERGENCY",
+                work_priority_rank(jobs_by_id[job_id].get("priority", "LOW")),
                 _date(jobs_by_id[job_id]["sla_date"]),
                 _datetime(jobs_by_id[job_id]["created_at"]),
                 job_id,
             ),
         )
-        assigned_urgent: set[int] = set()
-        for job_id in urgent_ids:
+        assigned_due_jobs: set[int] = set()
+        for job_id in due_job_ids:
             if job_id not in jobs_by_id:
                 continue
             assignments, inserted = await self._insert_one(
@@ -90,8 +91,8 @@ class DynamicTodayPlanningService:
                 jobs_by_id=jobs_by_id,
             )
             if inserted:
-                assigned_urgent.add(job_id)
-        return assignments, assigned_urgent
+                assigned_due_jobs.add(job_id)
+        return assignments, assigned_due_jobs
 
     async def replan_full_today(
         self,
@@ -391,7 +392,7 @@ class DynamicTodayPlanningService:
                         "longitude": job["longitude"],
                         "sla_date": _date(job["sla_date"]),
                         "work_type_id": int(job["work_type_id"]),
-                        "priority_type": job.get("priority_type", "NORMAL"),
+                        "priority": job.get("priority", "LOW"),
                     }
                 )
         return sorted(
@@ -450,8 +451,8 @@ class DynamicTodayPlanningService:
         context["event_deadline_monotonic"] = event_deadline
         for item in assignments:
             item.setdefault(
-                "priority_type",
-                jobs_by_id.get(int(item["job_id"]), {}).get("priority_type", "NORMAL"),
+                "priority",
+                jobs_by_id.get(int(item["job_id"]), {}).get("priority", "LOW"),
             )
         candidate_engineer_ids = sorted(schedule_by_engineer)
         await self._repository.set_candidate_progress(
@@ -700,7 +701,7 @@ def _replace_route(
                 "longitude": job["longitude"],
                 "sla_date": _date(job["sla_date"]),
                 "work_type_id": int(job["work_type_id"]),
-                "priority_type": job.get("priority_type", "NORMAL"),
+                "priority": job.get("priority", "LOW"),
             }
         )
     return sorted(
@@ -786,7 +787,7 @@ def _with_sla_hierarchy(
             "drop_priority_stages": drop_priority_stages,
             "penalty_encoding": penalty_encoding,
             "penalty_components": penalty_components,
-            "sla_hierarchy_version": "sla-emergency-count-v1",
+            "sla_hierarchy_version": "sla-work-priority-count-v2",
             "jobs": [
                 {**item, "drop_penalty": adjusted_by_id[item["id"]].drop_penalty}
                 if item["id"] in adjusted_by_id
@@ -818,12 +819,11 @@ def _candidate_score(
             if _sla_group(_date(before_by_id[job_id]["sla_date"]), planning_date)
             == group
         }
-        for emergency in (True, False):
+        for priority in WORK_PRIORITY_ORDER:
             category_ids = {
                 job_id
                 for job_id in group_ids
-                if (before_by_id[job_id].get("priority_type", "NORMAL") == "EMERGENCY")
-                == emergency
+                if before_by_id[job_id].get("priority", "LOW") == priority.value
             }
             vector.extend(
                 (

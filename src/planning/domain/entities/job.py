@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Any
 
 from planning.domain.entities.coordinate import Coordinate
-from planning.domain.enums import JobPriorityType, ReasonCode, TransportType
+from planning.domain.enums import ReasonCode, TransportType, WorkPriority
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class Job:
     drop_penalty: int = 0
     allowed_engineer_ids: frozenset[int] | None = None
     mandatory: bool = False
-    priority_type: JobPriorityType = JobPriorityType.NORMAL
+    priority: WorkPriority = WorkPriority.LOW
 
 
 @dataclass

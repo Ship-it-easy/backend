@@ -11,9 +11,12 @@ from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job, UnassignedJob
 from planning.domain.entities.planning import PlanningConfig, PlanningInput
-from planning.domain.enums import JobPriorityType, ReasonCode, TransportType
-
-EMERGENCY_BONUS = 1_000_000
+from planning.domain.enums import ReasonCode, TransportType
+from planning.domain.priority import (
+    work_priority,
+    work_priority_bonus,
+    work_priority_rank,
+)
 
 
 class PlanningInputNormalizer:
@@ -153,7 +156,7 @@ class PlanningInputNormalizer:
             key=lambda job: (
                 not job.mandatory,
                 _sla_group_rank(job.sla_date, planning_date),
-                job.priority_type != JobPriorityType.EMERGENCY,
+                work_priority_rank(job.priority),
                 -job.drop_penalty,
                 job.sla_date,
                 job.created_at,
@@ -321,9 +324,7 @@ class PlanningInputNormalizer:
                         else None
                     ),
                     mandatory=bool(row.get("mandatory", False)),
-                    priority_type=JobPriorityType(
-                        row.get("priority_type", JobPriorityType.NORMAL)
-                    ),
+                    priority=work_priority(row.get("priority", "LOW")),
                 )
             )
         return jobs, invalid
@@ -394,9 +395,7 @@ def calculate_drop_penalty_components(
         else _sla_penalty(job.sla_date, planning_date, config)
     )
     overdue_bonus = config.sla_overdue_per_day * -days if days < 0 else 0
-    emergency_bonus = (
-        EMERGENCY_BONUS if job.priority_type == JobPriorityType.EMERGENCY else 0
-    )
+    priority_bonus = work_priority_bonus(job.priority)
     skill_scarcity_bonus = 0
     if compatible_count == 1:
         skill_scarcity_bonus = config.skill_one_engineer
@@ -424,7 +423,7 @@ def calculate_drop_penalty_components(
             skill_scarcity_bonus,
             equipment_inventory_bonus,
             window_tightness_bonus,
-            emergency_bonus,
+            priority_bonus,
         )
     )
     return {
@@ -433,7 +432,7 @@ def calculate_drop_penalty_components(
         "skill_scarcity_bonus": skill_scarcity_bonus,
         "equipment_inventory_bonus": equipment_inventory_bonus,
         "window_tightness_bonus": window_tightness_bonus,
-        "emergency_bonus": emergency_bonus,
+        "priority_bonus": priority_bonus,
         "daily_drop_penalty_v2": daily_drop_penalty,
     }
 

@@ -4,9 +4,12 @@ import logging
 from datetime import date
 from typing import Any
 
+from planning.domain.enums import WorkPriority
+from planning.domain.priority import work_priority, work_priority_rank
+
 REASON_TEXTS: dict[str, str] = {
     "OPTIMIZER_SELECTED": "Выбрано оптимизатором среди допустимых вариантов",
-    "EMERGENCY_PRIORITY": "Аварийная заявка с высоким приоритетом",
+    "WORK_TYPE_PRIORITY": "Приоритет типа работ учтён при выборе заявки",
     "OVERDUE_PRIORITY": "Просроченная заявка получила повышенный приоритет",
     "SLA_DUE_TODAY": "Крайний срок сегодня",
     "HARD_CONSTRAINTS_MATCHED": ("Заявка соответствует смене и требованиям инженера"),
@@ -68,10 +71,14 @@ def reason(code: str, parameters: dict[str, Any] | None = None) -> dict[str, Any
 def assigned_primary_reason(
     job: dict[str, Any], planning_date: date, eligible_engineers_count: int
 ) -> dict[str, Any]:
-    if str(job.get("priority_type") or "NORMAL") == "EMERGENCY":
+    priority = work_priority(job.get("priority", "LOW"))
+    if priority != WorkPriority.LOW:
         return reason(
-            "EMERGENCY_PRIORITY",
-            {"emergency_bonus": job.get("emergency_bonus")},
+            "WORK_TYPE_PRIORITY",
+            {
+                "priority": priority.value,
+                "priority_bonus": job.get("priority_bonus"),
+            },
         )
     sla_date = _date(job.get("sla_date"))
     if sla_date is not None and sla_date < planning_date:
@@ -112,7 +119,7 @@ def unassigned_sort_key(item: dict[str, Any], planning_date: date) -> tuple[Any,
     created = str(item.get("created_at") or "")
     return (
         0 if sla < planning_date else 1,
-        0 if item.get("priority_type") == "EMERGENCY" else 1,
+        work_priority_rank(item.get("priority", "LOW")),
         sla,
         created,
         int(item.get("job_id") or 0),

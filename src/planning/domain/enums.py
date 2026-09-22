@@ -8,9 +8,11 @@ class JobStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
-class JobPriorityType(StrEnum):
-    NORMAL = "NORMAL"
-    EMERGENCY = "EMERGENCY"
+class WorkPriority(StrEnum):
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
 
 
 class JobPlanningState(StrEnum):

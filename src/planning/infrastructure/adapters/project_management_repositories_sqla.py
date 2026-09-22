@@ -1024,7 +1024,11 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
     async def list_jobs(
         self, project_id: int, filters: dict[str, Any]
     ) -> dict[str, Any]:
-        query = select(jobs).where(jobs.c.project_id == project_id)
+        query = (
+            select(jobs, work_types.c.priority.label("priority"))
+            .join(work_types, work_types.c.id == jobs.c.work_type_id)
+            .where(jobs.c.project_id == project_id)
+        )
         if filters.get("search"):
             query = query.where(jobs.c.address.ilike(f"%{filters['search']}%"))
         if filters.get("status"):
@@ -1158,7 +1162,6 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                     "external_id": values.get("external_id") or None,
                     "internal_code": _code("JOB"),
                     "status": "NEW",
-                    "priority_type": values.get("priority_type", "NORMAL"),
                     "address": values["address"],
                     "latitude": values.get("latitude"),
                     "longitude": values.get("longitude"),
@@ -1466,6 +1469,13 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
         return row
 
     async def _result(self, row: Any) -> dict[str, Any]:
+        priority = row.get("priority") if hasattr(row, "get") else None
+        if priority is None:
+            priority = await self._session.scalar(
+                select(work_types.c.priority).where(
+                    work_types.c.id == row.work_type_id
+                )
+            )
         history = (
             (
                 await self._session.execute(
@@ -1508,6 +1518,7 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                 row,
                 hidden=("internal_code", "external_id", "address_hash", "geocoded_at"),
             ),
+            "priority": priority or "LOW",
             "assignment": dict(assignment) if assignment else None,
             "status_history": [_dict(item, hidden=()) for item in history],
         }

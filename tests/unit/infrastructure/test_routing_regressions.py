@@ -103,10 +103,10 @@ async def solve(d, minutes=None, distances=None):
     return r
 
 
-async def test_emergency_outweighs_two_normal_jobs_in_same_sla_group():
+async def test_critical_outweighs_two_low_jobs_in_same_sla_group():
     d = data(
         [
-            job(1, priority_type="EMERGENCY", duration_min=100, drop_penalty=1009000),
+            job(1, priority="CRITICAL", duration_min=100, drop_penalty=3_009_000),
             job(2, duration_min=50),
             job(3, duration_min=50),
         ],
@@ -117,11 +117,11 @@ async def test_emergency_outweighs_two_normal_jobs_in_same_sla_group():
     assert [j.job_id for route in r.routes for j in route.jobs] == [1]
 
 
-async def test_earlier_sla_group_outweighs_later_emergency():
+async def test_earlier_sla_group_outweighs_later_critical_priority():
     d = data(
         [
             job(1, sla_date=DAY - timedelta(days=1), duration_min=60),
-            job(2, priority_type="EMERGENCY", duration_min=60, drop_penalty=1009000),
+            job(2, priority="CRITICAL", duration_min=60, drop_penalty=3_009_000),
         ],
         [engineer(shift_end_min=541)],
     )
@@ -370,12 +370,12 @@ async def test_infeasible_first_candidate_does_not_abort_second_engineer():
     assert context["today_solver_runs"][0][0].snapshot["snapshot_time"] == NOW
 
 
-def test_candidate_ranking_preserves_emergency_before_normal_count():
+def test_candidate_ranking_preserves_critical_before_low_count():
     def assignment(i, priority):
         return dict(
             job_id=i,
             sla_date=DAY,
-            priority_type=priority,
+            priority=priority,
             engineer_id=1,
             sequence=i,
             status="NEW",
@@ -383,18 +383,18 @@ def test_candidate_ranking_preserves_emergency_before_normal_count():
         )
 
     before = [
-        assignment(1, "EMERGENCY"),
-        assignment(2, "NORMAL"),
-        assignment(3, "NORMAL"),
+        assignment(1, "CRITICAL"),
+        assignment(2, "LOW"),
+        assignment(3, "LOW"),
     ]
-    new = assignment(4, "EMERGENCY")
-    common = ({1, 2, 3}, 4, NOW, DAY, {1: 1009000, 2: 9000, 3: 9000})
-    keep_emergency = _candidate_score(before, [before[0], new], *common)
-    keep_two_normals = _candidate_score(before, [before[1], before[2], new], *common)
-    assert keep_emergency < keep_two_normals
+    new = assignment(4, "CRITICAL")
+    common = ({1, 2, 3}, 4, NOW, DAY, {1: 3_009_000, 2: 9000, 3: 9000})
+    keep_critical = _candidate_score(before, [before[0], new], *common)
+    keep_two_low = _candidate_score(before, [before[1], before[2], new], *common)
+    assert keep_critical < keep_two_low
 
 
-async def test_urgent_insert_preserves_executing_job_and_next_stop():
+async def test_due_job_insert_preserves_executing_job_and_next_stop():
     snapshot_time = NOW + timedelta(hours=1, minutes=10)
     raws = [
         dict(
@@ -503,12 +503,12 @@ async def test_urgent_insert_preserves_executing_job_and_next_stop():
     assert candidate_result.objective_metrics["max_engineer_distance_meters"] == 400
 
 
-async def test_dataset_limit_cannot_displace_overdue_jobs_with_later_emergency():
+async def test_dataset_limit_cannot_displace_overdue_jobs_with_later_critical():
     rows = [
         dict(
             id=i,
             sla_date=(DAY - timedelta(days=1) if i < 3 else DAY).isoformat(),
-            priority_type="EMERGENCY" if i == 3 else "NORMAL",
+            priority="CRITICAL" if i == 3 else "LOW",
             work_type_id=1,
             service_duration_min=30,
             default_service_duration_min=30,

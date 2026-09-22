@@ -95,7 +95,7 @@ Timezone должен совпадать с timezone проекта. Все аб
 
 - заявка со сроком позже текущего дня запускает каскад с завтра и не меняет
   сегодняшний план;
-- срочная заявка обязательно проверяется отдельной моделью для каждого
+- новая заявка со сроком сегодня обязательно проверяется отдельной моделью для каждого
   подходящего инженера, кандидаты сравниваются сохранённым лексикографическим
   вектором;
 - `COMPLETED`, `IN_PROGRESS`, следующая остановка и первая остановка после начала
@@ -134,7 +134,7 @@ Read model связывает каждую дату опубликованной
 допускается показать только изменившийся операционный статус и признак
 `current_data_changed`.
 
-Публичные reason codes: `OPTIMIZER_SELECTED`, `EMERGENCY_PRIORITY`,
+Публичные reason codes: `OPTIMIZER_SELECTED`, `WORK_TYPE_PRIORITY`,
 `OVERDUE_PRIORITY`, `SLA_DUE_TODAY`, `HARD_CONSTRAINTS_MATCHED`,
 `NO_ELIGIBLE_ENGINEER`, `NO_QUALIFICATION`, `NO_EQUIPMENT`, `NO_SHIFT`,
 `NO_TRANSPORT`, `TIME_WINDOW_CONFLICT`, `SHIFT_CAPACITY_EXCEEDED`,

@@ -32,6 +32,7 @@ class SqlaJobsRepository:
                 select(
                     work_types.c.id,
                     work_types.c.default_service_duration_min,
+                    work_types.c.priority,
                 ).where(
                     work_types.c.id == values["work_type_id"],
                     work_types.c.project_id == project_id,
@@ -80,7 +81,11 @@ class SqlaJobsRepository:
             raise InvalidPlanningRequest(
                 "external_id already exists in project"
             ) from error
-        return {**dict(row), "planning_event_id": int(event_id)}
+        return {
+            **dict(row),
+            "priority": work_type.priority,
+            "planning_event_id": int(event_id),
+        }
 
     async def list_jobs(
         self, project_id: int, import_batch_id: int | None = None
@@ -90,7 +95,11 @@ class SqlaJobsRepository:
         )
         if exists is None:
             raise ProjectNotFound("Project not found")
-        query = select(jobs).where(jobs.c.project_id == project_id)
+        query = (
+            select(jobs, work_types.c.priority.label("priority"))
+            .join(work_types, work_types.c.id == jobs.c.work_type_id)
+            .where(jobs.c.project_id == project_id)
+        )
         if import_batch_id is not None:
             query = query.where(jobs.c.import_batch_id == import_batch_id)
         rows = (

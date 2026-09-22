@@ -9,24 +9,24 @@ from planning.application.services.planning_board import (
 )
 
 
-def test_assigned_reason_priority_is_emergency_then_overdue_then_due_today() -> None:
+def test_assigned_reason_is_work_priority_then_overdue_then_due_today() -> None:
     planning_date = date(2026, 9, 19)
 
     assert (
         assigned_primary_reason(
             {
-                "priority_type": "EMERGENCY",
+                "priority": "CRITICAL",
                 "sla_date": "2026-09-18",
-                "emergency_bonus": 1_000_000,
+                "priority_bonus": 3_000_000,
             },
             planning_date,
             2,
         )["code"]
-        == "EMERGENCY_PRIORITY"
+        == "WORK_TYPE_PRIORITY"
     )
     assert (
         assigned_primary_reason(
-            {"priority_type": "NORMAL", "sla_date": "2026-09-17"},
+            {"priority": "LOW", "sla_date": "2026-09-17"},
             planning_date,
             2,
         )["parameters"]["overdue_days"]
@@ -34,7 +34,7 @@ def test_assigned_reason_priority_is_emergency_then_overdue_then_due_today() -> 
     )
     assert (
         assigned_primary_reason(
-            {"priority_type": "NORMAL", "sla_date": "2026-09-19"},
+            {"priority": "LOW", "sla_date": "2026-09-19"},
             planning_date,
             2,
         )["code"]
@@ -95,25 +95,25 @@ def test_every_public_reason_code_has_human_readable_text() -> None:
         assert value["text"] != "Подробная причина недоступна"
 
 
-def test_unassigned_sort_is_overdue_then_emergency_then_sla_then_created() -> None:
+def test_unassigned_sort_is_overdue_then_priority_then_sla_then_created() -> None:
     planning_date = date(2026, 9, 19)
     jobs = [
         {
             "job_id": 1,
             "sla_date": "2026-09-20",
-            "priority_type": "EMERGENCY",
+            "priority": "CRITICAL",
             "created_at": "2026-09-01T10:00:00Z",
         },
         {
             "job_id": 2,
             "sla_date": "2026-09-18",
-            "priority_type": "NORMAL",
+            "priority": "LOW",
             "created_at": "2026-09-02T10:00:00Z",
         },
         {
             "job_id": 3,
             "sla_date": "2026-09-20",
-            "priority_type": "NORMAL",
+            "priority": "LOW",
             "created_at": "2026-09-01T10:00:00Z",
         },
     ]

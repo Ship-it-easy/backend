@@ -60,12 +60,17 @@ work_types = Table(
     Column("code", String(64), nullable=False),
     Column("name", String(255), nullable=False),
     Column("active", Boolean, nullable=False, server_default="true"),
+    Column("priority", String(16), nullable=False, server_default="LOW"),
     Column("default_service_duration_min", Integer),
     Column("required_transport", String(16)),
     UniqueConstraint("project_id", "code"),
     CheckConstraint(
         "default_service_duration_min IS NULL OR default_service_duration_min > 0",
         name="work_type_duration_positive",
+    ),
+    CheckConstraint(
+        "priority IN ('CRITICAL','HIGH','MEDIUM','LOW')",
+        name="work_type_priority_valid",
     ),
 )
 Index(
@@ -83,7 +88,6 @@ jobs = Table(
     Column("external_id", String(255)),
     Column("internal_code", String(64), nullable=False),
     Column("status", String(32), nullable=False),
-    Column("priority_type", String(16), nullable=False, server_default="NORMAL"),
     Column("cancelled_at", DateTime(timezone=True)),
     Column("cancelled_by_user_id", UUID(as_uuid=True), ForeignKey("users.id")),
     Column("previous_status", String(32)),
@@ -708,7 +712,7 @@ planning_batch_jobs = Table(
     Column("future_opportunity_bonus", Integer),
     Column("daily_drop_penalty", BigInteger),
     Column("cascade_drop_penalty", BigInteger),
-    Column("emergency_bonus", BigInteger, nullable=False, server_default="0"),
+    Column("priority_bonus", BigInteger, nullable=False, server_default="0"),
     Column("solver_drop_cost", BigInteger),
     Column("processing_status", String(40), nullable=False),
     Column("assigned_date", Date),

@@ -295,8 +295,8 @@ def test_stages_preserve_the_previous_business_order_exhaustively():
         job(index + 1, drop_penalty=value)
         for index, value in enumerate([1200, 1050, 950, 800, 700, 550, 400, 250])
     ]
-    jobs[0] = replace(jobs[0], priority_type="EMERGENCY")
-    jobs[2] = replace(jobs[2], priority_type="EMERGENCY")
+    jobs[0] = replace(jobs[0], priority="CRITICAL")
+    jobs[2] = replace(jobs[2], priority="HIGH")
     planning = data(jobs)
     decisions = {
         item.id: {"priority_group": group}

@@ -334,7 +334,7 @@ class SqlaDynamicPlanningRepository:
                         select(
                             project_plan_assignments,
                             jobs.c.status,
-                jobs.c.priority_type,
+                            work_types.c.priority.label("priority"),
                             jobs.c.address,
                             jobs.c.latitude,
                             jobs.c.longitude,
@@ -344,7 +344,6 @@ class SqlaDynamicPlanningRepository:
                             jobs.c.work_type_id,
                             jobs.c.service_duration_min,
                             jobs.c.created_at.label("job_created_at"),
-                            jobs.c.priority_type,
                             jobs.c.previous_status,
                             jobs.c.cancelled_at,
                             work_types.c.default_service_duration_min,
@@ -1684,7 +1683,7 @@ class SqlaDynamicPlanningRepository:
             "engineer_columns": [],
             "unassigned": {"moved": [], "horizon": []},
             "available_filters": {
-                "priorities": ["NORMAL", "EMERGENCY"],
+                "priorities": ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
                 "outcomes": ["ALL", "ASSIGNED", "UNASSIGNED_TODAY"],
                 "statuses": [],
             },
@@ -1729,11 +1728,10 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
-                jobs.c.priority_type,
+                        work_types.c.priority.label("priority"),
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.sla_date,
-                        jobs.c.priority_type,
                         jobs.c.service_duration_min,
                         jobs.c.time_window_start,
                         jobs.c.time_window_end,
@@ -1843,10 +1841,9 @@ class SqlaDynamicPlanningRepository:
                         select(
                             planning_unassigned_jobs,
                             jobs.c.status,
-                jobs.c.priority_type,
+                            work_types.c.priority.label("priority"),
                             jobs.c.address,
                             jobs.c.sla_date,
-                            jobs.c.priority_type,
                             jobs.c.service_duration_min,
                             jobs.c.time_window_start,
                             jobs.c.time_window_end,
@@ -2001,7 +1998,7 @@ class SqlaDynamicPlanningRepository:
             for field in (
                 "address",
                 "sla_date",
-                "priority_type",
+                "priority",
                 "service_duration_min",
                 "default_service_duration_min",
                 "work_type_name",
@@ -2163,7 +2160,7 @@ class SqlaDynamicPlanningRepository:
             penalty = source_input_snapshot.get("penalty_components", {}).get(
                 str(item.job_id), {}
             )
-            reason_job = {**job, "emergency_bonus": penalty.get("emergency_bonus")}
+            reason_job = {**job, "priority_bonus": penalty.get("priority_bonus")}
             primary = assigned_primary_reason(
                 reason_job, planning_date, eligible_count
             )
@@ -2174,7 +2171,7 @@ class SqlaDynamicPlanningRepository:
                 "planned_start": item.planned_start,
                 "planned_end": item.planned_finish,
                 "status": job.get("status", "NEW"),
-                "priority_type": job.get("priority_type", "NORMAL"),
+                "priority": job.get("priority", "LOW"),
                 "address": job.get("address"),
                 "work_type": job.get("work_type_name"),
                 "duration_min": job.get("duration_min"),
@@ -2202,7 +2199,7 @@ class SqlaDynamicPlanningRepository:
                     "planned_start": item.planned_start,
                     "planned_end": item.planned_finish,
                     "status": "CANCELLED",
-                    "priority_type": job.get("priority_type", "NORMAL"),
+                    "priority": job.get("priority", "LOW"),
                     "address": job.get("address"),
                     "work_type": job.get("work_type_name"),
                     "duration_min": job.get("duration_min"),
@@ -2333,7 +2330,7 @@ class SqlaDynamicPlanningRepository:
                 "job_id": job_id,
                 "outcome": "UNASSIGNED_TODAY",
                 "status": job.get("status", "NEW"),
-                "priority_type": job.get("priority_type", "NORMAL"),
+                "priority": job.get("priority", "LOW"),
                 "address": job.get("address"),
                 "work_type": job.get("work_type_name"),
                 "duration_min": job.get("duration_min"),
@@ -2378,7 +2375,7 @@ class SqlaDynamicPlanningRepository:
                         "job_id": job_id,
                         "outcome": "UNASSIGNED_TODAY",
                         "status": job.get("status", "NEW"),
-                        "priority_type": job.get("priority_type", "NORMAL"),
+                        "priority": job.get("priority", "LOW"),
                         "address": job.get("address"),
                         "work_type": job.get("work_type_name"),
                         "duration_min": job.get("duration_min"),
@@ -2715,11 +2712,14 @@ class SqlaDynamicPlanningRepository:
             str(job_id), {}
         )
         priority_factors = []
-        if card.get("priority_type") == "EMERGENCY":
+        if card.get("priority", "LOW") != "LOW":
             priority_factors.append(
                 reason(
-                    "EMERGENCY_PRIORITY",
-                    {"emergency_bonus": penalty_components.get("emergency_bonus")},
+                    "WORK_TYPE_PRIORITY",
+                    {
+                        "priority": card.get("priority"),
+                        "priority_bonus": penalty_components.get("priority_bonus"),
+                    },
                 )
             )
         if card.get("overdue"):
@@ -2832,8 +2832,7 @@ class SqlaDynamicPlanningRepository:
                         project_plan_assignments,
                         jobs.c.address,
                         jobs.c.status,
-                jobs.c.priority_type,
-                        jobs.c.priority_type,
+                        work_types.c.priority.label("priority"),
                         jobs.c.latitude,
                         jobs.c.longitude,
                         engineers.c.name.label("engineer_name"),
@@ -2843,6 +2842,7 @@ class SqlaDynamicPlanningRepository:
                         engineers.c.start_longitude,
                     )
                     .join(jobs, jobs.c.id == project_plan_assignments.c.job_id)
+                    .join(work_types, work_types.c.id == jobs.c.work_type_id)
                     .join(
                         engineers,
                         engineers.c.id == project_plan_assignments.c.engineer_id,
@@ -2916,7 +2916,7 @@ class SqlaDynamicPlanningRepository:
                     select(
                         project_plan_assignments,
                         jobs.c.status,
-                jobs.c.priority_type,
+                        work_types.c.priority.label("priority"),
                         jobs.c.previous_status,
                         jobs.c.address,
                         jobs.c.latitude,
@@ -2927,6 +2927,7 @@ class SqlaDynamicPlanningRepository:
                         actual_completed_at.label("actual_completed_at"),
                     )
                     .join(jobs, jobs.c.id == project_plan_assignments.c.job_id)
+                    .join(work_types, work_types.c.id == jobs.c.work_type_id)
                     .where(
                         project_plan_assignments.c.plan_version_id == version.id,
                         project_plan_assignments.c.planning_date == planning_date,
