@@ -383,7 +383,7 @@ class OrToolsPlanningSolver:
         self._add_equipment_constraints(routing, manager, data, compatible_vehicles)
         parameters = pywrapcp.DefaultRoutingSearchParameters()
         parameters.first_solution_strategy = (
-            routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
         )
         # Stop at a local optimum instead of consuming the entire limit after a
         # feasible result; the remaining budget is available for the bounded
@@ -403,7 +403,17 @@ class OrToolsPlanningSolver:
         )
         if remaining_ms <= 0:
             raise RuntimeError("OR-Tools solver time limit exhausted")
-        parameters.time_limit.FromMilliseconds(remaining_ms)
+        # Route times are reconstructed and validated after OR-Tools returns a
+        # sequence.  A sequence can require one bounded repair when that
+        # validation rejects an arc.  Keep part of the total budget for that
+        # repair instead of spending the complete limit on the first search.
+        # The retry receives the reserved budget through ``solve_started``.
+        repair_reserve_ms = 0
+        if not forbidden_arcs and remaining_ms > 10_000:
+            repair_reserve_ms = min(30_000, remaining_ms // 4)
+        parameters.time_limit.FromMilliseconds(
+            max(1, remaining_ms - repair_reserve_ms)
+        )
         routing.solver().ReSeed(data.config.solver_seed)
         assignment = routing.SolveWithParameters(parameters)
         solver_time_ms = int((monotonic_time.perf_counter() - solve_started) * 1000)

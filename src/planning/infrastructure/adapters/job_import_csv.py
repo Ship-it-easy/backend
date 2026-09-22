@@ -327,7 +327,7 @@ class JobImportExecutor:
                                     for k in ("city", "town", "village", "hamlet")
                                 ) or not any(
                                     details.get(k)
-                                    for k in ("road", "pedestrian", "street")
+                                    for k in ("road", "pedestrian", "street", "locality")
                                 ):
                                     row["issues_json"].append(
                                         issue(
@@ -575,6 +575,19 @@ class JobImportService:
             raise ConflictError("Этот файл уже применён", code="FILE_ALREADY_APPLIED")
         reusable = next((row for row in existing if row["status"] != "EXPIRED"), None)
         if reusable:
+            # A previous validation may have been performed by an older
+            # application image (for example before a parser compatibility
+            # fix). Re-run failed reusable batches when the same file is
+            # uploaded instead of returning stale issues forever.
+            if reusable["status"] in ("HAS_ERRORS", "FAILED_VALIDATION", "TECHNICAL_ERROR", "STALE_VALIDATION"):
+                await self.session.execute(
+                    update(job_import_batches)
+                    .where(job_import_batches.c.id == reusable["id"])
+                    .values(status="UPLOADED")
+                )
+                await self.session.commit()
+                self.executor.schedule(int(reusable["id"]), project_id)
+                return _batch_dict(await self._batch(project_id, reusable["id"]))
             return _batch_dict(reusable)
         try:
             batch_id = await self.session.scalar(

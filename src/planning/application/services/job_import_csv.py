@@ -7,6 +7,11 @@ from datetime import datetime
 from io import StringIO
 
 HEADERS = ("Тип заявки ВК", "Начало", "Окончание", "Адрес")
+# The reference exports use Latin ``BK`` in this heading, although the CSV
+# contract names the same field with Cyrillic ``ВК``.  Keep the canonical key
+# used by the rest of the importer and accept the reference spelling at the
+# input boundary.
+HEADER_ALIASES = {"Тип заявки BK": "Тип заявки ВК"}
 DATE_TIME = re.compile(
     r"^(?:\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2}) \d{1,2}:\d{2}(?::\d{2})?$"
 )
@@ -74,6 +79,7 @@ def parse_csv(content: bytes):
         if not records:
             continue
         headers = [cell.strip().lstrip("\ufeff") for cell in records[0][1]]
+        headers = [HEADER_ALIASES.get(header, header) for header in headers]
         if all(header in headers for header in HEADERS):
             candidates.append((delimiter, records, headers))
     if len(candidates) != 1:
@@ -87,6 +93,7 @@ def parse_csv(content: bytes):
                     continue
                 if records and len(records[0][1]) > 1:
                     headers = [cell.strip().lstrip("\ufeff") for cell in records[0][1]]
+                    headers = [HEADER_ALIASES.get(header, header) for header in headers]
                     missing = [h for h in HEADERS if h not in headers]
                     if missing:
                         return (

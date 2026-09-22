@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.persistence_sqla.mappings.tables import geocoding_cache
+from planning.infrastructure.adapters.address_search_nominatim import address_search_queries
 
 
 class NominatimGeocoder:
@@ -38,19 +39,23 @@ class NominatimGeocoder:
             timeout=self._config.geoservice_timeout_sec,
             headers={"User-Agent": "ship-it-planning/1.0"},
         ) as client:
-            response = await client.get(
-                "/search",
-                params={
-                    "q": address,
-                    "format": "jsonv2",
-                    "limit": 1,
-                    "countrycodes": "ru",
-                    "viewbox": self._config.nominatim_viewbox,
-                    "bounded": 1,
-                },
-            )
-            response.raise_for_status()
-            items = response.json()
+            items = []
+            for query in address_search_queries(address):
+                response = await client.get(
+                    "/search",
+                    params={
+                        "q": query,
+                        "format": "jsonv2",
+                        "limit": 1,
+                        "countrycodes": "ru",
+                        "viewbox": self._config.nominatim_viewbox,
+                        "bounded": 1,
+                    },
+                )
+                response.raise_for_status()
+                items = response.json()
+                if items:
+                    break
         if not items:
             return None
 

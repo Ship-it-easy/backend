@@ -15,7 +15,7 @@ class PlanningServiceConfig:
         return PlanningServiceConfig(
             valhalla_url=getenv("VALHALLA_URL", "http://localhost:8002"),
             nominatim_url=getenv("NOMINATIM_URL", "http://localhost:8080"),
-            nominatim_viewbox=getenv("NOMINATIM_VIEWBOX", "50.5,62.0,60.5,55.5"),
+            nominatim_viewbox=getenv("NOMINATIM_VIEWBOX", "35.0,57.0,40.5,54.0"),
             geoservice_timeout_sec=float(getenv("GEOSERVICE_TIMEOUT_SEC", "15")),
             matrix_block_size=int(getenv("MATRIX_BLOCK_SIZE", "40")),
         )
