@@ -24,7 +24,7 @@ from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
     StaleDynamicSnapshot,
 )
-from planning.infrastructure.adapters.geocoder_nominatim import NominatimGeocoder
+from planning.infrastructure.adapters.geocoder_factory import create_geocoder
 from planning.infrastructure.adapters.planning_batch_repository_sqla import (
     SqlaPlanningBatchRepository,
 )
@@ -446,7 +446,7 @@ class InProcessPlanningBatchExecutor:
             if job_id in jobs_by_id
             and date.fromisoformat(jobs_by_id[job_id]["sla_date"]) <= planning_date
         }
-        geocoder = NominatimGeocoder(session, self._config)
+        geocoder = create_geocoder(session, self._config)
         matrix_factory = TravelMatrixProviderFactory(
             StaticTravelMatrixProvider(),
             ValhallaTravelMatrixProvider(session, self._config),
@@ -690,7 +690,7 @@ class InProcessPlanningBatchExecutor:
                 return
             async with self._sessionmaker() as session:
                 repository = SqlaPlanningBatchRepository(session)
-                geocoder = NominatimGeocoder(session, self._config)
+                geocoder = create_geocoder(session, self._config)
                 matrix_factory = TravelMatrixProviderFactory(
                     StaticTravelMatrixProvider(),
                     ValhallaTravelMatrixProvider(session, self._config),

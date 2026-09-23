@@ -1,4 +1,5 @@
 from dishka import Provider, Scope, provide
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.entrypoint.config import Config
 from planning.application.access import ProjectAccess
@@ -35,9 +36,6 @@ from planning.application.interfaces.project_management_repositories import (
 )
 from planning.application.interfaces.transaction_manager import TransactionManager
 from planning.entrypoint.config import PlanningServiceConfig
-from planning.infrastructure.adapters.address_search_nominatim import (
-    NominatimAddressSearchProvider,
-)
 from planning.infrastructure.adapters.admin_management_repositories_sqla import (
     SqlaAdminProjectRepository,
     SqlaAdminUserRepository,
@@ -48,7 +46,10 @@ from planning.infrastructure.adapters.assignment_repository_sqla import (
 from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
 )
-from planning.infrastructure.adapters.geocoder_nominatim import NominatimGeocoder
+from planning.infrastructure.adapters.geocoder_factory import (
+    create_address_search_provider,
+    create_geocoder,
+)
 from planning.infrastructure.adapters.job_import_csv import (
     JobImportExecutor,
     JobImportService,
@@ -106,7 +107,11 @@ class PlanningAdaptersProvider(Provider):
     def planning_config(self, config: Config) -> PlanningServiceConfig:
         return config.planning_service_config
 
-    geocoder = provide(NominatimGeocoder, provides=Geocoder)
+    @provide
+    def geocoder(
+        self, session: AsyncSession, config: PlanningServiceConfig
+    ) -> Geocoder:
+        return create_geocoder(session, config)
     dynamic_planning_repository = provide(
         SqlaDynamicPlanningRepository,
         provides=DynamicPlanningRepository,
@@ -156,10 +161,11 @@ class PlanningAdaptersProvider(Provider):
         SqlaPlanningManagementRepository,
         provides=PlanningManagementRepository,
     )
-    address_search_provider = provide(
-        NominatimAddressSearchProvider,
-        provides=AddressSearchProvider,
-    )
+    @provide
+    def address_search_provider(
+        self, config: PlanningServiceConfig
+    ) -> AddressSearchProvider:
+        return create_address_search_provider(config)
     jobs_repository = provide(SqlaJobsRepository, provides=JobsRepository)
     planning_run_repository = provide(
         SqlaPlanningRunRepository,

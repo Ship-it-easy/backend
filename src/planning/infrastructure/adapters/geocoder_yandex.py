@@ -8,18 +8,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.adapters.address_search_yandex import (
+    parse_yandex_results,
+    yandex_address_search_queries,
+    yandex_request_params,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import geocoding_cache
-from planning.infrastructure.adapters.address_search_nominatim import address_search_queries
 
 
-class NominatimGeocoder:
+class YandexGeocoder:
     def __init__(self, session: AsyncSession, config: PlanningServiceConfig):
         self._session = session
         self._config = config
 
     async def geocode(self, address: str) -> Coordinate | None:
         normalized = " ".join(address.casefold().split())
-        address_hash = hashlib.sha256(normalized.encode()).hexdigest()
+        # Keep Yandex and legacy Nominatim cache entries independent.
+        address_hash = hashlib.sha256(f"yandex:{normalized}".encode()).hexdigest()
         cached = (
             (
                 await self._session.execute(
@@ -34,32 +39,37 @@ class NominatimGeocoder:
         if cached:
             return Coordinate(float(cached.latitude), float(cached.longitude))
 
+        if not self._config.yandex_geocoder_api_key:
+            raise RuntimeError("YANDEX_GEOCODER_API_KEY is required")
+        resolved = []
         async with httpx.AsyncClient(
-            base_url=self._config.nominatim_url,
+            base_url=self._config.yandex_geocoder_url,
             timeout=self._config.geoservice_timeout_sec,
-            headers={"User-Agent": "ship-it-planning/1.0"},
         ) as client:
-            items = []
-            for query in address_search_queries(address):
+            for query in yandex_address_search_queries(address):
                 response = await client.get(
-                    "/search",
-                    params={
-                        "q": query,
-                        "format": "jsonv2",
-                        "limit": 1,
-                        "countrycodes": "ru",
-                        "viewbox": self._config.nominatim_viewbox,
-                        "bounded": 1,
-                    },
+                    "/v1/",
+                    params=yandex_request_params(self._config, query, results=10),
                 )
                 response.raise_for_status()
-                items = response.json()
-                if items:
+                try:
+                    resolved = parse_yandex_results(
+                        response.json(),
+                        query=query,
+                        require_house=True,
+                        accepted_precisions={"exact"},
+                    )
+                except ValueError as error:
+                    raise RuntimeError(
+                        "Unexpected Yandex Geocoder response"
+                    ) from error
+                if resolved:
                     break
-        if not items:
-            return None
 
-        coordinate = Coordinate(float(items[0]["lat"]), float(items[0]["lon"]))
+        if not resolved:
+            return None
+        coordinate = Coordinate(resolved[0]["latitude"], resolved[0]["longitude"])
+
         await self._session.execute(
             insert(geocoding_cache)
             .values(
@@ -67,7 +77,8 @@ class NominatimGeocoder:
                 normalized_address=normalized,
                 latitude=Decimal(str(coordinate.latitude)),
                 longitude=Decimal(str(coordinate.longitude)),
-                provider="NOMINATIM_LOCAL",
+                provider="YANDEX",
+                provider_version="geocoder-v1",
             )
             .on_conflict_do_nothing(index_elements=["address_hash"])
         )

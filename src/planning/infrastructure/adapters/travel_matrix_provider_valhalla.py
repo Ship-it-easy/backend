@@ -81,16 +81,24 @@ class ValhallaTravelMatrixProvider:
                         (i, j) in missing for i in source_ids for j in target_ids
                     ):
                         continue
-                    response = await client.post(
-                        "/sources_to_targets",
-                        json={
-                            "sources": [_location(coordinates[i]) for i in source_ids],
-                            "targets": [_location(coordinates[j]) for j in target_ids],
-                            "costing": profile,
-                            "units": "kilometers",
-                        },
-                    )
-                    response.raise_for_status()
+                    try:
+                        response = await client.post(
+                            "/sources_to_targets",
+                            json={
+                                "sources": [_location(coordinates[i]) for i in source_ids],
+                                "targets": [_location(coordinates[j]) for j in target_ids],
+                                "costing": profile,
+                                "units": "kilometers",
+                            },
+                        )
+                        response.raise_for_status()
+                    except httpx.HTTPStatusError as error:
+                        # The matrix service rejects a whole block if even one pair
+                        # exceeds its configured matrix-distance limit. Individual
+                        # routes use a larger limit and are resolved below.
+                        if error.response.status_code != 400:
+                            raise
+                        continue
                     matrix = response.json().get("sources_to_targets", [])
                     for local_i, row in enumerate(matrix):
                         for local_j, item in enumerate(row):

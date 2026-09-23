@@ -194,13 +194,31 @@ Read model связывает каждую дату опубликованной
 2. Заполни переменные окружения
 3. Подними проект ``docker compose up --build``. Первый импорт OSM-данных для
    Valhalla и Nominatim может занять продолжительное время.
+   По умолчанию используется экстракт Центрального федерального округа: он
+   включает Москву и Московскую область (в тестовых CSV есть адреса Домодедова,
+   Ступина и Каширы). Поиск адресов ограничен прямоугольником вокруг этих
+   территорий через `NOMINATIM_VIEWBOX`. Если сервисы ранее запускались с
+   данными Пермского края, их постоянные тома `nominatim-data` и `valhalla-data`
+   нужно пересоздать перед импортом нового экстракта. Том `postgres-data`
+   приложения при этом сохраняется.
 4. Проведи миграции. Либо напрямую в контейнере, либо ``make migrate`` в терминале
 5. При необходимости создай демонстрационные данные Перми:
-   ``make seed-planning-demo``.
+   ``make seed-planning-demo``. Для этого укажи в env-файле
+   ``OSM_PBF_URL=https://download.openstreetmap.fr/extracts/russia/volga_federal_district/perm_krai-latest.osm.pbf``
+   и ``NOMINATIM_VIEWBOX=50.5,62.0,60.5,55.5``. Эти значения отличаются от
+   центрального экстракта и прямоугольника в шаблонах. Перед запуском с ними
+   пересоздай тома ``nominatim-data`` и ``valhalla-data``.
 
 Для быстрого запуска solver без геосервисов укажи в `planning_config.travel_provider`
 значение `STATIC_TEST`. Для дорожных матриц OpenStreetMap используется
 `VALHALLA_LOCAL`.
+
+По умолчанию адреса по-прежнему геокодируются через Nominatim. Чтобы целиком
+переключить геокодирование планов, адресные подсказки и CSV-импорт на Yandex,
+укажите `USE_YANDEX_GEOCODER=true` и заполните `YANDEX_GEOCODER_API_KEY`.
+Необязательный `YANDEX_GEOCODER_BBOX` задаётся в формате
+`долгота,широта~долгота,широта`; если он пуст, границы автоматически
+преобразуются из `NOMINATIM_VIEWBOX`.
 
 ## Полезные материалы
 1. Web sessions - https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html

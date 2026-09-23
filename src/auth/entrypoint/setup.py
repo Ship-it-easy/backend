@@ -1,4 +1,4 @@
-from logging import DEBUG, FileHandler, StreamHandler, basicConfig
+from logging import DEBUG, WARNING, FileHandler, StreamHandler, basicConfig, getLogger
 from typing import Iterable
 
 from dishka import AsyncContainer, Provider, make_async_container
@@ -65,3 +65,7 @@ def configure_logging(level=DEBUG):
         format=format,
         handlers=[file_handler, stream_handler],
     )
+    # HTTP clients include the full request URL in their access logs. External
+    # APIs commonly keep credentials in query parameters, so never emit them.
+    getLogger("httpx").setLevel(WARNING)
+    getLogger("httpcore").setLevel(WARNING)
