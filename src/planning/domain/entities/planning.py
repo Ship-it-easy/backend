@@ -4,6 +4,7 @@ from typing import Any
 
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job, UnassignedJob
+from planning.domain.traffic import TrafficModel
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,8 @@ class PlanningConfig:
     distance_unit_meters: int = 10
     time_unit_seconds: int = 60
     travel_cache_ttl_days: int | None = None
+    traffic_model: TrafficModel = field(default_factory=TrafficModel, compare=False)
+    traffic_profile: str = "moscow_default"
 
 
 @dataclass
@@ -94,7 +97,7 @@ class PlanningInput:
     )
     # Event-local state: shared by candidate inputs, never persisted as a deadline.
     travel_snapshot: dict[
-        tuple[str, float, float, float, float], tuple[int | None, int | None]
+        tuple[object, ...], tuple[int | None, int | None]
     ] = field(default_factory=dict, repr=False)
     solve_deadline_monotonic: float | None = None
 

@@ -90,6 +90,15 @@ def _batch_dict(row):
     return data
 
 
+def _count_source_statuses(rows):
+    counts = defaultdict(int)
+    for row in rows:
+        status = (row.get("source_metadata_json") or {}).get("job_status")
+        if status:
+            counts[str(status)] += 1
+    return dict(sorted(counts.items()))
+
+
 class JobImportExecutor:
     def __init__(
         self,
@@ -353,8 +362,36 @@ class JobImportExecutor:
                     )
                     provider = NominatimAddressSearchProvider(self._config)
                     cache = {}
+                    office_addresses = {
+                        row["office_address"]
+                        for row in parsed_rows
+                        if row.get("office_address")
+                    }
+                    for office in office_addresses:
+                        try:
+                            await provider.search(office, require_house=True)
+                        except PlanningUnavailable:
+                            raise
+                        except Exception:
+                            logger.warning(
+                                "job_import_office_address_not_resolved "
+                                "batch_id=%s address=%r",
+                                batch_id,
+                                office,
+                            )
                     for processed_count, row in enumerate(parsed_rows, start=1):
                         raw = row["raw_required_values_json"]
+                        row["source_metadata_json"]["_raw_work_type"] = raw[
+                            "Тип заявки ВК"
+                        ]
+                        connection = row["source_metadata_json"].get(
+                            "connection_type", ""
+                        ).casefold()
+                        if row["source_type"] == "SYNTHETIC" and connection:
+                            raw["Тип заявки ВК"] = f"Подключение {connection.upper()}"
+                            row["source_metadata_json"]["work_type"] = raw[
+                                "Тип заявки ВК"
+                            ]
                         name = raw["Тип заявки ВК"].strip().casefold()
                         matches = [
                             x for x in catalog if x["name"].strip().casefold() == name
@@ -624,6 +661,13 @@ class JobImportExecutor:
                             "address_requests": address_requests,
                             "address_retries": address_retries,
                             "address_cache_hits": address_cache_hits,
+                            "source_type": (
+                                parsed_rows[0].get("source_type", "STANDARD")
+                                if parsed_rows
+                                else "STANDARD"
+                            ),
+                            "control_status_counts": _count_source_statuses(parsed_rows),
+                            "office_addresses": sorted(office_addresses),
                         },
                         validation_finished_at=datetime.now(timezone.utc),
                     )
@@ -639,6 +683,13 @@ class JobImportExecutor:
                             "rows": len(parsed_rows),
                             "errors": errors,
                             "warnings": warnings,
+                            "source_type": (
+                                parsed_rows[0].get("source_type", "STANDARD")
+                                if parsed_rows
+                                else "STANDARD"
+                            ),
+                            "control_status_counts": _count_source_statuses(parsed_rows),
+                            "office_addresses": sorted(office_addresses),
                         },
                     )
                 )

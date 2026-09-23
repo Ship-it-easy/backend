@@ -53,6 +53,11 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
             if key not in {"id", "created_at", "updated_at", "active"}
         }
         next_values.update(values)
+        if not 1.0 <= float(next_values.get("traffic_reliability_buffer", 1.15)) <= 2.0:
+            raise ConflictError(
+                "Traffic reliability buffer must be between 1.0 and 2.0",
+                code="PLANNING_CONFIGURATION_INVALID",
+            )
         next_values.update(version=current.version + 1, active=True)
         if not (
             int(next_values["future_opportunity_critical"])

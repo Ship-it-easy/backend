@@ -175,6 +175,16 @@ class PlanningConfigPatch(BaseModel):
     distance_unit_meters: int | None = Field(default=None, ge=1, le=100_000)
     time_unit_seconds: int | None = Field(default=None, ge=1, le=86_400)
     travel_cache_ttl_days: int | None = Field(default=None, ge=0, le=3_650)
+    traffic_enabled: bool | None = None
+    traffic_reliability_buffer: float | None = Field(default=None, ge=1.0, le=2.0)
+    traffic_profile: Literal[
+        "moscow_default",
+        "yuvao_volgogradka_ryazanka",
+        "south_kashirka_biryulevo",
+        "yugocentr_profsoyuznaya_varshavka",
+        "center_ttk_sadovoe",
+        "oblast_domodedovo_kashira_stupino",
+    ] | None = None
     nightly_planning_enabled: bool | None = None
     nightly_planning_time: time | None = None
     travel_provider: Literal["VALHALLA_LOCAL"] | None = None

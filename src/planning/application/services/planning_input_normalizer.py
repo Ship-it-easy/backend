@@ -11,6 +11,7 @@ from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job, UnassignedJob
 from planning.domain.entities.planning import PlanningConfig, PlanningInput
+from planning.domain.traffic import HOURLY_PROFILES, TrafficModel
 from planning.domain.enums import ReasonCode, TransportType
 from planning.domain.priority import (
     work_priority,
@@ -41,6 +42,21 @@ class PlanningInputNormalizer:
         }
         if config_values.get("travel_cache_ttl_days") is None:
             config_values["travel_cache_ttl_days"] = 7
+        traffic_values = {
+            name: config_values.pop(name)
+            for name in ("traffic_enabled", "traffic_reliability_buffer", "traffic_profile")
+            if name in config_values
+        }
+        configured_profile = str(
+            traffic_values.get("traffic_profile", "moscow_default")
+        )
+        if configured_profile not in HOURLY_PROFILES:
+            configured_profile = "moscow_default"
+        config_values["traffic_model"] = TrafficModel(
+            enabled=bool(traffic_values.get("traffic_enabled", True)),
+            reliability_buffer=float(traffic_values.get("traffic_reliability_buffer", 1.15)),
+        )
+        config_values["traffic_profile"] = configured_profile
         config = PlanningConfig(**config_values)
         equipment_units = source["equipment_units"]
         snapshot_time = snapshot_time or datetime.now(timezone.utc)

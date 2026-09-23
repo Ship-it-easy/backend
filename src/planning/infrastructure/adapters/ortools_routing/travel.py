@@ -65,9 +65,20 @@ async def _load_snapshot_matrices(
 ) -> dict[str, TravelMatrix]:
     result = {}
     for profile in sorted(profiles):
+        local_minute = 0
+        if data.engineers:
+            shift_starts = [
+                int(engineer.shift_start_min) for engineer in data.engineers
+            ]
+            local_minute = min(shift_starts)
+        traffic_context = (
+            data.config.traffic_profile,
+            data.planning_date.isoformat(),
+            local_minute,
+        )
         keys = [
             [
-                (profile, a.latitude, a.longitude, b.latitude, b.longitude)
+                (profile, *traffic_context, a.latitude, a.longitude, b.latitude, b.longitude)
                 for b in coordinates
             ]
             for a in coordinates
@@ -90,6 +101,25 @@ async def _load_snapshot_matrices(
                 )
             ):
                 raise RuntimeError("INVALID_TRAVEL_MATRIX_SHAPE")
+            if profile == "auto" and data.config.traffic_model.enabled:
+                for i, time_row in enumerate(matrix.travel_time_seconds):
+                    for j, seconds in enumerate(time_row):
+                        if seconds is None:
+                            continue
+                        origin_minute = (
+                            data.engineers[i - len(data.jobs)].shift_start_min
+                            if i >= len(data.jobs)
+                            else local_minute
+                        )
+                        estimated_arrival = int(origin_minute) + (seconds // 60)
+                        multiplier = data.config.traffic_model.multiplier(
+                            data.config.traffic_profile,
+                            data.planning_date,
+                            estimated_arrival % 1440,
+                        )
+                        matrix.travel_time_seconds[i][j] = int(
+                            math.ceil(seconds * multiplier)
+                        )
             for i, row in enumerate(keys):
                 for j, key in enumerate(row):
                     # Все кандидаты события используют первое полученное значение

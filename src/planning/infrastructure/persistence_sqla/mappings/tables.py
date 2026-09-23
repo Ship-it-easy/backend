@@ -199,6 +199,9 @@ job_import_rows = Table(
     Column("work_type_id", ForeignKey("work_types.id")),
     Column("work_type_name", String(255)),
     Column("work_type_duration_min", Integer),
+    Column("source_type", String(16), nullable=False, server_default="STANDARD"),
+    Column("source_metadata_json", JSONB, nullable=False, server_default="{}"),
+    Column("office_address", Text),
     Column("severity", String(16)),
     Column("issues_json", JSONB, nullable=False, server_default="[]"),
     Column("created_job_id", ForeignKey("jobs.id")),
@@ -403,6 +406,9 @@ planning_config = Table(
         "travel_provider", String(32), nullable=False, server_default="VALHALLA_LOCAL"
     ),
     Column("travel_cache_ttl_days", Integer),
+    Column("traffic_enabled", Boolean, nullable=False, server_default="true"),
+    Column("traffic_reliability_buffer", Numeric(4, 2), nullable=False, server_default="1.15"),
+    Column("traffic_profile", String(64), nullable=False, server_default="moscow_default"),
     Column(
         "future_opportunity_critical", Integer, nullable=False, server_default="750"
     ),
