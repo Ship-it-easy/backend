@@ -136,4 +136,6 @@ class PlanningManagementRepository(Protocol):
 
 
 class AddressSearchProvider(Protocol):
-    async def search(self, query: str) -> list[dict[str, Any]]: ...
+    async def search(
+        self, query: str, *, require_house: bool = True
+    ) -> list[dict[str, Any]]: ...

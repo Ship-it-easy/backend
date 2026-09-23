@@ -136,7 +136,7 @@ def _select_yandex_results(
 
 
 def parse_yandex_results(
-    payload: Any, *, query: str | None = None
+    payload: Any, *, query: str | None = None, require_house: bool = True
 ) -> list[dict[str, Any]]:
     try:
         members = payload["response"]["GeoObjectCollection"]["featureMember"]
@@ -153,7 +153,7 @@ def parse_yandex_results(
                 and component.get("name")
             }
             address["country_code"] = _country_code(address_data, address)
-            if not address.get("house_number"):
+            if require_house and not address.get("house_number"):
                 continue
             if not address.get("road") and address.get("suburb"):
                 address["locality"] = address["suburb"]
@@ -188,7 +188,9 @@ class YandexAddressSearchProvider(AddressSearchProvider):
     def __init__(self, config: PlanningServiceConfig):
         self._config = config
 
-    async def search(self, query: str) -> list[dict[str, Any]]:
+    async def search(
+        self, query: str, *, require_house: bool = True
+    ) -> list[dict[str, Any]]:
         if not self._config.yandex_geocoder_api_key:
             raise PlanningUnavailable(
                 "Yandex Geocoder API key is not configured",
@@ -207,7 +209,11 @@ class YandexAddressSearchProvider(AddressSearchProvider):
                         ),
                     )
                     response.raise_for_status()
-                    result = parse_yandex_results(response.json(), query=candidate)
+                    result = parse_yandex_results(
+                        response.json(),
+                        query=candidate,
+                        require_house=require_house,
+                    )
                     if result:
                         return result
         except (httpx.HTTPError, TypeError, ValueError) as error:
