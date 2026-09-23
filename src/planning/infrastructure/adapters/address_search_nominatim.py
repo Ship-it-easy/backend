@@ -76,6 +76,7 @@ def _search_results(
     for item in items:
         address = item.get("address", {})
         house_number = str(address.get("house_number") or "").casefold()
+        building = str(address.get("building") or "").casefold()
         road = str(
             address.get("road")
             or address.get("pedestrian")
@@ -84,9 +85,9 @@ def _search_results(
             or ""
         ).casefold()
         city = str(address.get("city") or address.get("town") or "").casefold()
-        if not road or (require_house and not house_number):
+        if not road or (require_house and not (house_number or building)):
             continue
-        key = (house_number, road, city)
+        key = (house_number or building, road, city)
         if key in seen:
             continue
         seen.add(key)

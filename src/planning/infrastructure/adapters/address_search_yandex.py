@@ -136,7 +136,11 @@ def _select_yandex_results(
 
 
 def parse_yandex_results(
-    payload: Any, *, query: str | None = None, require_house: bool = True
+    payload: Any,
+    *,
+    query: str | None = None,
+    require_house: bool = True,
+    accepted_precisions: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     try:
         members = payload["response"]["GeoObjectCollection"]["featureMember"]
@@ -153,7 +157,10 @@ def parse_yandex_results(
                 and component.get("name")
             }
             address["country_code"] = _country_code(address_data, address)
+            precision = str(metadata.get("precision") or "other").casefold()
             if require_house and not address.get("house_number"):
+                continue
+            if accepted_precisions is not None and precision not in accepted_precisions:
                 continue
             if not address.get("road") and address.get("suburb"):
                 address["locality"] = address["suburb"]
@@ -176,7 +183,7 @@ def parse_yandex_results(
                             source_key.encode("utf-8")
                         ).hexdigest(),
                     },
-                    str(metadata.get("precision") or "other").casefold(),
+                    precision,
                 )
             )
         return _select_yandex_results(result, query)

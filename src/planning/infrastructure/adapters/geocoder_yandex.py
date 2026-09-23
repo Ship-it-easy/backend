@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.adapters.address_search_yandex import (
+    parse_yandex_results,
     yandex_address_search_queries,
     yandex_request_params,
 )
@@ -40,37 +41,34 @@ class YandexGeocoder:
 
         if not self._config.yandex_geocoder_api_key:
             raise RuntimeError("YANDEX_GEOCODER_API_KEY is required")
+        resolved = []
         async with httpx.AsyncClient(
             base_url=self._config.yandex_geocoder_url,
             timeout=self._config.geoservice_timeout_sec,
         ) as client:
-            members = []
             for query in yandex_address_search_queries(address):
                 response = await client.get(
                     "/v1/",
-                    params=yandex_request_params(self._config, query, results=1),
+                    params=yandex_request_params(self._config, query, results=10),
                 )
                 response.raise_for_status()
                 try:
-                    members = response.json()["response"]["GeoObjectCollection"][
-                        "featureMember"
-                    ]
-                except (KeyError, TypeError) as error:
+                    resolved = parse_yandex_results(
+                        response.json(),
+                        query=query,
+                        require_house=True,
+                        accepted_precisions={"exact"},
+                    )
+                except ValueError as error:
                     raise RuntimeError(
                         "Unexpected Yandex Geocoder response"
                     ) from error
-                if members:
+                if resolved:
                     break
 
-        try:
-            if not members:
-                return None
-            longitude, latitude = map(
-                float, members[0]["GeoObject"]["Point"]["pos"].split()
-            )
-            coordinate = Coordinate(latitude, longitude)
-        except (AttributeError, KeyError, TypeError, ValueError) as error:
-            raise RuntimeError("Unexpected Yandex Geocoder response") from error
+        if not resolved:
+            return None
+        coordinate = Coordinate(resolved[0]["latitude"], resolved[0]["longitude"])
 
         await self._session.execute(
             insert(geocoding_cache)

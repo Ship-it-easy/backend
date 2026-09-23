@@ -203,7 +203,11 @@ Read model связывает каждую дату опубликованной
    приложения при этом сохраняется.
 4. Проведи миграции. Либо напрямую в контейнере, либо ``make migrate`` в терминале
 5. При необходимости создай демонстрационные данные Перми:
-   ``make seed-planning-demo``.
+   ``make seed-planning-demo``. Для этого укажи в env-файле
+   ``OSM_PBF_URL=https://download.openstreetmap.fr/extracts/russia/volga_federal_district/perm_krai-latest.osm.pbf``
+   и ``NOMINATIM_VIEWBOX=50.5,62.0,60.5,55.5``. Эти значения отличаются от
+   центрального экстракта и прямоугольника в шаблонах. Перед запуском с ними
+   пересоздай тома ``nominatim-data`` и ``valhalla-data``.
 
 Для быстрого запуска solver без геосервисов укажи в `planning_config.travel_provider`
 значение `STATIC_TEST`. Для дорожных матриц OpenStreetMap используется

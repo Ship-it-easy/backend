@@ -294,7 +294,26 @@ async def test_yandex_geocoder_calls_api_and_caches_coordinate(monkeypatch) -> N
         "response": {
             "GeoObjectCollection": {
                 "featureMember": [
-                    {"GeoObject": {"Point": {"pos": "37.617635 55.755814"}}}
+                    {
+                        "GeoObject": {
+                            "name": "дом 1",
+                            "Point": {"pos": "37.617635 55.755814"},
+                            "metaDataProperty": {
+                                "GeocoderMetaData": {
+                                    "precision": "exact",
+                                    "Address": {
+                                        "country_code": "RU",
+                                        "Components": [
+                                            {"kind": "country", "name": "Россия"},
+                                            {"kind": "locality", "name": "Москва"},
+                                            {"kind": "street", "name": "Тестовая улица"},
+                                            {"kind": "house", "name": "1"},
+                                        ],
+                                    },
+                                }
+                            },
+                        }
+                    }
                 ]
             }
         }
@@ -338,6 +357,7 @@ async def test_yandex_geocoder_calls_api_and_caches_coordinate(monkeypatch) -> N
     assert request["params"]["geocode"] in address_search_queries(
         "Москва, улица Тестовая, 1"
     )
+    assert request["params"]["results"] == 10
     assert request["params"]["bbox"] == "35.0,54.0~40.5,57.0"
     assert len(session.statements) == 2
     assert session.statements[1].compile().params["provider"] == "YANDEX"
