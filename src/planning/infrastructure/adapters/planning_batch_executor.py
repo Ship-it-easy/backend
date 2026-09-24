@@ -559,6 +559,36 @@ class InProcessPlanningBatchExecutor:
             raise RuntimeError(
                 "FAILED_VALIDATION: " + "; ".join(today_validation_errors)
             )
+        # An unstarted job whose published finish is already in the past cannot
+        # remain on today's immutable part of the plan.  Release it into the
+        # future cascade; work in progress stays protected until completion.
+        snapshot_time = datetime.now(timezone.utc)
+        expired_new_job_ids: set[int] = set()
+        routes: dict[int, list[dict]] = {}
+        for item in today_assignments:
+            routes.setdefault(int(item["engineer_id"]), []).append(item)
+        for route in routes.values():
+            release_tail = False
+            for item in sorted(
+                route,
+                key=lambda value: (
+                    int(value["sequence"]),
+                    int(value["job_id"]),
+                ),
+            ):
+                if (
+                    item.get("status") == "NEW"
+                    and _as_event_datetime(item["planned_finish"]) <= snapshot_time
+                ):
+                    release_tail = True
+                if release_tail and item.get("status") == "NEW":
+                    expired_new_job_ids.add(int(item["job_id"]))
+        if expired_new_job_ids:
+            today_assignments = [
+                item
+                for item in today_assignments
+                if int(item["job_id"]) not in expired_new_job_ids
+            ]
         today_job_ids = {
             int(item["job_id"])
             for item in today_assignments

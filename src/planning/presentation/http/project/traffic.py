@@ -12,7 +12,6 @@ from planning.domain.traffic import (
     INTERVAL_MINUTES,
     MOSCOW,
     QUALITY,
-    SERVICE_BOUNDS,
     VERSION,
     profile_table,
 )
@@ -51,8 +50,9 @@ async def traffic_model(
         "enabled": config.traffic_model_enabled,
         "quality": QUALITY,
         "interval_minutes": INTERVAL_MINUTES,
-        "coverage_bounds": SERVICE_BOUNDS,
-        "areas": ["Москва", "Домодедово", "Ступино", "Кашира", "Связующие дороги"],
+        "coverage_bounds": None,
+        "areas": ["Москва", "Домодедово", "Ступино", "Кашира", "Прочие районы"],
+        "coverage_policy": "district_factor_for_all_automobile_segments",
         "accuracy": {
             "status": "not_validated",
             "accuracy_percent": None,
@@ -84,7 +84,11 @@ async def traffic_route(
     # Valhalla interprets date_time as local to the origin, not as UTC.
     body.departure_at = body.departure_at.astimezone(MOSCOW)
     try:
-        async with asyncio.timeout(60):
+        # One road request is needed for each consecutive pair of stops.  Keep
+        # a bounded per-leg budget so a long published route is not cut off by
+        # the former fixed one-minute limit.
+        timeout_seconds = min(300, 15 + 3 * (len(body.stops) - 1))
+        async with asyncio.timeout(timeout_seconds):
             return await build_traffic_route(body, config)
     except (httpx.TimeoutException, TimeoutError) as error:
         raise HTTPException(504, "Превышено время построения маршрута") from error

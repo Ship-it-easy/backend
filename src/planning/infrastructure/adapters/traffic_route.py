@@ -11,7 +11,7 @@ from planning.domain.traffic import (
     QUALITY,
     SOURCES,
     VERSION,
-    corridor_for,
+    district_profile_for,
     direction_for,
     traverse,
 )
@@ -41,7 +41,7 @@ def decode_shape(encoded: str) -> list[list[float]]:
 
 
 def evaluate_trip(trip, departure, profile, traffic_enabled=True):
-    elapsed = baseline = uncovered = 0.0
+    elapsed = baseline = 0.0
     segments, points = [], []
     for leg in trip["legs"]:
         shape = decode_shape(leg["shape"])
@@ -65,7 +65,7 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
                 raise ValueError("Invalid maneuver geometry")
             part = shape[begin : end + 1]
             names = maneuver.get("street_names", [])
-            corridor = corridor_for(names, part) if profile == "auto" else None
+            corridor = district_profile_for(part) if profile == "auto" else None
             direction = direction_for(part, corridor)
             entered = departure + timedelta(seconds=elapsed)
             duration = (
@@ -73,12 +73,11 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
                 if traffic_enabled
                 else seconds
             )
-            if corridor is None and profile == "auto":
-                uncovered += seconds
             segments.append(
                 {
                     "road": ", ".join(names) or "Без названия",
                     "corridor_id": corridor,
+                    "traffic_source": "district" if corridor else "not_applicable",
                     "direction": direction,
                     "points": part,
                     "departure_at": entered.isoformat(),
@@ -90,8 +89,7 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
                         else 1
                     ),
                     "quality": (
-                        QUALITY
-                        if corridor and traffic_enabled
+                        "district_estimate" if corridor and traffic_enabled
                         else (
                             "disabled"
                             if profile == "auto" and not traffic_enabled
@@ -111,7 +109,8 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
         "segments": segments,
         "duration_seconds": elapsed,
         "baseline_seconds": baseline,
-        "uncovered_baseline_seconds": uncovered,
+        "uncovered_baseline_seconds": 0,
+        "district_fallback_baseline_seconds": baseline if profile == "auto" else 0,
         "coefficient": round(elapsed / baseline, 3) if baseline else 1,
     }
 
@@ -200,6 +199,7 @@ async def build_traffic_route(request, config, *, client=None):
                 "duration_seconds": 0,
                 "baseline_seconds": 0,
                 "uncovered_baseline_seconds": 0,
+                "district_fallback_baseline_seconds": 0,
                 "coefficient": 1,
             }
         else:
@@ -234,12 +234,11 @@ async def build_traffic_route(request, config, *, client=None):
                 evaluate_trip(trip, current, request.profile, traffic_enabled)
                 for trip in candidates
             ]
-            fully_covered = [
-                item for item in evaluated if item["uncovered_baseline_seconds"] == 0
-            ]
-            # Missing congestion cannot make an uncovered alternative look faster.
+            # Every auto segment has a district profile, so candidates are
+            # comparable by their time-adjusted duration in either mode.
             chosen = min(
-                fully_covered or evaluated, key=lambda item: item["duration_seconds"]
+                evaluated,
+                key=lambda item: item["duration_seconds"],
             )
             chosen["alternatives_evaluated"] = len(evaluated)
         chosen["departure_at"] = current.isoformat()
@@ -251,7 +250,7 @@ async def build_traffic_route(request, config, *, client=None):
         legs.append(chosen)
     baseline = sum(leg["baseline_seconds"] for leg in legs)
     seconds = sum(leg["duration_seconds"] for leg in legs)
-    uncovered = sum(leg["uncovered_baseline_seconds"] for leg in legs)
+    district_fallback = sum(leg["district_fallback_baseline_seconds"] for leg in legs)
     result = {
         "model_version": VERSION,
         "traffic_enabled": traffic_enabled,
@@ -279,15 +278,14 @@ async def build_traffic_route(request, config, *, client=None):
         "baseline_seconds": math.ceil(baseline),
         "delay_seconds": math.ceil(seconds) - math.ceil(baseline),
         "coefficient": round(seconds / baseline, 3) if baseline else 1,
-        "coverage_fraction": (round(1 - uncovered / baseline, 3) if baseline else 1)
-        if request.profile == "auto"
-        else None,
-        "coverage_status": ("partial" if uncovered else "complete")
-        if request.profile == "auto"
-        else "not_applicable",
+        "coverage_fraction": 1 if request.profile == "auto" else None,
+        "coverage_status": "complete" if request.profile == "auto" else "not_applicable",
+        "district_fallback_fraction": (
+            round(district_fallback / baseline, 3) if baseline else 0
+        ) if request.profile == "auto" else None,
         "warnings": (
-            ["Часть пути вне зоны модели: время там рассчитано без поправки на пробки."]
-            if uncovered
+            ["Для всех автомобильных дорог применён районный коэффициент по времени."]
+            if district_fallback and traffic_enabled
             else []
         )
         + (

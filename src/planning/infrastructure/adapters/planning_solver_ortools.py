@@ -8,6 +8,7 @@
 import asyncio
 import time as monotonic_time
 
+from planning.application.errors import SolverNoFeasibleSolution, SolverTimeLimit
 from planning.application.interfaces.travel_matrix_provider import TravelMatrixProvider
 from planning.domain.entities.planning import PlanningInput, PlanningResult
 from planning.domain.traffic import INTERVAL_MINUTES, QUALITY, VERSION
@@ -33,6 +34,7 @@ from planning.infrastructure.adapters.ortools_routing.search import (
 from planning.infrastructure.adapters.ortools_routing.travel import (
     RoutingMatrices,
     prepare_travel_matrices,
+    refine_district_times_for_routes,
 )
 from planning.infrastructure.adapters.travel_matrix_provider_factory import (
     TravelMatrixProviderFactory,
@@ -53,19 +55,59 @@ class OrToolsPlanningSolver:
         travel = await prepare_travel_matrices(data, self._matrix_provider)
         # OR-Tools выполняет синхронный поиск; не блокируем цикл обработки HTTP.
         result = await asyncio.to_thread(self._solve_sync, data, travel)
-        result.travel_matrices = travel.minutes
-        result.travel_time_seconds_matrices = travel.seconds
-        result.distance_matrices = travel.meters
         traffic_enabled = getattr(
             self._matrix_provider, "planning_traffic_enabled", False
         )
+        correction_passes = 0
+        correction_status = "not_needed"
+        if traffic_enabled and result.routes:
+            # Static matrices are required by OR-Tools.  Correct the selected
+            # arcs at their real departures.  A second pass handles the case
+            # where the first correction changes the chosen order.
+            correction_status = "converged"
+            for _ in range(3):
+                before = [
+                    (route.engineer_id, tuple(job.job_id for job in route.jobs))
+                    for route in result.routes
+                ]
+                previous_result, previous_travel = result, travel
+                refined_travel = refine_district_times_for_routes(data, travel, result)
+                try:
+                    result = await asyncio.to_thread(
+                        self._solve_sync, data, refined_travel
+                    )
+                except SolverTimeLimit:
+                    result, travel = previous_result, previous_travel
+                    correction_status = "fallback_time_limit"
+                    break
+                except SolverNoFeasibleSolution:
+                    result, travel = previous_result, previous_travel
+                    correction_status = "fallback_infeasible"
+                    break
+                travel = refined_travel
+                correction_passes += 1
+                after = [
+                    (route.engineer_id, tuple(job.job_id for job in route.jobs))
+                    for route in result.routes
+                ]
+                if after == before:
+                    break
+            else:
+                correction_status = "max_passes_reached"
+        result.travel_matrices = travel.minutes
+        result.travel_time_seconds_matrices = travel.seconds
+        result.distance_matrices = travel.meters
         result.objective_metrics["traffic_model"] = {
             "enabled": traffic_enabled,
             "version": VERSION,
             "quality": QUALITY if traffic_enabled else "disabled",
-            "mode": ("conservative_shift_envelope" if traffic_enabled else "baseline"),
-            "coverage": "moscow_south_service_area_endpoint_pairs",
+            "mode": (
+                "district_time_refined_estimate" if traffic_enabled else "baseline"
+            ),
+            "coverage": "all_automobile_endpoint_pairs",
             "interval_minutes": INTERVAL_MINUTES,
+            "time_aware_correction_passes": correction_passes,
+            "time_aware_correction_status": correction_status,
         }
         return result
 

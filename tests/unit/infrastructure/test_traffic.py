@@ -57,7 +57,7 @@ def trip(seconds=600, road="МКАД", points=None):
 def test_profiles_are_complete_and_explicitly_estimates():
     table = profile_table(date(2026, 9, 23))
     assert table["quality"] == "uncalibrated_estimate"
-    rows = [r for r in table["rows"] if r["corridor_id"] == "mkad"]
+    rows = [r for r in table["rows"] if r["corridor_id"] == "urban"]
     assert len(rows) == 288
     assert len({r["time"] for r in rows}) == 288
     assert table["interval_minutes"] == 5
@@ -106,17 +106,18 @@ def test_midnight_and_invalid_inputs():
         TrafficRouteRequest(departure_at="2026-09-23T08:00:00", stops=[])
 
 
-def test_outside_region_and_pedestrians_are_not_given_moscow_traffic():
+def test_outside_region_gets_regional_profile_and_pedestrians_do_not():
     at = datetime(2026, 9, 23, 8, tzinfo=MOSCOW)
     outside = trip(points=[[56.8, 60.6], [56.81, 60.61]])
     assert corridor_for(["МКАД"], [[56.8, 60.6]]) is None
-    assert evaluate_trip(outside, at, "auto")["uncovered_baseline_seconds"] == 600
+    assert evaluate_trip(outside, at, "auto")["uncovered_baseline_seconds"] == 0
+    assert evaluate_trip(outside, at, "auto")["duration_seconds"] > 600
     assert evaluate_trip(trip(), at, "pedestrian")["duration_seconds"] == 600
     assert evaluate_trip(trip(), at, "auto")["duration_seconds"] > 600
 
 
 @pytest.mark.asyncio
-async def test_alternative_selection_and_service_shift_next_departure():
+async def test_district_alternative_selection_and_service_shift_next_departure():
     request = TrafficRouteRequest(
         departure_at="2026-09-23T08:00:00+03:00",
         stops=[
@@ -138,7 +139,8 @@ async def test_alternative_selection_and_service_shift_next_departure():
         json={"trip": trip(600, "ТТК"), "alternates": [{"trip": trip(650, "МСД")}]},
     )
     result = await build_traffic_route(request, SimpleNamespace(), client=client)
-    assert result["legs"][0]["segments"][0]["corridor_id"] == "msd"
+    assert result["legs"][0]["segments"][0]["corridor_id"] == "urban"
+    assert result["legs"][0]["baseline_seconds"] == 600
     assert result["legs"][1]["departure_at"] == "2026-09-23T11:00:00+03:00"
     assert result["duration_seconds"] < 3600  # excludes service/waiting
     assert client.post.call_count == 2
@@ -284,7 +286,7 @@ async def test_access_wait_and_last_service_reconcile_whole_day():
 
 
 @pytest.mark.asyncio
-async def test_uncovered_shortcut_is_not_preferred_to_covered_route():
+async def test_regional_shortcut_is_compared_by_its_district_time():
     request = TrafficRouteRequest(
         departure_at="2026-09-23T08:00:00+03:00",
         stops=[
@@ -303,7 +305,7 @@ async def test_uncovered_shortcut_is_not_preferred_to_covered_route():
     )
     result = await build_traffic_route(request, SimpleNamespace(), client=client)
     assert result["coverage_status"] == "complete"
-    assert result["baseline_seconds"] == 600
+    assert result["baseline_seconds"] == 100
 
 
 def test_same_node_zero_length_route_is_valid():

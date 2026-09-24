@@ -121,6 +121,7 @@ UNDIRECTED = {
     "stupino",
     "kashira_local",
 }
+DISTRICT_IDS = ("urban", "domodedovo", "stupino", "kashira_local", "regional")
 
 
 def covered(lat: float, lon: float) -> bool:
@@ -140,6 +141,19 @@ def area_profile(lat: float, lon: float) -> str | None:
     if 54.75 <= lat <= 54.90 and 38.10 <= lon <= 38.35:
         return "kashira_local"
     return "regional"
+
+
+def district_profile_for(points: list[list[float]]) -> str | None:
+    """Choose one coarse district for a segment, including outside the map box.
+
+    This is deliberately a hackathon-wide fallback rather than live traffic:
+    every automobile segment gets a time-of-day factor.  Points outside the
+    named districts use the ``regional`` profile.
+    """
+    profiles = [area_profile(*point) or "regional" for point in points]
+    if not profiles:
+        return "regional"
+    return max(profiles, key=profiles.count)
 
 
 def corridor_for(names: list[str], points: list[list[float]]) -> str | None:
@@ -241,9 +255,8 @@ def profile_table(day):
         "timezone": "Europe/Moscow",
         "date": day.isoformat(),
         "interval_minutes": INTERVAL_MINUTES,
-        "coverage_bounds": dict(
-            zip(("south", "west", "north", "east"), SERVICE_BOUNDS, strict=True)
-        ),
+        "coverage_bounds": None,
+        "coverage_policy": "district_factor_for_all_automobile_segments",
         "accuracy": {
             "status": "not_validated",
             "observed_trip_count": 0,
@@ -269,7 +282,8 @@ def profile_table(day):
                     direction,
                 ),
             }
-            for key, value in CORRIDORS.items()
+            for key in DISTRICT_IDS
+            for value in (CORRIDORS[key],)
             for direction in (
                 ("both",) if key in UNDIRECTED else ("inbound", "outbound", "both")
             )

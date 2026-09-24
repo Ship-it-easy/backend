@@ -15,7 +15,12 @@ from planning.application.interfaces.travel_matrix_provider import (
 from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.planning import PlanningInput
 from planning.domain.enums import TransportType
-from planning.domain.traffic import CORRIDORS, INTERVAL_MINUTES, coefficient, covered
+from planning.domain.traffic import (
+    INTERVAL_MINUTES,
+    coefficient,
+    district_profile_for,
+    traverse,
+)
 
 MatrixByProfile = dict[str, list[list[int | None]]]
 
@@ -63,7 +68,7 @@ async def prepare_travel_matrices(
 
 
 def _traffic_envelope(data, coordinates, raw_matrices):
-    """Conservative shift envelope for the static VRP, not departure-specific ETA.
+    """District-aware static approximation for the VRP, not departure-specific ETA.
 
     Baselines alone stay in the event snapshot/cache. Recalculate this bound for
     each planning date so future candidates cannot reuse today's traffic factor.
@@ -76,20 +81,26 @@ def _traffic_envelope(data, coordinates, raw_matrices):
         min(e.shift_start_min for e in drivers) // INTERVAL_MINUTES * INTERVAL_MINUTES
     )
     end = max(e.shift_end_min for e in drivers)
-    factor = max(
-        coefficient(key, midnight + timedelta(minutes=minute))
-        for key in CORRIDORS
-        for minute in range(
-            start, max(start, end) + INTERVAL_MINUTES + 1, INTERVAL_MINUTES
-        )
+    # OR-Tools consumes a static matrix.  Use the middle of the actual shift
+    # and the district between the pair, rather than applying the worst peak of
+    # every Moscow corridor to every road in the plan.
+    representative = midnight + timedelta(
+        minutes=(start + max(start, end)) // 2 // INTERVAL_MINUTES * INTERVAL_MINUTES
     )
     raw = raw_matrices["auto"]
-    within = [covered(c.latitude, c.longitude) for c in coordinates]
-    # No claim of congestion coverage outside the model's geographic boundary.
     adjusted = [
         [
-            math.ceil(value * factor)
-            if value is not None and within[i] and within[j]
+            math.ceil(
+                value
+                * coefficient(
+                    district_profile_for([
+                        [coordinates[i].latitude, coordinates[i].longitude],
+                        [coordinates[j].latitude, coordinates[j].longitude],
+                    ]),
+                    representative,
+                )
+            )
+            if value is not None
             else value
             for j, value in enumerate(row)
         ]
@@ -98,9 +109,72 @@ def _traffic_envelope(data, coordinates, raw_matrices):
     return {
         **raw_matrices,
         "auto": TravelMatrix(
-            adjusted, raw.distance_meters, "auto", "MOSCOW_SCENARIO_SHIFT_ENVELOPE"
+            adjusted,
+            raw.distance_meters,
+            "auto",
+            "DISTRICT_SCENARIO_INITIAL_PASS",
         ),
     }
+
+
+def refine_district_times_for_routes(data, travel, result):
+    """Reprice the selected automobile arcs at their actual five-minute times.
+
+    OR-Tools requires a static matrix.  The first pass gives an order; this
+    pass writes the time-dependent cost of that order back into a copy of the
+    matrix for one corrective solve.
+    """
+    if "auto" not in travel.minutes:
+        return travel
+    minutes = {
+        profile: [row[:] for row in values]
+        for profile, values in travel.minutes.items()
+    }
+    seconds = {
+        profile: [row[:] for row in values]
+        for profile, values in travel.seconds.items()
+    }
+    meters = {
+        profile: [row[:] for row in values]
+        for profile, values in travel.meters.items()
+    }
+    job_index = {job.id: index for index, job in enumerate(data.jobs)}
+    engineer_index = {engineer.id: index for index, engineer in enumerate(data.engineers)}
+    coordinates = [job.coordinate for job in data.jobs] + [
+        engineer.coordinate for engineer in data.engineers
+    ]
+
+    for route in result.routes:
+        engineer = data.engineers[engineer_index[route.engineer_id]]
+        if engineer.transport_type != TransportType.CAR:
+            continue
+        previous = len(data.jobs) + engineer_index[route.engineer_id]
+        departure = route.planned_start
+        for route_job in route.jobs:
+            destination = job_index[route_job.job_id]
+            origin_coordinate = coordinates[previous]
+            destination_coordinate = coordinates[destination]
+            key = (
+                "auto",
+                origin_coordinate.latitude,
+                origin_coordinate.longitude,
+                destination_coordinate.latitude,
+                destination_coordinate.longitude,
+            )
+            baseline = data.travel_snapshot.get(key, (None, None))[0]
+            if baseline is not None:
+                district = district_profile_for(
+                    [
+                        [origin_coordinate.latitude, origin_coordinate.longitude],
+                        [destination_coordinate.latitude, destination_coordinate.longitude],
+                    ]
+                )
+                elapsed = math.ceil(traverse(baseline, departure, district))
+                seconds["auto"][previous][destination] = elapsed
+                minutes["auto"][previous][destination] = math.ceil(elapsed / 60)
+            departure = route_job.planned_finish
+            previous = destination
+    return RoutingMatrices(minutes, seconds, meters)
 
 
 async def _load_snapshot_matrices(
