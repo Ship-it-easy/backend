@@ -43,6 +43,7 @@ async def test_dispatcher_requires_active_project() -> None:
         UserRoleEnum.DISPATCHER, project_id=7
     )
     repository = AsyncMock()
+    repository.list_dispatcher_projects.return_value = [{"id": 7}]
     repository.get_project_status.return_value = "BLOCKED"
     access = ProjectAccess(identity, repository)
 
@@ -56,9 +57,34 @@ async def test_project_hides_other_tenant() -> None:
         UserRoleEnum.DISPATCHER, project_id=7
     )
     access = ProjectAccess(identity, AsyncMock())
+    access.repository.dispatcher_has_project.return_value = False
 
     with pytest.raises(ObjectNotFoundError, match="Object not found"):
         await access.project(8)
+
+
+async def test_dispatcher_can_open_each_assigned_project() -> None:
+    user = _user(UserRoleEnum.DISPATCHER)
+    identity = AsyncMock()
+    identity.get_current_user.return_value = user
+    repository = AsyncMock()
+    repository.dispatcher_has_project.return_value = True
+    repository.get_project_status.return_value = "ACTIVE"
+    access = ProjectAccess(identity, repository)
+
+    assert await access.project(7, write=True) is user
+    repository.dispatcher_has_project.assert_awaited_once_with(user.id, 7)
+
+
+async def test_implicit_scope_rejects_multi_project_dispatcher() -> None:
+    identity = AsyncMock()
+    identity.get_current_user.return_value = _user(UserRoleEnum.DISPATCHER)
+    repository = AsyncMock()
+    repository.list_dispatcher_projects.return_value = [{"id": 7}, {"id": 8}]
+    access = ProjectAccess(identity, repository)
+
+    with pytest.raises(AccessDeniedError, match="Explicit project scope"):
+        await access.dispatcher()
 
 
 async def test_engineer_returns_identity_scope() -> None:

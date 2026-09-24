@@ -21,16 +21,20 @@ class _EngineerInteractor:
         self._access = access
         self._repository = repository
 
+    async def _scope(
+        self, scoped_project_id: int | None, *, write: bool = False
+    ) -> tuple[Any, int]:
+        if scoped_project_id is None:
+            return await self._access.dispatcher()
+        user = await self._access.project(scoped_project_id, write=write)
+        return user, scoped_project_id
+
 
 class ListEngineersInteractor(_EngineerInteractor):
     async def __call__(
         self, scoped_project_id: int | None = None
     ) -> list[dict[str, Any]]:
-        if scoped_project_id is None:
-            _, project_id = await self._access.dispatcher()
-        else:
-            project_id = scoped_project_id
-            await self._access.project(project_id)
+        _, project_id = await self._scope(scoped_project_id)
         return await self._repository.list_engineers(project_id)
 
 
@@ -39,8 +43,9 @@ class CreateEngineerInteractor(_EngineerInteractor):
         self,
         values: dict[str, Any],
         qualification_ids: list[int],
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+        _, project_id = await self._scope(scoped_project_id, write=True)
         return await self._repository.create_engineer(
             project_id, values, qualification_ids
         )
@@ -50,11 +55,7 @@ class GetEngineerInteractor(_EngineerInteractor):
     async def __call__(
         self, engineer_id: int, scoped_project_id: int | None = None
     ) -> dict[str, Any]:
-        if scoped_project_id is None:
-            _, project_id = await self._access.dispatcher()
-        else:
-            project_id = scoped_project_id
-            await self._access.project(project_id)
+        _, project_id = await self._scope(scoped_project_id)
         return await self._repository.get_engineer(project_id, engineer_id)
 
 
@@ -73,8 +74,9 @@ class UpdateEngineerInteractor(_EngineerInteractor):
         engineer_id: int,
         values: dict[str, Any],
         qualification_ids: list[int] | None,
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+        user, project_id = await self._scope(scoped_project_id, write=True)
         if "start_address" in values and (
             "start_latitude" not in values or "start_longitude" not in values
         ):
@@ -105,11 +107,7 @@ class ReplaceEngineerScheduleInteractor(_EngineerInteractor):
         entries: list[dict[str, Any]],
         scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        if scoped_project_id is None:
-            user, project_id = await self._access.dispatcher()
-        else:
-            project_id = scoped_project_id
-            user = await self._access.project(project_id, write=True)
+        user, project_id = await self._scope(scoped_project_id, write=True)
         dates: list[date] = [entry["work_date"] for entry in entries]
         if len(dates) != len(set(dates)):
             raise InvalidPlanningRequest(

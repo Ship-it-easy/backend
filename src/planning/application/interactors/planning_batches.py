@@ -60,7 +60,7 @@ class StartPlanningBatchInteractor:
             "planning_event_id": event["id"],
             "planning_batch_id": event.get("planning_batch_id"),
             "status": event["state"],
-            "status_url": f"/api/project/planning/events/{event['id']}",
+            "status_url": f"/api/projects/{project_id}/planning/events/{event['id']}",
             "reuse": event["state"] != "PENDING",
         }
 

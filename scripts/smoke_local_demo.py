@@ -26,13 +26,17 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             raise AssertionError(f"{method} {path}: {r.status_code} {r.text[:1500]}")
         return r.json() if r.content else None
 
+    project_id = manifest["project_id"]
+    workspace = f"/api/projects/{project_id}/workspace"
+    planning = f"/api/projects/{project_id}/planning"
+
     def wait_event(client, response):
         event_id = response.get("planning_event_id")
         if event_id is None:
             raise AssertionError(f"No event in response: {response}")
         deadline = time.monotonic() + 330
         while time.monotonic() < deadline:
-            event = request(client, "GET", f"/api/project/planning/events/{event_id}")
+            event = request(client, "GET", f"{planning}/events/{event_id}")
             state = event.get("state")
             if state == "PUBLISHED":
                 return event
@@ -42,7 +46,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         raise AssertionError(f"Event {event_id} timed out")
 
     def plan(client):
-        return request(client, "GET", "/api/project/planning/current")
+        return request(client, "GET", f"{planning}/current")
 
     with httpx.Client(base_url="http://localhost:8000", timeout=30) as c:
         account = manifest["accounts"][0]
@@ -52,8 +56,9 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             "/api/auth/login",
             json={"login": account["login"], "password": account["password"]},
         )
-        me = request(c, "GET", "/api/auth/me")
-        assert me["project_id"] == manifest["project_id"], (
+        request(c, "GET", "/api/auth/me")
+        available = request(c, "GET", "/api/project/available-projects")
+        assert any(item["id"] == project_id for item in available), (
             "Refuse to mutate a different project"
         )
         assert account["login"].startswith("demo_routes_"), (
@@ -63,14 +68,14 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         readiness = request(
             c,
             "GET",
-            "/api/project/planning/readiness",
-            params={"planning_date": manifest["planning_date"]},
+            f"{planning}/board",
+            params={"from": manifest["planning_date"], "days": 7},
         )
         record("readiness", result=readiness)
         response = request(
             c,
             "POST",
-            "/api/project/planning/events/manual",
+            f"{planning}/events/manual",
             headers={"Idempotency-Key": str(uuid.uuid4())},
         )
         event = wait_event(c, response)
@@ -85,11 +90,11 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         board = request(
             c,
             "GET",
-            "/api/project/planning/board",
+            f"{planning}/board",
             params={"from": manifest["planning_date"], "days": 7},
         )
         day = request(
-            c, "GET", f"/api/project/planning/board/{manifest['planning_date']}"
+            c, "GET", f"{planning}/board/{manifest['planning_date']}"
         )
         record("board_and_day", board_keys=list(board), day_keys=list(day))
         if not full:
@@ -97,7 +102,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         job = request(
             c,
             "POST",
-            "/api/project/jobs",
+            f"{workspace}/jobs",
             json={
                 "address": "Пермь, Ленина, 50",
                 "latitude": 58.011905,
@@ -122,7 +127,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             job_id=job_id,
             candidate_count=event.get("candidate_total"),
         )
-        cancel = request(c, "POST", f"/api/project/jobs/{job_id}/cancel")
+        cancel = request(c, "POST", f"{workspace}/jobs/{job_id}/cancel")
         event = wait_event(c, cancel)
         assert all(x["job_id"] != job_id for x in plan(c)["assignments"])
         record("cancel_job", event_id=event["id"], job_id=job_id)
@@ -136,7 +141,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         response = request(
             c,
             "PATCH",
-            f"/api/project/engineers/{engineer_id}/availability",
+            f"{workspace}/engineers/{engineer_id}/availability",
             json={
                 "entries": [{"work_date": manifest["planning_date"], "working": False}]
             },
@@ -151,7 +156,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         response = request(
             c,
             "PATCH",
-            f"/api/project/engineers/{engineer_id}/availability",
+            f"{workspace}/engineers/{engineer_id}/availability",
             json={
                 "entries": [
                     {
@@ -165,7 +170,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         )
         event = wait_event(c, response)
         record("engineer_restored", event_id=event["id"], engineer_id=engineer_id)
-        request(c, "GET", "/api/project/planning/versions")
+        request(c, "GET", f"{planning}/versions")
         record("plan_history")
         with httpx.Client(
             base_url="http://localhost:8000", timeout=30

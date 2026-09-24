@@ -6,20 +6,52 @@ from fastapi import APIRouter, status
 
 from planning.application.interactors.admin.users import (
     BlockUserInteractor,
+    CreateDispatcherInteractor,
     CreateOwnerInteractor,
     CreateProjectUserInteractor,
+    ListDispatchersInteractor,
     ListOwnersInteractor,
     ListProjectUsersInteractor,
+    ReplaceDispatcherProjectsInteractor,
     ResetUserPasswordInteractor,
     UnblockUserInteractor,
 )
 from planning.presentation.http.admin.schemas import (
+    DispatcherCreate,
+    DispatcherProjectsPut,
     OwnerCreate,
     PasswordReset,
     UserCreate,
 )
 
 router = APIRouter()
+
+
+@router.get("/dispatchers")
+@inject
+async def list_dispatchers(
+    interactor: FromDishka[ListDispatchersInteractor],
+) -> list[dict[str, Any]]:
+    return await interactor()
+
+
+@router.post("/dispatchers", status_code=status.HTTP_201_CREATED)
+@inject
+async def create_project_user(
+    body: DispatcherCreate,
+    interactor: FromDishka[CreateDispatcherInteractor],
+) -> dict[str, Any]:
+    return await interactor(body.login, body.password, body.project_ids)
+
+
+@router.put("/dispatchers/{user_id}/projects")
+@inject
+async def replace_dispatcher_projects(
+    user_id: UUID,
+    body: DispatcherProjectsPut,
+    interactor: FromDishka[ReplaceDispatcherProjectsInteractor],
+) -> dict[str, Any]:
+    return await interactor(user_id, body.project_ids)
 
 
 @router.get("/owners")

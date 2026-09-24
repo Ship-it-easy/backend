@@ -32,6 +32,7 @@ from planning.application.interactors.planning_batches import (
     StopPlanningBatchInteractor,
     ValidateCurrentBatchDayInteractor,
 )
+from planning.application.interactors.project import access as project_access
 from planning.application.interactors.project import address_search, engineer_access
 from planning.application.interactors.project import catalogs as project_catalogs
 from planning.application.interactors.project import engineers as project_engineers
@@ -83,6 +84,11 @@ class PlanningInteractorProvider(Provider):
 
     list_owners = provide(admin_users.ListOwnersInteractor)
     create_owner = provide(admin_users.CreateOwnerInteractor)
+    list_dispatchers = provide(admin_users.ListDispatchersInteractor)
+    create_dispatcher = provide(admin_users.CreateDispatcherInteractor)
+    replace_dispatcher_projects = provide(
+        admin_users.ReplaceDispatcherProjectsInteractor
+    )
     list_project_users = provide(admin_users.ListProjectUsersInteractor)
     create_project_user = provide(admin_users.CreateProjectUserInteractor)
     reset_user_password = provide(admin_users.ResetUserPasswordInteractor)
@@ -95,6 +101,10 @@ class PlanningInteractorProvider(Provider):
     start_assignment = provide(engineer_assignments.StartAssignmentInteractor)
     complete_assignment = provide(engineer_assignments.CompleteAssignmentInteractor)
     return_assignment = provide(engineer_assignments.ReturnAssignmentInteractor)
+
+    list_dispatcher_projects = provide(
+        project_access.ListDispatcherProjectsInteractor
+    )
 
     list_qualifications = provide(project_catalogs.ListQualificationsInteractor)
     create_qualification = provide(project_catalogs.CreateQualificationInteractor)

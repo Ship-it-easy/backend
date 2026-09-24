@@ -20,6 +20,7 @@ from auth.domain.user_role import UserRoleEnum
 from auth.entrypoint.config import PostgresConfig
 from auth.infrastructure.persistence_sqla.mappings.user import users_table
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    dispatcher_projects,
     engineer_qualifications,
     engineer_schedules,
     engineers,
@@ -193,18 +194,28 @@ async def prepare(day: date, suffix: str = "") -> dict:
                 (UserRoleEnum.DISPATCHER, None, f"demo_routes_{stamp}"),
                 (UserRoleEnum.ENGINEER, engineer_ids[0], f"demo_engineer_{stamp}"),
             ]:
+                user_id = uuid.uuid4()
                 await connection.execute(
                     insert(users_table).values(
-                        id=uuid.uuid4(),
+                        id=user_id,
                         username=login,
                         password_hash=password_hash,
                         is_active=True,
                         is_verified=True,
                         role=role,
-                        project_id=project_id,
+                        project_id=(
+                            project_id if role is UserRoleEnum.ENGINEER else None
+                        ),
                         engineer_id=engineer_id,
                     )
                 )
+                if role is UserRoleEnum.DISPATCHER:
+                    await connection.execute(
+                        insert(dispatcher_projects).values(
+                            user_id=user_id,
+                            project_id=project_id,
+                        )
+                    )
                 accounts.append(dict(login=login, password=password, role=role.value))
             result = dict(
                 project_id=project_id,

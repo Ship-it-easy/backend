@@ -13,12 +13,17 @@ from planning.application.errors import (
 )
 from planning.application.interactors.admin.users import (
     BlockUserInteractor,
+    CreateDispatcherInteractor,
     CreateProjectUserInteractor,
+    ReplaceDispatcherProjectsInteractor,
 )
 from planning.application.interactors.project.engineer_access import (
     CreateEngineerAccessInteractor,
 )
-from planning.application.interactors.project.jobs import UpdateProjectJobInteractor
+from planning.application.interactors.project.jobs import (
+    CreateProjectJobInteractor,
+    UpdateProjectJobInteractor,
+)
 from planning.application.interactors.project.planning import (
     PublishPlanningRunInteractor,
 )
@@ -209,6 +214,30 @@ async def test_update_address_clears_coordinates_and_geocoding() -> None:
     assert changes["geocoded_at"] is None
 
 
+async def test_scoped_job_creation_returns_scoped_planning_event_url() -> None:
+    repository = AsyncMock()
+    repository.create_job.return_value = {
+        "id": 1,
+        "planning_event_id": 42,
+        "planning_event_status_url": "/api/project/planning/events/42",
+    }
+    project_access = access()
+    project_access.project.return_value = MagicMock(id=USER_ID)
+    executor = MagicMock()
+    uow = FakeUow()
+
+    result = await CreateProjectJobInteractor(
+        project_access, repository, executor, uow
+    )({"work_type_id": 2}, 10)
+
+    assert result["planning_event_status_url"] == (
+        "/api/projects/10/planning/events/42"
+    )
+    project_access.project.assert_awaited_once_with(10, write=True)
+    executor.schedule_project.assert_called_once_with(10)
+    assert uow.committed
+
+
 async def test_block_last_active_owner() -> None:
     repository = AsyncMock()
     repository.lock_activation.return_value = UserActivationState(
@@ -253,6 +282,63 @@ async def test_create_project_user_rejects_cross_project_engineer() -> None:
     with pytest.raises(InvalidPlanningRequest) as raised:
         await interactor(10, "login", "password", UserRoleEnum.ENGINEER, 4)
     assert raised.value.code == "CROSS_PROJECT_REFERENCE"
+
+
+async def test_create_dispatcher_allows_no_projects() -> None:
+    repository = AsyncMock()
+    repository.get_existing_project_ids.return_value = set()
+    repository.create_user.return_value = {"id": str(USER_ID)}
+    repository.replace_dispatcher_projects.return_value = {
+        "id": str(USER_ID),
+        "project_ids": [],
+    }
+    uow = FakeUow()
+
+    result = await CreateDispatcherInteractor(
+        access(), repository, MagicMock(), uow
+    )("dispatcher", "password", [])
+
+    assert result["project_ids"] == []
+    repository.create_user.assert_awaited_once()
+    assert repository.create_user.await_args.args[2] is UserRoleEnum.DISPATCHER
+    repository.replace_dispatcher_projects.assert_awaited_once_with(
+        USER_ID, [], USER_ID
+    )
+    assert uow.committed
+
+
+async def test_create_project_dispatcher_uses_membership_not_user_project_id() -> None:
+    repository = AsyncMock()
+    repository.get_project_user_validation.return_value = ProjectUserValidationState(
+        True, True, None
+    )
+    repository.create_user.return_value = {"id": str(USER_ID)}
+    repository.replace_dispatcher_projects.return_value = {
+        "id": str(USER_ID),
+        "project_ids": [10],
+    }
+
+    await CreateProjectUserInteractor(
+        access(), repository, MagicMock(), FakeUow()
+    )(10, "dispatcher", "password", UserRoleEnum.DISPATCHER, None)
+
+    assert repository.create_user.await_args.args[3] is None
+    repository.replace_dispatcher_projects.assert_awaited_once_with(
+        USER_ID, [10], USER_ID
+    )
+
+
+async def test_replace_dispatcher_projects_rejects_unknown_project() -> None:
+    repository = AsyncMock()
+    repository.get_existing_project_ids.return_value = {10}
+    interactor = ReplaceDispatcherProjectsInteractor(
+        access(), repository, MagicMock(), FakeUow()
+    )
+
+    with pytest.raises(ObjectNotFoundError, match="Project not found"):
+        await interactor(USER_ID, [10, 11])
+
+    repository.replace_dispatcher_projects.assert_not_awaited()
 
 
 async def test_engineer_access_rejects_engineer_from_another_project() -> None:

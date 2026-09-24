@@ -25,6 +25,9 @@ from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
 from planning.infrastructure.adapters.planning_management_repository_sqla import (
     SqlaPlanningManagementRepository,
 )
+from planning.infrastructure.adapters.project_access_repository_sqla import (
+    SqlaProjectAccessRepository,
+)
 from planning.infrastructure.adapters.project_management_repositories_sqla import (
     SqlaEngineerAccountRepository,
 )
@@ -34,6 +37,7 @@ from planning.infrastructure.adapters.transaction_manager_sqla import (
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     assignments,
     daily_plans,
+    dispatcher_projects,
     engineer_schedules,
     engineers,
     equipment_types,
@@ -191,6 +195,76 @@ async def test_concurrent_admin_login_creation_maps_conflict(
     )
 
 
+async def test_dispatcher_project_memberships_are_independent_and_filter_blocked(
+    pg_engine: AsyncEngine,
+) -> None:
+    dispatcher_id = uuid.uuid4()
+    owner_id = uuid.uuid4()
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_ids = [await seed_project(session), await seed_project(session)]
+        blocked_id = await seed_project(session)
+        await session.execute(
+            update(projects)
+            .where(projects.c.id == blocked_id)
+            .values(status="BLOCKED")
+        )
+        values = owner_values(dispatcher_id, f"dispatcher-{uuid.uuid4().hex}")
+        values.update(role=UserRoleEnum.DISPATCHER, project_id=None)
+        await session.execute(insert(users_table).values(**values))
+        await session.execute(
+            insert(users_table).values(
+                **owner_values(owner_id, f"owner-{uuid.uuid4().hex}")
+            )
+        )
+        await session.execute(
+            insert(dispatcher_projects),
+            [
+                {"user_id": dispatcher_id, "project_id": project_id}
+                for project_id in [*project_ids, blocked_id]
+            ],
+        )
+        await session.commit()
+
+        access = SqlaProjectAccessRepository(session)
+        assert await access.dispatcher_has_project(dispatcher_id, project_ids[0])
+        active = await access.list_dispatcher_projects(
+            dispatcher_id, active_only=True
+        )
+        assert {row["id"] for row in active} == set(project_ids)
+
+        dispatchers = await SqlaAdminUserRepository(session).list_dispatchers()
+        assert dispatchers == [
+            {
+                "id": str(dispatcher_id),
+                "login": values["username"],
+                "role": "dispatcher",
+                "project_id": None,
+                "engineer_id": None,
+                "status": "ACTIVE",
+                "project_ids": sorted([*project_ids, blocked_id]),
+            }
+        ]
+
+        repository = SqlaAdminUserRepository(session)
+        single = await repository.replace_dispatcher_projects(
+            dispatcher_id, [project_ids[0]], owner_id
+        )
+        await session.commit()
+        assert single["project_id"] == project_ids[0]
+        assert await session.scalar(
+            select(users_table.c.project_id).where(users_table.c.id == dispatcher_id)
+        ) == project_ids[0]
+
+        multiple = await repository.replace_dispatcher_projects(
+            dispatcher_id, project_ids, owner_id
+        )
+        await session.commit()
+        assert multiple["project_id"] is None
+        assert await session.scalar(
+            select(users_table.c.project_id).where(users_table.c.id == dispatcher_id)
+        ) is None
+
+
 async def test_concurrent_engineer_login_creation_maps_conflict(
     pg_engine: AsyncEngine,
 ) -> None:
@@ -240,8 +314,13 @@ async def seed_publication(session: AsyncSession) -> tuple[int, int, uuid.UUID]:
     project_id = await seed_project(session)
     user_id = uuid.uuid4()
     user = owner_values(user_id, f"dispatcher-{uuid.uuid4().hex}")
-    user.update(role=UserRoleEnum.DISPATCHER, project_id=project_id)
+    user.update(role=UserRoleEnum.DISPATCHER, project_id=None)
     await session.execute(insert(users_table).values(**user))
+    await session.execute(
+        insert(dispatcher_projects).values(
+            user_id=user_id, project_id=project_id
+        )
+    )
     work_type_id = await session.scalar(
         insert(work_types)
         .values(

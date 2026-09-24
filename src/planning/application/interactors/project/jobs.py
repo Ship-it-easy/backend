@@ -24,6 +24,14 @@ class _ProjectJobsInteractor:
         self._access = access
         self._repository = repository
 
+    async def _scope(
+        self, scoped_project_id: int | None, *, write: bool = False
+    ) -> tuple[Any, int]:
+        if scoped_project_id is None:
+            return await self._access.dispatcher()
+        user = await self._access.project(scoped_project_id, write=write)
+        return user, scoped_project_id
+
 
 class ListProjectJobsInteractor(_ProjectJobsInteractor):
     async def __call__(
@@ -37,8 +45,9 @@ class ListProjectJobsInteractor(_ProjectJobsInteractor):
         limit: int,
         offset: int,
         import_batch_id: int | None = None,
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+        _, project_id = await self._scope(scoped_project_id)
         return await self._repository.list_jobs(
             project_id,
             {
@@ -66,17 +75,29 @@ class CreateProjectJobInteractor(_ProjectJobsInteractor):
         self._executor = executor
         self._transaction_manager = transaction_manager
 
-    async def __call__(self, values: dict[str, Any]) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, values: dict[str, Any], scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        user, project_id = await self._scope(scoped_project_id, write=True)
         result = await self._repository.create_job(project_id, values, user.id)
+        if (
+            scoped_project_id is not None
+            and result.get("planning_event_id") is not None
+        ):
+            result["planning_event_status_url"] = (
+                f"/api/projects/{project_id}/planning/events/"
+                f"{result['planning_event_id']}"
+            )
         await self._transaction_manager.commit()
         self._executor.schedule_project(project_id)
         return result
 
 
 class GetProjectJobInteractor(_ProjectJobsInteractor):
-    async def __call__(self, job_id: int) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, job_id: int, scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        _, project_id = await self._scope(scoped_project_id)
         return await self._repository.get_job(project_id, job_id)
 
 
@@ -90,8 +111,13 @@ class UpdateProjectJobInteractor(_ProjectJobsInteractor):
         super().__init__(access, repository)
         self._transaction_manager = transaction_manager
 
-    async def __call__(self, job_id: int, values: dict[str, Any]) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self,
+        job_id: int,
+        values: dict[str, Any],
+        scoped_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        _, project_id = await self._scope(scoped_project_id, write=True)
         current = await self._repository.load_job_for_update(project_id, job_id)
         if current.status != "NEW":
             raise InvalidJobStatusError("Only NEW jobs may be edited")
@@ -173,8 +199,13 @@ class ChangeProjectJobStatusInteractor:
         job_id: int,
         status: str,
         reason: str | None,
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+        if scoped_project_id is None:
+            user, project_id = await self._access.dispatcher()
+        else:
+            user = await self._access.project(scoped_project_id, write=True)
+            project_id = scoped_project_id
         return await self._change_status(
             user,
             job_id,
@@ -200,11 +231,7 @@ class CancelProjectJobInteractor(_ProjectJobsInteractor):
     async def __call__(
         self, job_id: int, scoped_project_id: int | None = None
     ) -> dict[str, Any]:
-        if scoped_project_id is None:
-            user, project_id = await self._access.dispatcher()
-        else:
-            project_id = scoped_project_id
-            user = await self._access.project(project_id, write=True)
+        user, project_id = await self._scope(scoped_project_id, write=True)
         result = await self._repository.cancel_job(project_id, job_id, user.id)
         if (
             scoped_project_id is not None

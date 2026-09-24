@@ -7,10 +7,12 @@ from planning.presentation.http.planning_runs.router import planning_runs_router
 from planning.presentation.http.project_scoped_engineers import (
     router as project_scoped_engineers_router,
 )
+from planning.presentation.http.project_workspace import router as workspace_router
 
 planning_router = APIRouter(prefix="/api/projects", tags=["Planning"])
 planning_router.include_router(job_imports_router)
 planning_router.include_router(jobs_router)
 planning_router.include_router(project_scoped_engineers_router)
+planning_router.include_router(workspace_router)
 planning_router.include_router(planning_runs_router)
 planning_router.include_router(planning_batches_router)

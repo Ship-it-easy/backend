@@ -27,6 +27,14 @@ class _EngineerAccessInteractor:
     def _hash(self, password: str) -> str:
         return self._password_hasher.hash(RawPassword(password))
 
+    async def _scope(
+        self, scoped_project_id: int | None, *, write: bool = False
+    ) -> tuple[Any, int]:
+        if scoped_project_id is None:
+            return await self._access.dispatcher()
+        user = await self._access.project(scoped_project_id, write=write)
+        return user, scoped_project_id
+
 
 class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
     def __init__(
@@ -44,8 +52,9 @@ class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
         engineer_id: int,
         login: str,
         password: str,
+        scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
-        _, project_id = await self._access.dispatcher()
+        _, project_id = await self._scope(scoped_project_id, write=True)
         if not await self._repository.engineer_belongs_to_project(
             project_id, engineer_id
         ):
@@ -61,8 +70,13 @@ class CreateEngineerAccessInteractor(_EngineerAccessInteractor):
 
 
 class ResetEngineerPasswordInteractor(_EngineerAccessInteractor):
-    async def __call__(self, engineer_id: int, password: str) -> dict[str, str]:
-        _, project_id = await self._access.dispatcher()
+    async def __call__(
+        self,
+        engineer_id: int,
+        password: str,
+        scoped_project_id: int | None = None,
+    ) -> dict[str, str]:
+        _, project_id = await self._scope(scoped_project_id, write=True)
         return await self._repository.reset_password(
             project_id, engineer_id, self._hash(password)
         )
@@ -79,8 +93,10 @@ class BlockEngineerAccessInteractor(_EngineerAccessInteractor):
         super().__init__(access, repository, password_hasher)
         self._executor = executor
 
-    async def __call__(self, engineer_id: int) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, engineer_id: int, scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        user, project_id = await self._scope(scoped_project_id, write=True)
         result = await self._repository.set_active(
             project_id, engineer_id, False, user.id
         )
@@ -100,8 +116,10 @@ class UnblockEngineerAccessInteractor(_EngineerAccessInteractor):
         super().__init__(access, repository, password_hasher)
         self._executor = executor
 
-    async def __call__(self, engineer_id: int) -> dict[str, Any]:
-        user, project_id = await self._access.dispatcher()
+    async def __call__(
+        self, engineer_id: int, scoped_project_id: int | None = None
+    ) -> dict[str, Any]:
+        user, project_id = await self._scope(scoped_project_id, write=True)
         result = await self._repository.set_active(
             project_id, engineer_id, True, user.id
         )

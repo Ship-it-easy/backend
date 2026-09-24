@@ -85,8 +85,12 @@ class ValhallaTravelMatrixProvider:
                         response = await client.post(
                             "/sources_to_targets",
                             json={
-                                "sources": [_location(coordinates[i]) for i in source_ids],
-                                "targets": [_location(coordinates[j]) for j in target_ids],
+                                "sources": [
+                                    _location(coordinates[i]) for i in source_ids
+                                ],
+                                "targets": [
+                                    _location(coordinates[j]) for j in target_ids
+                                ],
                                 "costing": profile,
                                 "units": "kilometers",
                             },
