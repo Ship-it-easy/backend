@@ -2003,6 +2003,8 @@ class SqlaDynamicPlanningRepository:
                 "default_service_duration_min",
                 "work_type_name",
                 "created_at",
+                "time_window_start",
+                "time_window_end",
             ):
                 if value.get(field) is None and current.get(field) is not None:
                     value[field] = current[field]
@@ -2168,8 +2170,11 @@ class SqlaDynamicPlanningRepository:
                 "job_id": int(item.job_id),
                 "outcome": "ASSIGNED",
                 "route_position": int(item.sequence),
+                "planned_arrival": item.planned_arrival,
                 "planned_start": item.planned_start,
                 "planned_end": item.planned_finish,
+                "time_window_start": job.get("time_window_start"),
+                "time_window_end": job.get("time_window_end"),
                 "status": job.get("status", "NEW"),
                 "priority": job.get("priority", "LOW"),
                 "address": job.get("address"),

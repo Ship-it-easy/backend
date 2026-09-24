@@ -36,14 +36,15 @@ def test_mismatched_dates_and_partial_rows_block_import():
     _, _, rows, _ = parse_csv(source)
     assert [x["code"] for x in rows[0]["issues_json"]] == ["DATE_MISMATCH"]
     assert [x["code"] for x in rows[1]["issues_json"]] == [
-        "REQUIRED_VALUE_MISSING", "REQUIRED_VALUE_MISSING"
+        "REQUIRED_VALUE_MISSING",
+        "REQUIRED_VALUE_MISSING",
     ]
 
 
 def test_quoted_newline_and_blank_record_keep_physical_line_number():
     source = (
-        'Тип заявки ВК;Начало;Окончание;Адрес\n'
-        '\n'
+        "Тип заявки ВК;Начало;Окончание;Адрес\n"
+        "\n"
         'Монтаж;2026-09-17 9:00;2026-09-17 10:00;"Пермь,\nЛенина, 5"\n'
     ).encode()
     _, _, rows, issues = parse_csv(source)
@@ -68,6 +69,15 @@ def test_normalizes_osm_building_structure_notation():
     assert queries[0] == "Москва, Международная улица, 28 с1"
 
 
+def test_address_abbreviations_do_not_corrupt_ulyanova_or_full_street_word():
+    assert address_search_queries("Город Москва, ул.Дмитрия Ульянова, д. 27")[0] == (
+        "Москва, Дмитрия Ульянова улица, 27"
+    )
+    assert address_search_queries("Москва, улица Дмитрия Ульянова, 27")[0] == (
+        "Москва, Дмитрия Ульянова улица, 27"
+    )
+
+
 def test_utf8_bom_comma_and_seconds_are_supported():
     source = (
         "Тип заявки ВК,Начало,Окончание,Адрес\r\n"
@@ -84,9 +94,7 @@ def test_empty_file_duplicate_header_and_missing_header_have_specific_codes():
     assert [item["code"] for item in parse_csv(header)[3]] == ["NO_DATA_ROWS"]
 
     duplicate = "Тип заявки ВК;Начало;Окончание;Адрес;Адрес\n".encode()
-    assert [item["code"] for item in parse_csv(duplicate)[3]] == [
-        "DUPLICATE_HEADER"
-    ]
+    assert [item["code"] for item in parse_csv(duplicate)[3]] == ["DUPLICATE_HEADER"]
 
     missing = "Тип заявки ВК;Начало;Адрес\n".encode()
     assert [item["code"] for item in parse_csv(missing)[3]] == ["MISSING_HEADER"]
@@ -95,9 +103,7 @@ def test_empty_file_duplicate_header_and_missing_header_have_specific_codes():
 def test_row_limit_counts_only_non_empty_records():
     header = "Тип заявки ВК;Начало;Окончание;Адрес\n"
     row = "Монтаж;17.09.2026 9:00;17.09.2026 10:00;Пермь, Ленина, 5\n"
-    _, _, accepted, accepted_issues = parse_csv(
-        (header + (row + "\n") * 1000).encode()
-    )
+    _, _, accepted, accepted_issues = parse_csv((header + (row + "\n") * 1000).encode())
     assert len(accepted) == 1000
     assert accepted_issues == []
 
@@ -114,12 +120,8 @@ def test_timezone_offset_and_equal_window_are_rejected():
     ).encode()
     _, _, rows, issues = parse_csv(source)
     assert issues == []
-    assert [item["code"] for item in rows[0]["issues_json"]] == [
-        "INVALID_DATETIME"
-    ]
-    assert [item["code"] for item in rows[1]["issues_json"]] == [
-        "INVALID_TIME_WINDOW"
-    ]
+    assert [item["code"] for item in rows[0]["issues_json"]] == ["INVALID_DATETIME"]
+    assert [item["code"] for item in rows[1]["issues_json"]] == ["INVALID_TIME_WINDOW"]
 
 
 def test_malformed_quotes_and_extra_cells_are_rejected():

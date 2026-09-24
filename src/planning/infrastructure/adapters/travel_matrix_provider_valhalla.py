@@ -17,7 +17,7 @@ from planning.infrastructure.persistence_sqla.mappings.tables import travel_time
 def _cache_key(origin: Coordinate, destination: Coordinate, profile: str) -> str:
     value = (
         f"{origin.latitude:.6f}:{origin.longitude:.6f}:"
-        f"{destination.latitude:.6f}:{destination.longitude:.6f}:{profile}:osm"
+        f"{destination.latitude:.6f}:{destination.longitude:.6f}:{profile}:osm-freeflow-v2"
     )
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -26,6 +26,7 @@ class ValhallaTravelMatrixProvider:
     def __init__(self, session: AsyncSession, config: PlanningServiceConfig):
         self._session = session
         self._config = config
+        self.planning_traffic_enabled = config.traffic_model_enabled
 
     async def get_matrix(
         self,
@@ -85,9 +86,16 @@ class ValhallaTravelMatrixProvider:
                         response = await client.post(
                             "/sources_to_targets",
                             json={
-                                "sources": [_location(coordinates[i]) for i in source_ids],
-                                "targets": [_location(coordinates[j]) for j in target_ids],
+                                "sources": [
+                                    _location(coordinates[i]) for i in source_ids
+                                ],
+                                "targets": [
+                                    _location(coordinates[j]) for j in target_ids
+                                ],
                                 "costing": profile,
+                                "costing_options": {
+                                    profile: {"speed_types": ["freeflow"]}
+                                },
                                 "units": "kilometers",
                             },
                         )
@@ -132,6 +140,7 @@ class ValhallaTravelMatrixProvider:
                                 _location(coordinates[j]),
                             ],
                             "costing": profile,
+                            "costing_options": {profile: {"speed_types": ["freeflow"]}},
                             "units": "kilometers",
                         },
                     )

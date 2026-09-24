@@ -10,6 +10,7 @@ import time as monotonic_time
 
 from planning.application.interfaces.travel_matrix_provider import TravelMatrixProvider
 from planning.domain.entities.planning import PlanningInput, PlanningResult
+from planning.domain.traffic import INTERVAL_MINUTES, QUALITY, VERSION
 from planning.infrastructure.adapters.ortools_routing.lexicographic import (
     solve_lexicographically,
 )
@@ -55,6 +56,17 @@ class OrToolsPlanningSolver:
         result.travel_matrices = travel.minutes
         result.travel_time_seconds_matrices = travel.seconds
         result.distance_matrices = travel.meters
+        traffic_enabled = getattr(
+            self._matrix_provider, "planning_traffic_enabled", False
+        )
+        result.objective_metrics["traffic_model"] = {
+            "enabled": traffic_enabled,
+            "version": VERSION,
+            "quality": QUALITY if traffic_enabled else "disabled",
+            "mode": ("conservative_shift_envelope" if traffic_enabled else "baseline"),
+            "coverage": "moscow_south_service_area_endpoint_pairs",
+            "interval_minutes": INTERVAL_MINUTES,
+        }
         return result
 
     def _solve_sync(

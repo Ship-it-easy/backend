@@ -1,0 +1,4667 @@
+{
+  "model_version": "moscow-south-scenario-2026.2-5min",
+  "probe": "one_verified_office_to_each_building_and_back",
+  "tested_routes": 368,
+  "fully_covered_routes": 368,
+  "addresses_requiring_review": 13,
+  "accuracy_percent": null,
+  "note": "Geographic coverage is not ETA accuracy.",
+  "routes": [
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Волжский, д. 50 к 2",
+      "baseline_seconds": 2025.1439999999998,
+      "estimated_seconds": 3550.6614885348126,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Кленовый, д. 10 к 1",
+      "baseline_seconds": 844.464,
+      "estimated_seconds": 1462.0647952032034,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Ореховый, д. 11 к 1",
+      "baseline_seconds": 1324.8459999999998,
+      "estimated_seconds": 2133.2257037378395,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Ореховый, д. 35 к 1",
+      "baseline_seconds": 1423.554,
+      "estimated_seconds": 2312.973015318615,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Ореховый, д. 61 к 1",
+      "baseline_seconds": 1713.262,
+      "estimated_seconds": 2842.535895011152,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Ореховый, д. 7 к 1",
+      "baseline_seconds": 1371.788,
+      "estimated_seconds": 2295.2361355134535,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Симферопольский, д. 27",
+      "baseline_seconds": 514.082,
+      "estimated_seconds": 878.2771428798336,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Смоленский, д. 17 стр. 1",
+      "baseline_seconds": 2189.444,
+      "estimated_seconds": 4223.97032708412,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Черноморский, д. 19 к 2",
+      "baseline_seconds": 552.405,
+      "estimated_seconds": 945.3868107924321,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Чонгарский, д. 1 к 4",
+      "baseline_seconds": 419.774,
+      "estimated_seconds": 714.6527628864444,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, б-р.Чонгарский, д. 22 к 2",
+      "baseline_seconds": 297.299,
+      "estimated_seconds": 503.56845577413685,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, наб.Нагатинская, д. 60 к 2",
+      "baseline_seconds": 1094.9769999999999,
+      "estimated_seconds": 1912.4937544843858,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пер.Большой Рогожский, д. 10 к 2",
+      "baseline_seconds": 1913.45,
+      "estimated_seconds": 3406.954526602455,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пер.Маяковского, д. 2",
+      "baseline_seconds": 1767.9989999999998,
+      "estimated_seconds": 3140.722330812139,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пер.Ослябинский, д. 3",
+      "baseline_seconds": 1372.626,
+      "estimated_seconds": 2417.0182109741104,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.60-летия Октября, д. 17",
+      "baseline_seconds": 874.108,
+      "estimated_seconds": 1514.9429130417457,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.60-летия Октября, д. 18 к 2",
+      "baseline_seconds": 845.217,
+      "estimated_seconds": 1463.4043822114784,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Балаклавский, д. 20 к 4",
+      "baseline_seconds": 638.8060000000002,
+      "estimated_seconds": 1097.3661697826433,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Балаклавский, д. 50",
+      "baseline_seconds": 750.0130000000001,
+      "estimated_seconds": 1294.036466209498,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Волгоградский, д. 128 к 5",
+      "baseline_seconds": 2250.988,
+      "estimated_seconds": 3920.0592844045236,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Волгоградский, д. 97 к 1",
+      "baseline_seconds": 2094.5209999999997,
+      "estimated_seconds": 3674.672241569607,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Нахимовский, д. 50",
+      "baseline_seconds": 724.25,
+      "estimated_seconds": 1248.2040892043883,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Пролетарский, д. 14А",
+      "baseline_seconds": 924.0800000000002,
+      "estimated_seconds": 1548.9861435847292,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Пролетарский, д. 18 к 4",
+      "baseline_seconds": 1014.929,
+      "estimated_seconds": 1712.1510370594551,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Рязанский, д. 73",
+      "baseline_seconds": 2447.5740000000005,
+      "estimated_seconds": 4269.173575983417,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, пр-кт.Севастопольский, д. 9 к 1",
+      "baseline_seconds": 781.806,
+      "estimated_seconds": 1350.5962132067189,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.3-й Павелецкий, д. 7 к 2",
+      "baseline_seconds": 1404.0929999999998,
+      "estimated_seconds": 2612.5781243353968,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.3-й Павелецкий, д. 9",
+      "baseline_seconds": 1265.2379999999998,
+      "estimated_seconds": 2358.908999742898,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Борисовский, д. 44 к 3",
+      "baseline_seconds": 1300.9949999999997,
+      "estimated_seconds": 2111.8905811627915,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Востряковский, д. 15 к 2",
+      "baseline_seconds": 1584.2689999999998,
+      "estimated_seconds": 2663.699376364211,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Востряковский, д. 15 к 4",
+      "baseline_seconds": 1731.1090000000004,
+      "estimated_seconds": 2932.6307084681484,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Гурьевский, д. 19 к 2",
+      "baseline_seconds": 1864.2360000000003,
+      "estimated_seconds": 3119.120200156833,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Гурьевский, д. 23 к 1",
+      "baseline_seconds": 1809.1649999999997,
+      "estimated_seconds": 3018.2301076325966,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Загорьевский, д. 7 к 2",
+      "baseline_seconds": 1973.896,
+      "estimated_seconds": 3460.7509908146126,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Загорьевский, д. 9",
+      "baseline_seconds": 1818.268,
+      "estimated_seconds": 3175.992200361279,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Коломенский, д. 27 к 3",
+      "baseline_seconds": 656.3059999999999,
+      "estimated_seconds": 1128.1486697742862,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Ореховый, д. 23 к 1",
+      "baseline_seconds": 1303.839,
+      "estimated_seconds": 2117.069506683243,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Ореховый, д. 41",
+      "baseline_seconds": 1416.904,
+      "estimated_seconds": 2322.960927756387,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Ферганский, д. 7 к 5",
+      "baseline_seconds": 2826.44,
+      "estimated_seconds": 5081.684377792807,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "mkad",
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, проезд.Шипиловский, д. 59 к 2",
+      "baseline_seconds": 1469.605,
+      "estimated_seconds": 2473.6428330108693,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.1-я Дубровская, д. 6",
+      "baseline_seconds": 1448.1370000000002,
+      "estimated_seconds": 2555.052318996875,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.1-я Новокузьминская, д. 16 к 1",
+      "baseline_seconds": 2302.727,
+      "estimated_seconds": 4013.5813230958565,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.11-я Текстильщиков, д. 10",
+      "baseline_seconds": 2016.817,
+      "estimated_seconds": 3553.045834370537,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.2-я Рощинская, д. 11",
+      "baseline_seconds": 1045.417,
+      "estimated_seconds": 1822.7901544768472,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.2-я Синичкина, д. 9 к 1",
+      "baseline_seconds": 2406.3430000000008,
+      "estimated_seconds": 4477.881345411461,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.3-я Институтская, д. 5 к 2",
+      "baseline_seconds": 2292.336,
+      "estimated_seconds": 4006.166782523273,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.3-я Карачаровская, д. 4 к 1",
+      "baseline_seconds": 2172.6400000000003,
+      "estimated_seconds": 3813.2333087206266,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.3-я Карачаровская, д. 8 к 2",
+      "baseline_seconds": 2237.601,
+      "estimated_seconds": 3931.336823522303,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.6-я Радиальная, д. 5 к 3",
+      "baseline_seconds": 1413.2570000000003,
+      "estimated_seconds": 2351.2767600338975,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.6-я Радиальная, д. 7/1 к 2",
+      "baseline_seconds": 1594.7829999999997,
+      "estimated_seconds": 2682.9188800860447,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Авиамоторная, д. 14",
+      "baseline_seconds": 2292.188,
+      "estimated_seconds": 4290.621388859479,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Автозаводская, д. 11",
+      "baseline_seconds": 1290.515,
+      "estimated_seconds": 2267.428911749311,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Академика Миллионщикова, д. 13 к 1",
+      "baseline_seconds": 535.666,
+      "estimated_seconds": 915.9429097673894,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Артюхиной, д. 16",
+      "baseline_seconds": 1926.412,
+      "estimated_seconds": 3254.4600318081766,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Артюхиной, д. 3",
+      "baseline_seconds": 1996.2849999999999,
+      "estimated_seconds": 3515.5133589558554,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Бирюлёвская, д. 39",
+      "baseline_seconds": 1599.453,
+      "estimated_seconds": 2691.4558268141323,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Бирюлёвская, д. 58 к 3",
+      "baseline_seconds": 1813.3680000000002,
+      "estimated_seconds": 3167.015399732505,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Болотниковская, д. 9 к 2",
+      "baseline_seconds": 330.147,
+      "estimated_seconds": 559.7385357796893,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Большая Калитниковская, д. 38",
+      "baseline_seconds": 1766.119,
+      "estimated_seconds": 3137.278170831073,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Большая Пионерская, д. 33 к 2",
+      "baseline_seconds": 1484.0429999999997,
+      "estimated_seconds": 2791.9001821046245,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Большая Серпуховская, д. 31 к 6",
+      "baseline_seconds": 1337.0780000000002,
+      "estimated_seconds": 2523.0476008684695,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Борисовские Пруды, д. 20 к 1",
+      "baseline_seconds": 1427.6230000000003,
+      "estimated_seconds": 2396.9115962464175,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Борисовские Пруды, д. 48 к 2",
+      "baseline_seconds": 1733.7660000000003,
+      "estimated_seconds": 2957.0906134352954,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Боровая, д. 12",
+      "baseline_seconds": 2472.898,
+      "estimated_seconds": 4596.546208155425,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Боровая, д. 14",
+      "baseline_seconds": 2453.554000000001,
+      "estimated_seconds": 4562.113962475874,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Братеевская, д. 16 к 1",
+      "baseline_seconds": 1713.3469999999998,
+      "estimated_seconds": 2919.6830019524914,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Братеевская, д. 18 к 1",
+      "baseline_seconds": 1667.825,
+      "estimated_seconds": 2836.2866898131424,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Бронницкая, д. 12",
+      "baseline_seconds": 2050.527,
+      "estimated_seconds": 3616.958441571936,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Булатниковская, д. 4 к 1",
+      "baseline_seconds": 1585.5660000000003,
+      "estimated_seconds": 2666.070292895581,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Весёлая, д. 33 к 7",
+      "baseline_seconds": 1141.237,
+      "estimated_seconds": 1940.0837569690211,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Винокурова, д. 12 к 4",
+      "baseline_seconds": 701.1520000000002,
+      "estimated_seconds": 1207.1127472225044,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Винокурова, д. 5/6 к 2",
+      "baseline_seconds": 843.465,
+      "estimated_seconds": 1460.287574222549,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Восточная, д. 2 к 2",
+      "baseline_seconds": 1297.0849999999996,
+      "estimated_seconds": 2279.392881767968,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Генерала Белова, д. 45 к 2",
+      "baseline_seconds": 1391.495,
+      "estimated_seconds": 2254.5934132076454,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Городская, д. 9",
+      "baseline_seconds": 1193.1130000000003,
+      "estimated_seconds": 2260.415957965161,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Грайвороновская, д. 10 к 2",
+      "baseline_seconds": 2126.9120000000003,
+      "estimated_seconds": 3421.609684731614,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Дмитрия Ульянова, д. 27",
+      "baseline_seconds": 645.492,
+      "estimated_seconds": 1109.1268437931667,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Домодедовская, д. 31",
+      "baseline_seconds": 1448.0930000000003,
+      "estimated_seconds": 2340.3476181530805,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Ереванская, д. 29",
+      "baseline_seconds": 1102.8919999999998,
+      "estimated_seconds": 1816.5781102808903,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Зарайская, д. 51 к 2",
+      "baseline_seconds": 2324.6300000000006,
+      "estimated_seconds": 4064.6188891706015,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Затонная, д. 11 к 3",
+      "baseline_seconds": 963.9249999999998,
+      "estimated_seconds": 1676.2542450409596,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Затонная, д. 12 к 1",
+      "baseline_seconds": 966.23,
+      "estimated_seconds": 1680.3940250602031,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Зеленодольская, д. 28Б",
+      "baseline_seconds": 2271.2119999999995,
+      "estimated_seconds": 3973.364666175099,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Земляной Вал, д. 24/30 стр. 1",
+      "baseline_seconds": 2058.032,
+      "estimated_seconds": 3775.832246544106,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Кантемировская, д. 5 к 2",
+      "baseline_seconds": 1005.5870000000001,
+      "estimated_seconds": 1655.2729304378518,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Каховка, д. 7 к 1",
+      "baseline_seconds": 475.05,
+      "estimated_seconds": 810.5566228802435,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Керченская, д. 10 к 2",
+      "baseline_seconds": 604.338,
+      "estimated_seconds": 1036.7369577744391,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Керченская, д. 6 к 2",
+      "baseline_seconds": 618.012,
+      "estimated_seconds": 1060.789523788175,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Коломенская, д. 21",
+      "baseline_seconds": 1094.385,
+      "estimated_seconds": 1911.4222344848397,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Коломенская, д. 5",
+      "baseline_seconds": 1204.741,
+      "estimated_seconds": 2111.2344577546783,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Кустанайская, д. 8 к 1",
+      "baseline_seconds": 1615.657,
+      "estimated_seconds": 2685.9854639939626,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Кустанайская, д. 9 к 1",
+      "baseline_seconds": 1602.156,
+      "estimated_seconds": 2661.305517420133,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Луганская, д. 1",
+      "baseline_seconds": 975.5189999999999,
+      "estimated_seconds": 1641.3706071423844,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Луганская, д. 3 к 1",
+      "baseline_seconds": 988.63,
+      "estimated_seconds": 1664.918025564188,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Луганская, д. 4 к 1",
+      "baseline_seconds": 1185.648,
+      "estimated_seconds": 2020.4676278415986,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Люсиновская, д. 4",
+      "baseline_seconds": 1443.95,
+      "estimated_seconds": 2718.449703826063,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Малышева, д. 13",
+      "baseline_seconds": 1993.503,
+      "estimated_seconds": 3377.2016512900877,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Маршала Захарова, д. 18 к 1",
+      "baseline_seconds": 1232.559,
+      "estimated_seconds": 1999.7208205847344,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Маршала Чуйкова, д. 9 к 2",
+      "baseline_seconds": 2081.8649999999993,
+      "estimated_seconds": 3538.7275163321324,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Машкова, д. 13 стр. 1",
+      "baseline_seconds": 2292.827,
+      "estimated_seconds": 4251.566519030367,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Медынская, д. 5 к 1",
+      "baseline_seconds": 1560.9009999999998,
+      "estimated_seconds": 2620.982757139085,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Международная, д. 28 стр. 1",
+      "baseline_seconds": 1886.288,
+      "estimated_seconds": 3357.302390612529,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Михайлова, д. 14",
+      "baseline_seconds": 2208.836,
+      "estimated_seconds": 3871.931542684531,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Москворечье, д. 4 к 6",
+      "baseline_seconds": 775.872,
+      "estimated_seconds": 1284.8603641068605,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Мусы Джалиля, д. 9 к 1",
+      "baseline_seconds": 1632.646,
+      "estimated_seconds": 2717.0784245959867,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Нагорная, д. 44 к 2",
+      "baseline_seconds": 440.43500000000006,
+      "estimated_seconds": 750.4995978701894,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Нижегородская, д. 25",
+      "baseline_seconds": 2044.3210000000004,
+      "estimated_seconds": 3616.9698256964725,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Нижегородская, д. 61",
+      "baseline_seconds": 1870.6669999999997,
+      "estimated_seconds": 3299.594695156205,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Нижегородская, д. 63",
+      "baseline_seconds": 1798.8019999999997,
+      "estimated_seconds": 3167.9380115931012,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Новорогожская, д. 10",
+      "baseline_seconds": 1830.653,
+      "estimated_seconds": 3255.504458771968,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Новорогожская, д. 8",
+      "baseline_seconds": 1834.5809999999997,
+      "estimated_seconds": 3262.7005547810645,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Окская, д. 32",
+      "baseline_seconds": 2187.539,
+      "estimated_seconds": 3844.0580609447734,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Окская, д. 48/2",
+      "baseline_seconds": 2295.3190000000004,
+      "estimated_seconds": 4000.1728421263992,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Окская, д. 6 к 1",
+      "baseline_seconds": 2009.4219999999998,
+      "estimated_seconds": 3519.3983332683533,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Паперника, д. 18",
+      "baseline_seconds": 2341.799,
+      "estimated_seconds": 4084.301606757533,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Паперника, д. 19",
+      "baseline_seconds": 2429.575,
+      "estimated_seconds": 4242.842140441267,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Паромная, д. 9 к 1",
+      "baseline_seconds": 1617.129,
+      "estimated_seconds": 2743.411687032149,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Плющиха, д. 42",
+      "baseline_seconds": 1972.4539999999997,
+      "estimated_seconds": 3651.1673845771775,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Профсоюзная, д. 8 к 2",
+      "baseline_seconds": 891.888,
+      "estimated_seconds": 1546.8757930484412,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Ремизова, д. 15 к 2",
+      "baseline_seconds": 367.74000000000007,
+      "estimated_seconds": 624.3737728760618,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Рогожский Вал, д. 2/50",
+      "baseline_seconds": 1788.3580000000002,
+      "estimated_seconds": 3178.0200187976384,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Садовники, д. 10 к 1",
+      "baseline_seconds": 731.2690000000002,
+      "estimated_seconds": 1260.6908902141963,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Саратовская, д. 14/1",
+      "baseline_seconds": 2066.7919999999995,
+      "estimated_seconds": 3746.966595472053,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Севанская, д. 15 к 1",
+      "baseline_seconds": 1125.8339999999998,
+      "estimated_seconds": 1905.5142188254722,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Смирновская, д. 6",
+      "baseline_seconds": 2045.92,
+      "estimated_seconds": 3619.881632251304,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Сторожевая, д. 31",
+      "baseline_seconds": 2377.013000000001,
+      "estimated_seconds": 4425.2046725762375,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Стройковская, д. 8",
+      "baseline_seconds": 1666.075,
+      "estimated_seconds": 2953.9975628276516,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Судостроительная, д. 27 к 2",
+      "baseline_seconds": 866.646,
+      "estimated_seconds": 1501.5411610340825,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Судостроительная, д. 31 к 3",
+      "baseline_seconds": 965.4519999999999,
+      "estimated_seconds": 1678.9967370282088,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Судостроительная, д. 36",
+      "baseline_seconds": 915.267,
+      "estimated_seconds": 1588.8644770514184,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Талалихина, д. 16",
+      "baseline_seconds": 1661.556,
+      "estimated_seconds": 2945.718754762576,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Талалихина, д. 2/1 к 4",
+      "baseline_seconds": 1617.302,
+      "estimated_seconds": 2864.6454267738895,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Трофимова, д. 24 к 2",
+      "baseline_seconds": 1145.528,
+      "estimated_seconds": 2003.9910644883323,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Усачёва, д. 25",
+      "baseline_seconds": 1728.692,
+      "estimated_seconds": 3205.5610949219185,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Усачёва, д. 29 к 1",
+      "baseline_seconds": 1691.517,
+      "estimated_seconds": 3000.6073067956468,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Ферганская, д. 28/7",
+      "baseline_seconds": 2608.599,
+      "estimated_seconds": 4543.563427510049,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Фёдора Полетаева, д. 2 к 6",
+      "baseline_seconds": 2235.737,
+      "estimated_seconds": 3931.6343709831795,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Херсонская, д. 18",
+      "baseline_seconds": 691.602,
+      "estimated_seconds": 1190.234333795632,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Чистова, д. 12",
+      "baseline_seconds": 1965.8619999999996,
+      "estimated_seconds": 3326.6737954965483,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Чистопольская, д. 2 к 2",
+      "baseline_seconds": 2024.1719999999998,
+      "estimated_seconds": 3568.8466887646864,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шверника, д. 12/2 к 3",
+      "baseline_seconds": 772.8860000000001,
+      "estimated_seconds": 1334.7275332182014,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шверника, д. 14/1 к 2",
+      "baseline_seconds": 732.1550000000001,
+      "estimated_seconds": 1262.2670842339935,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шверника, д. 18 к 2",
+      "baseline_seconds": 703.91,
+      "estimated_seconds": 1212.0192292281743,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шверника, д. 3",
+      "baseline_seconds": 863.4679999999998,
+      "estimated_seconds": 1495.8729112146152,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шверника, д. 5 к 2",
+      "baseline_seconds": 864.312,
+      "estimated_seconds": 1497.3743872225912,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Шипиловская, д. 38",
+      "baseline_seconds": 1229.746,
+      "estimated_seconds": 1982.858320087267,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ул.Юных Ленинцев, д. 84",
+      "baseline_seconds": 2236.9799999999996,
+      "estimated_seconds": 3900.3276678386464,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ш.Каширское, д. 136",
+      "baseline_seconds": 1440.9129999999998,
+      "estimated_seconds": 2315.3766319010233,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Город Москва, ш.Каширское, д. 94 к 1",
+      "baseline_seconds": 1203.541,
+      "estimated_seconds": 1925.039487134647,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, проезд.Кутузовский, д. 16",
+      "baseline_seconds": 2834.191,
+      "estimated_seconds": 4760.4919231844715,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "kutuzov",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, проезд.Советский 1-й, д. 1А",
+      "baseline_seconds": 2835.7829999999994,
+      "estimated_seconds": 4746.823210472194,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.1-я Коммунистическая, д. 39",
+      "baseline_seconds": 2906.9390000000003,
+      "estimated_seconds": 4833.7766444955805,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Зеленая, д. 85",
+      "baseline_seconds": 2884.7250000000004,
+      "estimated_seconds": 4801.106355846534,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Ильюшина, д. 11 к 2",
+      "baseline_seconds": 3117.9969999999994,
+      "estimated_seconds": 5179.1757131434715,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Ильюшина, д. 20",
+      "baseline_seconds": 3254.8469999999993,
+      "estimated_seconds": 5384.997962326742,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Корнеева, д. 40",
+      "baseline_seconds": 2858.1829999999995,
+      "estimated_seconds": 4743.348206863969,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Корнеева, д. 48",
+      "baseline_seconds": 2854.1290000000004,
+      "estimated_seconds": 4737.153696163008,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Домодедово, ул.Корнеева, д. 50",
+      "baseline_seconds": 2817.551,
+      "estimated_seconds": 4681.26265688866,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.8 Марта, д. 22",
+      "baseline_seconds": 6365.697,
+      "estimated_seconds": 9058.845664962688,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Кржижановского, д. 7",
+      "baseline_seconds": 6367.915,
+      "estimated_seconds": 9061.609292658452,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Ленина, д. 11 к 3",
+      "baseline_seconds": 6188.386000000001,
+      "estimated_seconds": 8837.135796416958,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Металлургов, д. 5 к 3",
+      "baseline_seconds": 6081.486999999999,
+      "estimated_seconds": 8703.298155879043,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Победы, д. 9",
+      "baseline_seconds": 6047.171999999999,
+      "estimated_seconds": 8660.113903704681,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Садовая, д. 18",
+      "baseline_seconds": 6350.034999999999,
+      "estimated_seconds": 9039.330815324145,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Садовая, д. 2/11",
+      "baseline_seconds": 6276.405,
+      "estimated_seconds": 8947.335352275826,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Юбилейная, д. 8",
+      "baseline_seconds": 6387.168999999999,
+      "estimated_seconds": 9085.599667826127,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Кашира, ул.Юбилейная, д. 9",
+      "baseline_seconds": 6483.560000000001,
+      "estimated_seconds": 9205.702945579356,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "МО, г. Кашира Кржижановского ул. д. 7к2",
+      "baseline_seconds": 6511.332000000001,
+      "estimated_seconds": 9240.306957526129,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "МО, г. Кашира Центральная ул. д. 19",
+      "baseline_seconds": 6375.598,
+      "estimated_seconds": 9071.182309503065,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "МО, г. Кашира Центральная ул. д. 21",
+      "baseline_seconds": 6362.603,
+      "estimated_seconds": 9054.990541418698,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "МО, г. Ступино Андропова ул. д. 33",
+      "baseline_seconds": 5378.568,
+      "estimated_seconds": 7836.6839134752,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "m4",
+        "stupino",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "МО, г. Ступино Андропова ул. д. 37",
+      "baseline_seconds": 5345.439999999999,
+      "estimated_seconds": 7793.701701457627,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "m4",
+        "stupino",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Москва Бирюлевская ул. д. 44",
+      "baseline_seconds": 1656.3810000000003,
+      "estimated_seconds": 2879.415194417679,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Москва Булатниковский пр-зд. д. 6к1",
+      "baseline_seconds": 1633.141,
+      "estimated_seconds": 2753.1535580297286,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Москва, проезд Орехово-Зуевский, д. 18/8",
+      "baseline_seconds": 2014.094,
+      "estimated_seconds": 3550.4240647734086,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "Ступино, ул.Калинина, д. 34",
+      "baseline_seconds": 5338.048000000001,
+      "estimated_seconds": 7784.047854633192,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "m4",
+        "stupino",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, б-р.Самаркандский, д. 10к2",
+      "baseline_seconds": 2704.7019999999998,
+      "estimated_seconds": 4714.626693520342,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, б-р.Самаркандский, д. 32к1",
+      "baseline_seconds": 2592.59,
+      "estimated_seconds": 4515.067362532126,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, наб.Семеновская, д. 2/1",
+      "baseline_seconds": 2586.204,
+      "estimated_seconds": 4848.813330371399,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, наб.Семеновская, д. 3/1к2",
+      "baseline_seconds": 2667.748000000001,
+      "estimated_seconds": 4992.330825831588,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, пр-кт.Волгоградский, д. 128к1",
+      "baseline_seconds": 2182.357,
+      "estimated_seconds": 3795.2041323046374,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, ул.Новорогожская, д. 20",
+      "baseline_seconds": 2120.533,
+      "estimated_seconds": 3755.7518556561117,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, ул.Саратовская, д. 16",
+      "baseline_seconds": 2026.806,
+      "estimated_seconds": 3674.1520337563625,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban"
+      ]
+    },
+    {
+      "origin": "г.Москва проезд Симферопольский, д.7",
+      "destination": "г.Город Москва, ул.Ташкентская, д. 16к2",
+      "baseline_seconds": 2526.5289999999995,
+      "estimated_seconds": 4396.557280429713,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Волжский, д. 50 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2331.5189999999993,
+      "estimated_seconds": 4251.394044253332,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Кленовый, д. 10 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1081.571,
+      "estimated_seconds": 1825.6855009910716,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Ореховый, д. 11 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1588.525,
+      "estimated_seconds": 3015.2126851947337,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Ореховый, д. 35 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1654.474,
+      "estimated_seconds": 3139.9594853773133,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Ореховый, д. 61 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1948.3770000000002,
+      "estimated_seconds": 3682.271959773834,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Ореховый, д. 7 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1585.5360000000003,
+      "estimated_seconds": 2982.4205770459375,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Симферопольский, д. 27",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 579.717,
+      "estimated_seconds": 988.748101328242,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Смоленский, д. 17 стр. 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1595.0200000000002,
+      "estimated_seconds": 2893.6036152792562,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Черноморский, д. 19 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 703.4689999999999,
+      "estimated_seconds": 1206.3839674528967,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Чонгарский, д. 1 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 657.989,
+      "estimated_seconds": 1163.6901217275288,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, б-р.Чонгарский, д. 22 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 559.889,
+      "estimated_seconds": 953.8706571092226,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, наб.Нагатинская, д. 60 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1248.257,
+      "estimated_seconds": 2126.806456101187,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пер.Большой Рогожский, д. 10 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1873.0120000000002,
+      "estimated_seconds": 3294.464509533668,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пер.Маяковского, д. 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1755.4730000000004,
+      "estimated_seconds": 3079.090360840325,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пер.Ослябинский, д. 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1466.9040000000002,
+      "estimated_seconds": 2550.8980259956775,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.60-летия Октября, д. 17",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1138.648,
+      "estimated_seconds": 1986.4441779160557,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.60-летия Октября, д. 18 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 955.984,
+      "estimated_seconds": 1657.0207096745849,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Балаклавский, д. 20 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 769.442,
+      "estimated_seconds": 1323.749923039767,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Балаклавский, д. 50",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1026.256,
+      "estimated_seconds": 1783.1737032565725,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Волгоградский, д. 128 к 5",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2715.4099999999994,
+      "estimated_seconds": 5386.523918865282,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Волгоградский, д. 97 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2199.4009999999994,
+      "estimated_seconds": 4356.376228103778,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Нахимовский, д. 50",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1057.835,
+      "estimated_seconds": 1840.20052128165,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Пролетарский, д. 14А",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1148.4210000000003,
+      "estimated_seconds": 2059.2597691016545,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Пролетарский, д. 18 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1334.239,
+      "estimated_seconds": 2398.491516660471,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Рязанский, д. 73",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2568.375,
+      "estimated_seconds": 4488.194999412463,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, пр-кт.Севастопольский, д. 9 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1013.618,
+      "estimated_seconds": 1728.8100887155565,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.3-й Павелецкий, д. 7 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1129.7670000000003,
+      "estimated_seconds": 1863.2095342345258,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.3-й Павелецкий, д. 9",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1038.6549999999997,
+      "estimated_seconds": 1700.066821352581,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Борисовский, д. 44 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1505.7390000000003,
+      "estimated_seconds": 2835.4915816053376,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Востряковский, д. 15 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1854.171,
+      "estimated_seconds": 3472.097982154386,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Востряковский, д. 15 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1982.7680000000005,
+      "estimated_seconds": 3707.59154932527,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Гурьевский, д. 19 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2059.0059999999994,
+      "estimated_seconds": 3916.9646002708705,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Гурьевский, д. 23 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2074.715,
+      "estimated_seconds": 3945.6409915745007,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Загорьевский, д. 7 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2214.041,
+      "estimated_seconds": 4128.39386951945,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Загорьевский, д. 9",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2070.2699999999995,
+      "estimated_seconds": 3747.4028510841094,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Коломенский, д. 27 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 765.429,
+      "estimated_seconds": 1316.610802226588,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Ореховый, д. 23 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1511.4500000000003,
+      "estimated_seconds": 2846.0648167308786,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Ореховый, д. 41",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1624.8460000000002,
+      "estimated_seconds": 3055.8733086075026,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Ферганский, д. 7 к 5",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2916.92,
+      "estimated_seconds": 5793.660025964831,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, проезд.Шипиловский, д. 59 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1734.0420000000001,
+      "estimated_seconds": 3214.9945997293958,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.1-я Дубровская, д. 6",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1651.236,
+      "estimated_seconds": 3021.9690117033565,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.1-я Новокузьминская, д. 16 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2627.4430000000007,
+      "estimated_seconds": 4576.9373706011975,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.11-я Текстильщиков, д. 10",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2333.008,
+      "estimated_seconds": 4422.725920034674,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.2-я Рощинская, д. 11",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1000.8660000000001,
+      "estimated_seconds": 1705.9385557332355,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.2-я Синичкина, д. 9 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2538.87,
+      "estimated_seconds": 4998.196566250788,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.3-я Институтская, д. 5 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2527.386,
+      "estimated_seconds": 4393.253068399604,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.3-я Карачаровская, д. 4 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2507.052,
+      "estimated_seconds": 4190.599238168353,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.3-я Карачаровская, д. 8 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2575.32,
+      "estimated_seconds": 4312.485507800529,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.6-я Радиальная, д. 5 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1681.2050000000002,
+      "estimated_seconds": 3153.5532443040065,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.6-я Радиальная, д. 7/1 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1743.6499999999999,
+      "estimated_seconds": 3268.7072513534695,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Авиамоторная, д. 14",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2429.222,
+      "estimated_seconds": 4792.452427447867,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Автозаводская, д. 11",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1303.231,
+      "estimated_seconds": 2252.6135609364765,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Академика Миллионщикова, д. 13 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 712.381,
+      "estimated_seconds": 1222.2384088181448,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Артюхиной, д. 16",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2251.9770000000003,
+      "estimated_seconds": 4275.666926263049,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Артюхиной, д. 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2311.5639999999994,
+      "estimated_seconds": 4383.814700228113,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Бирюлёвская, д. 39",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1880.5419999999997,
+      "estimated_seconds": 3520.4747175890734,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Бирюлёвская, д. 58 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2024.373,
+      "estimated_seconds": 3783.6031151460884,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Болотниковская, д. 9 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 509.79800000000006,
+      "estimated_seconds": 866.2277447523867,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Большая Калитниковская, д. 38",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2127.624,
+      "estimated_seconds": 4122.721464652086,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Большая Пионерская, д. 33 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1417.739,
+      "estimated_seconds": 2461.123520342229,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Большая Серпуховская, д. 31 к 6",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1298.957,
+      "estimated_seconds": 2244.8425674812165,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Борисовские Пруды, д. 20 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1628.6630000000002,
+      "estimated_seconds": 3020.603350879202,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Борисовские Пруды, д. 48 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1929.9799999999998,
+      "estimated_seconds": 3574.9213187212554,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Боровая, д. 12",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2653.5279999999993,
+      "estimated_seconds": 5201.866867473106,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Боровая, д. 14",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2630.9300000000003,
+      "estimated_seconds": 5162.075754897082,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Братеевская, д. 16 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1911.14,
+      "estimated_seconds": 3540.3431170081685,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Братеевская, д. 18 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1862.0169999999998,
+      "estimated_seconds": 3450.2315590189705,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Бронницкая, д. 12",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2286.9420000000005,
+      "estimated_seconds": 3865.3605929780583,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Булатниковская, д. 4 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1855.5729999999999,
+      "estimated_seconds": 3474.6698146832687,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Весёлая, д. 33 к 7",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1321.48,
+      "estimated_seconds": 2375.1952241532267,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Винокурова, д. 12 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 853.5840000000001,
+      "estimated_seconds": 1473.3648188316715,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Винокурова, д. 5/6 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 861.86,
+      "estimated_seconds": 1488.0878346669574,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Восточная, д. 2 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1388.6580000000001,
+      "estimated_seconds": 2408.0219897249613,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Генерала Белова, д. 45 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1614.473,
+      "estimated_seconds": 3075.4102896847467,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Городская, д. 9",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 940.1369999999998,
+      "estimated_seconds": 1597.0481054282623,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Грайвороновская, д. 10 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2292.569,
+      "estimated_seconds": 4349.336066473775,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Дмитрия Ульянова, д. 27",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 815.616,
+      "estimated_seconds": 1405.8203013990403,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Домодедовская, д. 31",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1744.08,
+      "estimated_seconds": 3275.403429516102,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Ереванская, д. 29",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1304.977,
+      "estimated_seconds": 2396.6355787802577,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Зарайская, д. 51 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2555.115,
+      "estimated_seconds": 4411.264347895512,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Затонная, д. 11 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1256.7909999999997,
+      "estimated_seconds": 2142.3020763008035,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Затонная, д. 12 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1247.1849999999995,
+      "estimated_seconds": 2124.8599708782785,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Зеленодольская, д. 28Б",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2560.1190000000006,
+      "estimated_seconds": 4978.187513200857,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Земляной Вал, д. 24/30 стр. 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1845.7020000000002,
+      "estimated_seconds": 3406.2893120823337,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Кантемировская, д. 5 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1313.0530000000003,
+      "estimated_seconds": 2411.4887954023357,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Каховка, д. 7 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 628.9900000000001,
+      "estimated_seconds": 1075.3853722509568,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Керченская, д. 10 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 757.385,
+      "estimated_seconds": 1302.300526018621,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Керченская, д. 6 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 800.2019999999999,
+      "estimated_seconds": 1378.448360986781,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Коломенская, д. 21",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1384.5840000000003,
+      "estimated_seconds": 2374.4875743303437,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Коломенская, д. 5",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1491.8749999999998,
+      "estimated_seconds": 2570.1312884544886,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Кустанайская, д. 8 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1811.646,
+      "estimated_seconds": 3400.7752298507735,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Кустанайская, д. 9 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1803.127,
+      "estimated_seconds": 3385.069919650144,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Луганская, д. 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1168.3289999999997,
+      "estimated_seconds": 2095.3801235252995,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Луганская, д. 3 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1177.388,
+      "estimated_seconds": 2111.888316244859,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Луганская, д. 4 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1280.11,
+      "estimated_seconds": 2299.6269480460123,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Люсиновская, д. 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1105.437,
+      "estimated_seconds": 1894.2230222035787,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Малышева, д. 13",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2348.812,
+      "estimated_seconds": 4451.402462839781,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Маршала Захарова, д. 18 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1442.9670000000003,
+      "estimated_seconds": 2706.66675525884,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Маршала Чуйкова, д. 9 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2412.3320000000003,
+      "estimated_seconds": 4396.2294594328505,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Машкова, д. 13 стр. 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1985.8159999999998,
+      "estimated_seconds": 3686.700515448811,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Медынская, д. 5 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1834.461,
+      "estimated_seconds": 3435.869617782594,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Международная, д. 28 стр. 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1991.3590000000002,
+      "estimated_seconds": 3535.4457646426376,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Михайлова, д. 14",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2374.7770000000005,
+      "estimated_seconds": 4076.097348362474,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Москворечье, д. 4 к 6",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 971.1930000000001,
+      "estimated_seconds": 1737.7721182505861,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Мусы Джалиля, д. 9 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1875.535,
+      "estimated_seconds": 3518.3140838164163,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Нагорная, д. 44 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 759.3900000000001,
+      "estimated_seconds": 1305.8674210844895,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Нижегородская, д. 25",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2251.307,
+      "estimated_seconds": 4349.068479126861,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Нижегородская, д. 61",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2136.154,
+      "estimated_seconds": 3560.833774579884,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Нижегородская, д. 63",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2110.904,
+      "estimated_seconds": 3515.1676718227905,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Новорогожская, д. 10",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1923.66,
+      "estimated_seconds": 3387.118088926488,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Новорогожская, д. 8",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1976.463,
+      "estimated_seconds": 3483.702136199529,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Окская, д. 32",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2453.6680000000006,
+      "estimated_seconds": 4788.422294631736,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Окская, д. 48/2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2577.883,
+      "estimated_seconds": 5009.861183173169,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Окская, д. 6 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2276.782,
+      "estimated_seconds": 4468.1215935349865,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Паперника, д. 18",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2614.6409999999996,
+      "estimated_seconds": 4554.03520687846,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Паперника, д. 19",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2541.712,
+      "estimated_seconds": 4422.356448745303,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Паромная, д. 9 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1816.8699999999997,
+      "estimated_seconds": 3367.3574641822565,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Плющиха, д. 42",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1717.881,
+      "estimated_seconds": 3100.7580238795263,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "garden",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Профсоюзная, д. 8 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 949.0859999999999,
+      "estimated_seconds": 1644.631896230279,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Ремизова, д. 15 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 575.254,
+      "estimated_seconds": 980.8976679298398,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Рогожский Вал, д. 2/50",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1932.33,
+      "estimated_seconds": 3402.976590515045,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Садовники, д. 10 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 846.6540000000001,
+      "estimated_seconds": 1461.0363717764944,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Саратовская, д. 14/1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2092.365,
+      "estimated_seconds": 3983.9034187696766,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Севанская, д. 15 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1414.8879999999997,
+      "estimated_seconds": 2546.369927531113,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Смирновская, д. 6",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2276.12,
+      "estimated_seconds": 4394.22253645142,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Сторожевая, д. 31",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2553.9439999999995,
+      "estimated_seconds": 5025.187654021762,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "enthusiasts",
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Стройковская, д. 8",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1886.6040000000003,
+      "estimated_seconds": 3325.1457842797163,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Судостроительная, д. 27 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1138.382,
+      "estimated_seconds": 1928.2826630851805,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Судостроительная, д. 31 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1188.4519999999998,
+      "estimated_seconds": 2018.709541138815,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Судостроительная, д. 36",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1173.778,
+      "estimated_seconds": 1992.2261052812332,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Талалихина, д. 16",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1962.8879999999997,
+      "estimated_seconds": 3682.2058303925696,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Талалихина, д. 2/1 к 4",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1813.531,
+      "estimated_seconds": 3185.4283801011175,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Трофимова, д. 24 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1351.6879999999999,
+      "estimated_seconds": 2373.6183853337834,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Усачёва, д. 25",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1786.0229999999997,
+      "estimated_seconds": 3341.787420527196,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Усачёва, д. 29 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1769.831,
+      "estimated_seconds": 3311.881266901139,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Ферганская, д. 28/7",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2839.614,
+      "estimated_seconds": 5644.64314383464,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Фёдора Полетаева, д. 2 к 6",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2501.486,
+      "estimated_seconds": 4873.735077163303,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Херсонская, д. 18",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 873.0049999999999,
+      "estimated_seconds": 1507.990434596394,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Чистова, д. 12",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2282.999,
+      "estimated_seconds": 4164.004469667327,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "msd",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Чистопольская, д. 2 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2260.7719999999995,
+      "estimated_seconds": 3817.90614256515,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шверника, д. 12/2 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 921.972,
+      "estimated_seconds": 1595.9351513225888,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шверника, д. 14/1 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 864.208,
+      "estimated_seconds": 1492.2649210339016,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шверника, д. 18 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 847.0269999999999,
+      "estimated_seconds": 1461.6999271426407,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шверника, д. 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1017.1670000000003,
+      "estimated_seconds": 1766.8498394073688,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шверника, д. 5 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1007.4179999999999,
+      "estimated_seconds": 1749.3406351010267,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Шипиловская, д. 38",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1433.304,
+      "estimated_seconds": 2701.3444093089493,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ул.Юных Ленинцев, д. 84",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2547.436,
+      "estimated_seconds": 5022.842935575661,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ш.Каширское, д. 136",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1649.8319999999999,
+      "estimated_seconds": 3160.401371173446,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Город Москва, ш.Каширское, д. 94 к 1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1535.373,
+      "estimated_seconds": 2904.1900851559826,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, проезд.Кутузовский, д. 16",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3179.9809999999998,
+      "estimated_seconds": 5688.7999168922415,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "kutuzov",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, проезд.Советский 1-й, д. 1А",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3136.7439999999997,
+      "estimated_seconds": 5588.929774904032,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.1-я Коммунистическая, д. 39",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3244.464,
+      "estimated_seconds": 5692.587700703008,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Зеленая, д. 85",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3242.4219999999996,
+      "estimated_seconds": 5505.681998211648,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Ильюшина, д. 11 к 2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3360.3299999999995,
+      "estimated_seconds": 5855.623432293161,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Ильюшина, д. 20",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3519.2539999999995,
+      "estimated_seconds": 6085.910189703263,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Корнеева, д. 40",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3238.604,
+      "estimated_seconds": 5496.643182288395,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Корнеева, д. 48",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3234.4509999999996,
+      "estimated_seconds": 5490.641417261883,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Домодедово, ул.Корнеева, д. 50",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 3194.574,
+      "estimated_seconds": 5433.00957777216,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "domodedovo",
+        "kashira",
+        "m4",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.8 Марта, д. 22",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6590.664,
+      "estimated_seconds": 9593.709879998183,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Кржижановского, д. 7",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6589.906999999999,
+      "estimated_seconds": 9592.890900554781,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Ленина, д. 11 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6420.428999999999,
+      "estimated_seconds": 9410.297160145132,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Металлургов, д. 5 к 3",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6312.729000000002,
+      "estimated_seconds": 9295.007910120858,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Победы, д. 9",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6277.790000000001,
+      "estimated_seconds": 9256.826261829652,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Садовая, д. 18",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6575.1230000000005,
+      "estimated_seconds": 9576.893505942598,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Садовая, д. 2/11",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6501.325000000001,
+      "estimated_seconds": 9497.202245484958,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Юбилейная, д. 8",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6615.480999999999,
+      "estimated_seconds": 9620.249682540107,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Кашира, ул.Юбилейная, д. 9",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6712.885,
+      "estimated_seconds": 9723.569932372246,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "МО, г. Кашира Кржижановского ул. д. 7к2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6738.9400000000005,
+      "estimated_seconds": 9751.424922594726,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "МО, г. Кашира Центральная ул. д. 19",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6600.735,
+      "estimated_seconds": 9604.543585406738,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "МО, г. Кашира Центральная ул. д. 21",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 6586.293000000001,
+      "estimated_seconds": 9588.980325983744,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira_local",
+        "m4",
+        "regional",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "МО, г. Ступино Андропова ул. д. 33",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 5628.157,
+      "estimated_seconds": 8532.944620262422,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "m4",
+        "stupino",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "МО, г. Ступино Андропова ул. д. 37",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 5594.645,
+      "estimated_seconds": 8494.888384007407,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "m4",
+        "stupino",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Москва Бирюлевская ул. д. 44",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1848.6180000000002,
+      "estimated_seconds": 3461.89143974186,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Москва Булатниковский пр-зд. д. 6к1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 1915.339,
+      "estimated_seconds": 3584.3085863808965,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Москва, проезд Орехово-Зуевский, д. 18/8",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2252.839,
+      "estimated_seconds": 3803.470064272727,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "msd",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "Ступино, ул.Калинина, д. 34",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 5586.09,
+      "estimated_seconds": 8485.172148959846,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "m4",
+        "stupino",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, б-р.Самаркандский, д. 10к2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2999.9540000000006,
+      "estimated_seconds": 5469.965242870576,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "kashira",
+        "mkad",
+        "ryazan",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, б-р.Самаркандский, д. 32к1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2677.7830000000004,
+      "estimated_seconds": 5361.793006283356,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, наб.Семеновская, д. 2/1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2832.846,
+      "estimated_seconds": 5542.416261738803,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, наб.Семеновская, д. 3/1к2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2950.9950000000003,
+      "estimated_seconds": 5745.809937777134,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, пр-кт.Волгоградский, д. 128к1",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2646.778,
+      "estimated_seconds": 5264.861961175345,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, ул.Новорогожская, д. 20",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2203.715,
+      "estimated_seconds": 4262.271073695124,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, ул.Саратовская, д. 16",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2109.8069999999993,
+      "estimated_seconds": 4015.87479154445,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "warsaw"
+      ]
+    },
+    {
+      "origin": "г.Город Москва, ул.Ташкентская, д. 16к2",
+      "destination": "г.Москва проезд Симферопольский, д.7",
+      "baseline_seconds": 2805.009,
+      "estimated_seconds": 5573.917818306466,
+      "uncovered_seconds": 0.0,
+      "all_shape_points_covered": true,
+      "profiles": [
+        "ttk",
+        "urban",
+        "volgograd",
+        "warsaw"
+      ]
+    }
+  ]
+}

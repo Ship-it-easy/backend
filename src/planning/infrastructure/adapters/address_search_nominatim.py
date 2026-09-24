@@ -14,13 +14,13 @@ _MOSCOW_PREFIX = re.compile(
     r"^\s*(?:г\.\s*)?(?:город\s+)?москва\s*,?\s*", re.IGNORECASE
 )
 _ADDRESS_ABBREVIATIONS = (
-    (re.compile(r"\bпр-кт\.?\s*", re.IGNORECASE), "проспект "),
+    (re.compile(r"\bпр-кт(?:\.\s*|\s+)", re.IGNORECASE), "проспект "),
     (re.compile(r"\bпросп\.\s*", re.IGNORECASE), "проспект "),
-    (re.compile(r"\bул\.?\s*", re.IGNORECASE), "улица "),
-    (re.compile(r"\bпер\.?\s*", re.IGNORECASE), "переулок "),
-    (re.compile(r"\bб-р\.?\s*", re.IGNORECASE), "бульвар "),
-    (re.compile(r"\bнаб\.?\s*", re.IGNORECASE), "набережная "),
-    (re.compile(r"\bпр-д\.?\s*", re.IGNORECASE), "проезд "),
+    (re.compile(r"\bул(?:\.\s*|\s+)", re.IGNORECASE), "улица "),
+    (re.compile(r"\bпер(?:\.\s*|\s+)", re.IGNORECASE), "переулок "),
+    (re.compile(r"\bб-р(?:\.\s*|\s+)", re.IGNORECASE), "бульвар "),
+    (re.compile(r"\bнаб(?:\.\s*|\s+)", re.IGNORECASE), "набережная "),
+    (re.compile(r"\b(?:пр-д|пр-зд)(?:\.\s*|\s+)", re.IGNORECASE), "проезд "),
     (re.compile(r"\bпроезд\.\s*", re.IGNORECASE), "проезд "),
     (re.compile(r"\bд(?:\.\s*|\s+)(?=\d|к\d)", re.IGNORECASE), "дом "),
 )
@@ -48,9 +48,7 @@ def address_search_queries(address: str) -> tuple[str, ...]:
         flags=re.IGNORECASE,
     )
     normalized = re.sub(r"\bдом\s+", "", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(
-        r"\s+стр\.?\s*(\d+)", r" с\1", normalized, flags=re.IGNORECASE
-    )
+    normalized = re.sub(r"\s+стр\.?\s*(\d+)", r" с\1", normalized, flags=re.IGNORECASE)
     without_structure = re.sub(r"\s+с\d+\b", "", normalized, flags=re.IGNORECASE)
     base_house = re.sub(
         r"(\d+)[а-яa-z]+(?=\s*$)", r"\1", without_structure, flags=re.IGNORECASE

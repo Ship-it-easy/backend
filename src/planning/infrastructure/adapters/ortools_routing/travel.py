@@ -4,6 +4,8 @@ import asyncio
 import math
 import time as monotonic_time
 from dataclasses import dataclass
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from planning.application.errors import SolverTimeLimit
 from planning.application.interfaces.travel_matrix_provider import (
@@ -13,6 +15,7 @@ from planning.application.interfaces.travel_matrix_provider import (
 from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.planning import PlanningInput
 from planning.domain.enums import TransportType
+from planning.domain.traffic import CORRIDORS, INTERVAL_MINUTES, coefficient, covered
 
 MatrixByProfile = dict[str, list[list[int | None]]]
 
@@ -54,7 +57,50 @@ async def prepare_travel_matrices(
             )
     except TimeoutError as error:
         raise SolverTimeLimit("MATRIX_TIME_LIMIT") from error
+    if getattr(matrix_provider, "planning_traffic_enabled", False):
+        raw_matrices = _traffic_envelope(data, coordinates, raw_matrices)
     return _convert_matrices(raw_matrices, len(coordinates))
+
+
+def _traffic_envelope(data, coordinates, raw_matrices):
+    """Conservative shift envelope for the static VRP, not departure-specific ETA.
+
+    Baselines alone stay in the event snapshot/cache. Recalculate this bound for
+    each planning date so future candidates cannot reuse today's traffic factor.
+    """
+    drivers = [e for e in data.engineers if e.transport_type == TransportType.CAR]
+    if not drivers or "auto" not in raw_matrices:
+        return raw_matrices
+    midnight = datetime.combine(data.planning_date, time.min, ZoneInfo(data.timezone))
+    start = (
+        min(e.shift_start_min for e in drivers) // INTERVAL_MINUTES * INTERVAL_MINUTES
+    )
+    end = max(e.shift_end_min for e in drivers)
+    factor = max(
+        coefficient(key, midnight + timedelta(minutes=minute))
+        for key in CORRIDORS
+        for minute in range(
+            start, max(start, end) + INTERVAL_MINUTES + 1, INTERVAL_MINUTES
+        )
+    )
+    raw = raw_matrices["auto"]
+    within = [covered(c.latitude, c.longitude) for c in coordinates]
+    # No claim of congestion coverage outside the model's geographic boundary.
+    adjusted = [
+        [
+            math.ceil(value * factor)
+            if value is not None and within[i] and within[j]
+            else value
+            for j, value in enumerate(row)
+        ]
+        for i, row in enumerate(raw.travel_time_seconds)
+    ]
+    return {
+        **raw_matrices,
+        "auto": TravelMatrix(
+            adjusted, raw.distance_meters, "auto", "MOSCOW_SCENARIO_SHIFT_ENVELOPE"
+        ),
+    }
 
 
 async def _load_snapshot_matrices(
