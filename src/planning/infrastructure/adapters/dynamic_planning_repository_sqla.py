@@ -88,9 +88,7 @@ class SqlaDynamicPlanningRepository:
             # Serialize the read/create pair for manual starts. The transaction
             # lock closes the race where two UI requests both observe no active
             # event and enqueue duplicate calculations for the same project.
-            await self._session.execute(
-                select(func.pg_advisory_xact_lock(project_id))
-            )
+            await self._session.execute(select(func.pg_advisory_xact_lock(project_id)))
             active = await self.get_active_event(project_id)
             if active is not None:
                 return {**active, "_reused_active": True}
@@ -524,14 +522,14 @@ class SqlaDynamicPlanningRepository:
         rows = (
             (
                 await self._session.execute(
-            update(planning_events)
-            .where(planning_events.c.id.in_(event_ids))
-            .values(
-                state="PENDING" if retry else "FAILED",
-                error_code=code,
-                error_message=message[:1000],
-                finished_at=None if retry else finished_at,
-            )
+                    update(planning_events)
+                    .where(planning_events.c.id.in_(event_ids))
+                    .values(
+                        state="PENDING" if retry else "FAILED",
+                        error_code=code,
+                        error_message=message[:1000],
+                        finished_at=None if retry else finished_at,
+                    )
                     .returning(
                         planning_events.c.id,
                         planning_events.c.project_id,
@@ -559,9 +557,7 @@ class SqlaDynamicPlanningRepository:
                     event.project_id,
                     event.id,
                     code,
-                    round(
-                        (finished_at - event.requested_at).total_seconds() * 1000
-                    ),
+                    round((finished_at - event.requested_at).total_seconds() * 1000),
                 )
 
     async def publish(
@@ -848,6 +844,13 @@ class SqlaDynamicPlanningRepository:
             )
         new = {int(item["job_id"]): item for item in assignments}
         changes = _changes(old, new, version_id, project_id)
+        unassigned_by_job = {int(item["job_id"]): item for item in unassigned}
+        for change in changes:
+            if change["change_type"] != "DISPLACED":
+                continue
+            unassigned_job = unassigned_by_job.get(int(change["job_id"]))
+            if unassigned_job and unassigned_job.get("primary_reason_code"):
+                change["reason"] = str(unassigned_job["primary_reason_code"])
         event_rows = (
             (
                 await self._session.execute(
@@ -913,6 +916,9 @@ class SqlaDynamicPlanningRepository:
             .mappings()
             .all()
         )
+        version_planning_metrics = _planning_metrics(
+            assignments, [item.planning_date for item in run_rows]
+        )
         publication_metrics = {
             **(batch.metrics or {}),
             "source_event_count": len(event_ids),
@@ -952,6 +958,12 @@ class SqlaDynamicPlanningRepository:
                     route_distances.items()
                 )
             ],
+            # Keep an immutable operational breakdown on the version itself.
+            # The same values can be rebuilt from project_plan_assignments for
+            # legacy versions, but persisting them makes exports and audits
+            # independent from the read-model implementation.
+            "daily_metrics": version_planning_metrics["days"],
+            "engineer_metrics": version_planning_metrics["engineers"],
         }
         await self._session.execute(
             update(project_plan_versions)
@@ -1143,8 +1155,7 @@ class SqlaDynamicPlanningRepository:
         cancelled_changes = [
             item
             for item in changes
-            if item.get("change_type") == "CANCELLED"
-            and item.get("old_assignment")
+            if item.get("change_type") == "CANCELLED" and item.get("old_assignment")
         ]
         if not cancelled_changes:
             return
@@ -1223,8 +1234,7 @@ class SqlaDynamicPlanningRepository:
                     )
                     .join(
                         planning_routes,
-                        planning_routes.c.id
-                        == planning_route_jobs.c.planning_route_id,
+                        planning_routes.c.id == planning_route_jobs.c.planning_route_id,
                     )
                     .where(planning_route_jobs.c.planning_run_id.in_(run_ids))
                 )
@@ -1234,9 +1244,9 @@ class SqlaDynamicPlanningRepository:
         )
         route_assignments_by_run: dict[int, list[dict[str, Any]]] = {}
         for item in route_assignment_rows:
-            route_assignments_by_run.setdefault(
-                int(item.planning_run_id), []
-            ).append(dict(item))
+            route_assignments_by_run.setdefault(int(item.planning_run_id), []).append(
+                dict(item)
+            )
         current_assignment_rows = (
             (
                 await self._session.execute(
@@ -1489,9 +1499,7 @@ class SqlaDynamicPlanningRepository:
                                 planning_cancelled_job_snapshots.c.planning_date
                                 <= range_end,
                             )
-                            .group_by(
-                                planning_cancelled_job_snapshots.c.planning_date
-                            )
+                            .group_by(planning_cancelled_job_snapshots.c.planning_date)
                         )
                     )
                     .mappings()
@@ -1518,9 +1526,7 @@ class SqlaDynamicPlanningRepository:
                     ),
                     "assigned_count": assigned_count,
                     "unassigned_count": (
-                        int(saved_day.unassigned_count)
-                        if saved_day is not None
-                        else 0
+                        int(saved_day.unassigned_count) if saved_day is not None else 0
                     ),
                     "cancelled_count": cancelled_counts.get(planning_date, 0),
                 }
@@ -1541,9 +1547,7 @@ class SqlaDynamicPlanningRepository:
                                 planning_batches.c.status,
                                 planning_batches.c.completion_reason,
                                 planning_batches.c.metrics,
-                            ).where(
-                                planning_batches.c.id == version.planning_batch_id
-                            )
+                            ).where(planning_batches.c.id == version.planning_batch_id)
                         )
                     )
                     .mappings()
@@ -1709,6 +1713,7 @@ class SqlaDynamicPlanningRepository:
             day_result = compatible_results[0] if compatible_results else None
         batch = None
         batch_snapshot: dict[str, Any] = {}
+        version_batch_snapshot: dict[str, Any] = {}
         if version.planning_batch_id is not None:
             batch = (
                 (
@@ -1722,6 +1727,7 @@ class SqlaDynamicPlanningRepository:
                 .one_or_none()
             )
             batch_snapshot = (batch.input_snapshot or {}) if batch else {}
+            version_batch_snapshot = batch_snapshot
         assignment_rows = (
             (
                 await self._session.execute(
@@ -1809,10 +1815,7 @@ class SqlaDynamicPlanningRepository:
         if (
             run is not None
             and run.planning_batch_id is not None
-            and (
-                batch is None
-                or int(batch.id) != int(run.planning_batch_id)
-            )
+            and (batch is None or int(batch.id) != int(run.planning_batch_id))
         ):
             source_batch = (
                 (
@@ -1833,6 +1836,12 @@ class SqlaDynamicPlanningRepository:
             planning_date=planning_date,
             job_ids={int(item.job_id) for item in assignment_rows},
         )
+        final_unassigned_values = list(version.unassigned_jobs or [])
+        final_unassigned_ids = {
+            int(item["job_id"])
+            for item in final_unassigned_values
+            if item.get("job_id") is not None
+        }
         unassigned_rows = []
         if run is not None:
             unassigned_rows = (
@@ -1860,6 +1869,9 @@ class SqlaDynamicPlanningRepository:
                 .mappings()
                 .all()
             )
+        unassigned_rows = _include_final_unassigned_rows(
+            unassigned_rows, final_unassigned_values
+        )
         cancelled_snapshots = (
             (
                 await self._session.execute(
@@ -1880,7 +1892,7 @@ class SqlaDynamicPlanningRepository:
         batch_jobs = {int(item["id"]): item for item in batch_snapshot.get("jobs", [])}
         all_job_ids = {
             *(int(item.job_id) for item in assignment_rows),
-            *(int(item.job_id) for item in unassigned_rows),
+            *(int(item["job_id"]) for item in unassigned_rows),
             *(int(item.job_id) for item in cancelled_snapshots),
             *run_jobs,
         }
@@ -1949,9 +1961,6 @@ class SqlaDynamicPlanningRepository:
             current = later_dates.get(int(item.job_id))
             if current is None or item.planning_date < current:
                 later_dates[int(item.job_id)] = item.planning_date
-        final_unassigned_ids = {
-            int(item["job_id"]) for item in (version.unassigned_jobs or [])
-        }
         snapshot_equipment_names = {
             int(item["id"]): item.get("name")
             for item in batch_snapshot.get("equipment_types", [])
@@ -1971,23 +1980,33 @@ class SqlaDynamicPlanningRepository:
             )
         }
 
-        def job_snapshot(job_id: int) -> dict[str, Any]:
-            source_context = assignment_source_contexts.get(job_id, {})
-            source_batch_snapshot = source_context.get(
-                "batch_snapshot", batch_snapshot
+        def job_snapshot(job_id: int, *, final_horizon: bool = False) -> dict[str, Any]:
+            source_context = (
+                {} if final_horizon else assignment_source_contexts.get(job_id, {})
             )
-            source_run_snapshot = source_context.get("run_snapshot", input_snapshot)
+            source_batch_snapshot = (
+                version_batch_snapshot
+                if final_horizon
+                else source_context.get("batch_snapshot", batch_snapshot)
+            )
+            source_run_snapshot = (
+                {}
+                if final_horizon
+                else source_context.get("run_snapshot", input_snapshot)
+            )
             source_batch_jobs = {
-                int(item["id"]): item
-                for item in source_batch_snapshot.get("jobs", [])
+                int(item["id"]): item for item in source_batch_snapshot.get("jobs", [])
             }
             source_run_jobs = {
-                int(item["id"]): item
-                for item in source_run_snapshot.get("jobs", [])
+                int(item["id"]): item for item in source_run_snapshot.get("jobs", [])
             }
             saved = {
-                **source_batch_jobs.get(job_id, batch_jobs.get(job_id, {})),
-                **source_run_jobs.get(job_id, run_jobs.get(job_id, {})),
+                **source_batch_jobs.get(
+                    job_id, {} if final_horizon else batch_jobs.get(job_id, {})
+                ),
+                **source_run_jobs.get(
+                    job_id, {} if final_horizon else run_jobs.get(job_id, {})
+                ),
             }
             current = database_jobs.get(job_id, {})
             value = {
@@ -2025,14 +2044,21 @@ class SqlaDynamicPlanningRepository:
                 int(item["id"]): item.get("name")
                 for item in source_batch_snapshot.get("equipment_types", [])
             }
-            required_equipment_ids = [
-                int(item) for item in value.get("required_equipment", [])
-            ]
+            required_equipment_ids = _snapshot_requirement_ids(
+                value, source_batch_snapshot, "required_equipment"
+            )
+            value["required_qualifications"] = _snapshot_requirement_ids(
+                value, source_batch_snapshot, "required_qualifications"
+            )
             value["required_equipment"] = [
                 {
                     "id": equipment_id,
                     "name": source_equipment_names.get(equipment_id)
-                    or snapshot_equipment_names.get(equipment_id)
+                    or (
+                        None
+                        if final_horizon
+                        else snapshot_equipment_names.get(equipment_id)
+                    )
                     or database_equipment_names.get(equipment_id)
                     or "Название оборудования недоступно",
                 }
@@ -2044,9 +2070,7 @@ class SqlaDynamicPlanningRepository:
                 or (
                     snapshot_updated_at
                     and current.get("updated_at")
-                    and not _same_instant(
-                        snapshot_updated_at, current["updated_at"]
-                    )
+                    and not _same_instant(snapshot_updated_at, current["updated_at"])
                 )
             )
             return _jsonable(value)
@@ -2068,10 +2092,7 @@ class SqlaDynamicPlanningRepository:
         engineer_ids = (
             set(schedule_by_engineer)
             | {int(item.engineer_id) for item in assignment_rows}
-            | {
-                int(item.engineer_id)
-                for item in cancelled_snapshots
-            }
+            | {int(item.engineer_id) for item in cancelled_snapshots}
         )
         current_schedule_ids: set[int] = set()
         if engineer_ids:
@@ -2090,9 +2111,7 @@ class SqlaDynamicPlanningRepository:
             for item in current_schedules:
                 engineer_id = int(item.engineer_id)
                 current_schedule_ids.add(engineer_id)
-                schedule_by_engineer.setdefault(
-                    engineer_id, _jsonable(dict(item))
-                )
+                schedule_by_engineer.setdefault(engineer_id, _jsonable(dict(item)))
         engineer_rows = []
         if engineer_ids:
             engineer_rows = (
@@ -2161,9 +2180,7 @@ class SqlaDynamicPlanningRepository:
                 str(item.job_id), {}
             )
             reason_job = {**job, "priority_bonus": penalty.get("priority_bonus")}
-            primary = assigned_primary_reason(
-                reason_job, planning_date, eligible_count
-            )
+            primary = assigned_primary_reason(reason_job, planning_date, eligible_count)
             card = {
                 "job_id": int(item.job_id),
                 "outcome": "ASSIGNED",
@@ -2232,10 +2249,7 @@ class SqlaDynamicPlanningRepository:
                     "shift_start": schedule.get("shift_start"),
                     "shift_end": schedule.get("shift_end"),
                     "unavailable": not bool(engineer.get("active", True))
-                    or (
-                        bool(active_cards)
-                        and engineer_id not in current_schedule_ids
-                    ),
+                    or (bool(active_cards) and engineer_id not in current_schedule_ids),
                     "active_count": len(active_cards),
                     "route_duration_min": sum(
                         int(card.get("duration_min") or 0)
@@ -2254,18 +2268,72 @@ class SqlaDynamicPlanningRepository:
         moved = []
         horizon = []
         for item in unassigned_rows:
-            job_id = int(item.job_id)
+            job_id = int(item["job_id"])
             if any(
                 card["job_id"] == job_id
                 for cards in assigned_by_engineer.values()
                 for card in cards
             ):
                 continue
-            job = job_snapshot(job_id)
+            final_horizon = bool(item.get("_final_horizon_outcome"))
+            reason_snapshot = (
+                version_batch_snapshot if final_horizon else batch_snapshot
+            )
+            job = job_snapshot(job_id, final_horizon=final_horizon)
             statuses.add(str(job.get("status") or "NEW"))
             later = later_dates.get(job_id)
-            diagnostic_flags = dict(item.diagnostic_flags or {})
-            saved_reason_code = str(item.primary_reason_code or "")
+            diagnostic_flags = dict(item.get("diagnostic_flags") or {})
+            saved_reason_code = str(item.get("primary_reason_code") or "")
+            required_equipment = job.get("required_equipment", [])
+            equipment_units = reason_snapshot.get("equipment_units", {})
+            missing_equipment = []
+            for equipment in required_equipment:
+                equipment_id = int(
+                    equipment.get("id") if isinstance(equipment, dict) else equipment
+                )
+                if "equipment_units" not in reason_snapshot:
+                    continue
+                available_units = int(
+                    equipment_units.get(
+                        str(equipment_id), equipment_units.get(equipment_id, 0)
+                    )
+                    or 0
+                )
+                if available_units <= 0:
+                    missing_equipment.append(
+                        {
+                            "id": equipment_id,
+                            "name": (
+                                equipment.get("name")
+                                if isinstance(equipment, dict)
+                                else database_equipment_names.get(equipment_id)
+                            ),
+                            "available_units": available_units,
+                        }
+                    )
+            if missing_equipment:
+                diagnostic_flags["missing_equipment"] = missing_equipment
+                diagnostic_flags.setdefault(
+                    "required_equipment_type_ids",
+                    [value["id"] for value in missing_equipment],
+                )
+                # Repair legacy/generic daily reasons using the immutable batch
+                # snapshot. Zero mandatory stock is more specific than a missing
+                # current shift and makes the job impossible throughout the run.
+                if saved_reason_code in {
+                    "",
+                    "NO_AVAILABLE_ENGINEER",
+                    "NO_AVAILABLE_ENGINEER_TODAY",
+                    "NO_COMPATIBLE_ENGINEER",
+                    "NO_COMPATIBLE_ENGINEER_IN_HORIZON",
+                    "NO_SHIFT_IN_HORIZON",
+                    "NOT_SELECTED_BY_OPTIMIZER",
+                    "NOT_ASSIGNED_WITHIN_HORIZON",
+                    "DATASET_LIMIT",
+                    "DAILY_EQUIPMENT_CAPACITY",
+                    "EQUIPMENT_UNAVAILABLE_IN_HORIZON",
+                }:
+                    saved_reason_code = "EQUIPMENT_UNAVAILABLE_IN_HORIZON"
             if saved_reason_code in {
                 "NO_AVAILABLE_ENGINEER",
                 "NO_AVAILABLE_ENGINEER_TODAY",
@@ -2278,18 +2346,13 @@ class SqlaDynamicPlanningRepository:
                 )
                 diagnostic_flags.setdefault(
                     "required_equipment_type_ids",
-                    [
-                        value["id"]
-                        for value in job.get("required_equipment", [])
-                    ],
+                    [value["id"] for value in job.get("required_equipment", [])],
                 )
                 diagnostic_flags.setdefault(
                     "required_transport", job.get("required_transport")
                 )
             if saved_reason_code in {"NO_SHIFT_IN_HORIZON", "NO_AVAILABLE_ENGINEER"}:
-                diagnostic_flags.setdefault(
-                    "planning_date", planning_date.isoformat()
-                )
+                diagnostic_flags.setdefault("planning_date", planning_date.isoformat())
             if saved_reason_code in {
                 "INVALID_TIME_WINDOW",
                 "INVALID_TIME_WINDOW_FOR_HORIZON",
@@ -2298,30 +2361,26 @@ class SqlaDynamicPlanningRepository:
                 diagnostic_flags.setdefault(
                     "window_start_min", job.get("window_start_min")
                 )
-                diagnostic_flags.setdefault(
-                    "window_end_min", job.get("window_end_min")
-                )
+                diagnostic_flags.setdefault("window_end_min", job.get("window_end_min"))
             if saved_reason_code == "DURATION_EXCEEDS_ALL_SHIFTS":
-                diagnostic_flags.setdefault(
-                    "required_minutes", job.get("duration_min")
-                )
+                diagnostic_flags.setdefault("required_minutes", job.get("duration_min"))
             if saved_reason_code in {
                 "NOT_SELECTED_BY_OPTIMIZER",
                 "DATASET_LIMIT",
             }:
-                diagnostic_flags.setdefault("final_penalty", item.drop_penalty)
+                diagnostic_flags.setdefault("final_penalty", item.get("drop_penalty"))
             if run is not None and run.solver_status == "FEASIBLE_TIME_LIMIT":
                 diagnostic_flags.setdefault("solver_status", run.solver_status)
                 diagnostic_flags.setdefault("solver_time_ms", run.solver_time_ms)
             if job_id in final_unassigned_ids and later is None:
                 diagnostic_flags.setdefault(
                     "horizon_end",
-                    batch_snapshot.get("project", {}).get(
+                    version_batch_snapshot.get("project", {}).get(
                         "maximum_horizon_end"
                     ),
                 )
             primary = unassigned_reason(
-                item.primary_reason_code,
+                saved_reason_code,
                 solver_status=run.solver_status if run else None,
                 diagnostic_flags=diagnostic_flags,
                 final_horizon=job_id in final_unassigned_ids and later is None,
@@ -2353,9 +2412,7 @@ class SqlaDynamicPlanningRepository:
                 for cards in assigned_by_engineer.values()
                 for card in cards
             }
-            unassigned_ids = {
-                card["job_id"] for card in [*moved, *horizon]
-            }
+            unassigned_ids = {card["job_id"] for card in [*moved, *horizon]}
             missing_ids = input_ids - assigned_ids - unassigned_ids
             if missing_ids or len(input_ids) != int(run.input_jobs_count or 0):
                 logger.error(
@@ -2384,9 +2441,7 @@ class SqlaDynamicPlanningRepository:
                         "created_at": job.get("created_at"),
                         "required_equipment": job.get("required_equipment", []),
                         "coordinate": _coordinate(job),
-                        "current_data_changed": job.get(
-                            "current_data_changed", False
-                        ),
+                        "current_data_changed": job.get("current_data_changed", False),
                         "later_assignment_date": None,
                         "final_horizon_outcome": False,
                         "primary_reason": reason("RESULT_DATA_UNAVAILABLE"),
@@ -2399,13 +2454,16 @@ class SqlaDynamicPlanningRepository:
             or run is not None
             or assignment_rows
             or cancelled_snapshots
+            or unassigned_rows
         )
         return {
             **empty,
             "day_result_id": (
                 int(day_result.id)
                 if day_result is not None
-                else int(run.id) if run is not None else None
+                else int(run.id)
+                if run is not None
+                else None
             ),
             "result_available": result_available,
             "solver_status": run.solver_status if run is not None else None,
@@ -2439,9 +2497,7 @@ class SqlaDynamicPlanningRepository:
                 await self._session.execute(
                     select(
                         planning_runs,
-                        planning_batches.c.input_snapshot.label(
-                            "batch_input_snapshot"
-                        ),
+                        planning_batches.c.input_snapshot.label("batch_input_snapshot"),
                         project_plan_versions.c.version_number.label(
                             "source_version_number"
                         ),
@@ -2460,8 +2516,7 @@ class SqlaDynamicPlanningRepository:
                         planning_runs.c.planning_date == planning_date,
                         planning_runs.c.status == "SUCCESS",
                         project_plan_versions.c.project_id == project_id,
-                        project_plan_versions.c.version_number
-                        <= target_version_number,
+                        project_plan_versions.c.version_number <= target_version_number,
                     )
                     .order_by(
                         project_plan_versions.c.version_number.desc(),
@@ -2544,7 +2599,9 @@ class SqlaDynamicPlanningRepository:
         planning_date = (
             saved_day.planning_date
             if saved_day is not None
-            else run.planning_date if run is not None else None
+            else run.planning_date
+            if run is not None
+            else None
         )
         if planning_date is None:
             planning_date = await self._session.scalar(
@@ -2646,9 +2703,7 @@ class SqlaDynamicPlanningRepository:
                 if source_context is not None:
                     run = source_context["run"]
         input_snapshot = (run.input_snapshot or {}) if run is not None else {}
-        input_jobs = {
-            int(item["id"]): item for item in input_snapshot.get("jobs", [])
-        }
+        input_jobs = {int(item["id"]): item for item in input_snapshot.get("jobs", [])}
         input_engineers = input_snapshot.get("engineers", [])
         input_job = input_jobs.get(job_id, {})
         eligible_count = int(
@@ -2665,9 +2720,7 @@ class SqlaDynamicPlanningRepository:
                         "code": "QUALIFICATIONS",
                         "text": "Требуемые квалификации подтверждены результатом",
                         "parameters": {
-                            "qualification_ids": input_job[
-                                "required_qualifications"
-                            ]
+                            "qualification_ids": input_job["required_qualifications"]
                         },
                     }
                 )
@@ -2825,6 +2878,113 @@ class SqlaDynamicPlanningRepository:
                 projects.c.id == version.project_id
             )
         )
+        comparison_snapshot = (
+            await self._session.scalar(
+                select(planning_batches.c.input_snapshot).where(
+                    planning_batches.c.id == version.planning_batch_id
+                )
+            )
+            if version.planning_batch_id is not None
+            else {}
+        ) or {}
+        previous_version = (
+            (
+                await self._session.execute(
+                    select(project_plan_versions)
+                    .where(
+                        project_plan_versions.c.project_id == version.project_id,
+                        project_plan_versions.c.version_number < version.version_number,
+                    )
+                    .order_by(project_plan_versions.c.version_number.desc())
+                    .limit(1)
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        previous_comparison_snapshot = (
+            await self._session.scalar(
+                select(planning_batches.c.input_snapshot).where(
+                    planning_batches.c.id == previous_version.planning_batch_id
+                )
+            )
+            if previous_version is not None
+            and previous_version.planning_batch_id is not None
+            else {}
+        ) or {}
+        trigger_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        planning_events.c.id,
+                        planning_events.c.event_type,
+                        planning_events.c.job_ids,
+                        planning_events.c.engineer_ids,
+                        planning_events.c.initiator,
+                        planning_events.c.requested_at,
+                    )
+                    .where(
+                        planning_events.c.project_id == version.project_id,
+                        planning_events.c.published_plan_version_id == version.id,
+                    )
+                    .order_by(planning_events.c.requested_at, planning_events.c.id)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        if not trigger_rows and version.planning_event_id is not None:
+            trigger_rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            planning_events.c.id,
+                            planning_events.c.event_type,
+                            planning_events.c.job_ids,
+                            planning_events.c.engineer_ids,
+                            planning_events.c.initiator,
+                            planning_events.c.requested_at,
+                        ).where(planning_events.c.id == version.planning_event_id)
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        trigger_engineer_ids = {
+            int(engineer_id)
+            for row in trigger_rows
+            for engineer_id in (row.engineer_ids or [])
+        }
+        trigger_engineer_names: dict[int, str] = {}
+        if trigger_engineer_ids:
+            trigger_engineer_names = {
+                int(row.id): str(row.name)
+                for row in (
+                    (
+                        await self._session.execute(
+                            select(engineers.c.id, engineers.c.name).where(
+                                engineers.c.project_id == version.project_id,
+                                engineers.c.id.in_(trigger_engineer_ids),
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+            }
+        serialized_triggers = []
+        for row in trigger_rows:
+            item = _jsonable(dict(row))
+            item["engineers"] = [
+                {
+                    "engineer_id": int(engineer_id),
+                    "engineer_name": trigger_engineer_names.get(
+                        int(engineer_id), f"Инженер #{engineer_id}"
+                    ),
+                }
+                for engineer_id in (row.engineer_ids or [])
+            ]
+            serialized_triggers.append(item)
         rows = (
             (
                 await self._session.execute(
@@ -2832,6 +2992,7 @@ class SqlaDynamicPlanningRepository:
                         project_plan_assignments,
                         jobs.c.address,
                         jobs.c.status,
+                        work_types.c.name.label("work_type"),
                         work_types.c.priority.label("priority"),
                         jobs.c.latitude,
                         jobs.c.longitude,
@@ -2858,6 +3019,61 @@ class SqlaDynamicPlanningRepository:
             .mappings()
             .all()
         )
+        previous_rows = []
+        if previous_version is not None:
+            previous_rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            project_plan_assignments,
+                            engineers.c.name.label("engineer_name"),
+                        )
+                        .join(
+                            engineers,
+                            engineers.c.id == project_plan_assignments.c.engineer_id,
+                        )
+                        .where(
+                            project_plan_assignments.c.plan_version_id
+                            == previous_version.id
+                        )
+                        .order_by(
+                            project_plan_assignments.c.planning_date,
+                            project_plan_assignments.c.engineer_id,
+                            project_plan_assignments.c.sequence,
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+        metric_version_ids = [int(version.id)]
+        if previous_version is not None:
+            metric_version_ids.append(int(previous_version.id))
+        metric_day_rows = (
+            (
+                await self._session.execute(
+                    select(
+                        planning_day_results.c.plan_version_id,
+                        planning_day_results.c.planning_date,
+                    ).where(
+                        planning_day_results.c.plan_version_id.in_(metric_version_ids)
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+        metric_dates_by_version: dict[int, list[date]] = {}
+        for row in metric_day_rows:
+            metric_dates_by_version.setdefault(int(row.plan_version_id), []).append(
+                _as_date(row.planning_date)
+            )
+        input_changes = _planning_input_changes(
+            previous_comparison_snapshot, comparison_snapshot
+        )
+        input_changes = _classify_carried_forward_jobs(
+            input_changes, rows, comparison_snapshot
+        )
         changes = (
             (
                 await self._session.execute(
@@ -2869,6 +3085,91 @@ class SqlaDynamicPlanningRepository:
             .mappings()
             .all()
         )
+        changed_job_ids = {int(row.job_id) for row in changes}
+        unassigned_by_job = {
+            int(item["job_id"]): item
+            for item in (version.unassigned_jobs or [])
+            if item.get("job_id") is not None
+        }
+        previous_unassigned_by_job = {
+            int(item["job_id"]): item
+            for item in (
+                previous_version.unassigned_jobs or []
+                if previous_version is not None
+                else []
+            )
+            if item.get("job_id") is not None
+        }
+        unassigned_changed_ids: list[int] = []
+        removed_unassigned_ids: list[int] = []
+        unchanged_unassigned_ids: list[int] = []
+        if previous_version is not None:
+            for job_id, current_unassigned in unassigned_by_job.items():
+                if job_id in changed_job_ids:
+                    continue
+                previous_unassigned = previous_unassigned_by_job.get(job_id)
+                if previous_unassigned is None or not _same_unassigned_reason(
+                    previous_unassigned, current_unassigned
+                ):
+                    unassigned_changed_ids.append(job_id)
+                else:
+                    unchanged_unassigned_ids.append(job_id)
+            removed_unassigned_ids = [
+                job_id
+                for job_id in previous_unassigned_by_job
+                if job_id not in unassigned_by_job and job_id not in changed_job_ids
+            ]
+        comparison_job_ids = (
+            changed_job_ids
+            | set(unassigned_changed_ids)
+            | set(unchanged_unassigned_ids)
+            | set(removed_unassigned_ids)
+        )
+        change_jobs: dict[int, dict[str, Any]] = {}
+        if comparison_job_ids:
+            change_job_rows = (
+                (
+                    await self._session.execute(
+                        select(
+                            jobs.c.id,
+                            jobs.c.address,
+                            jobs.c.status,
+                            work_types.c.name.label("work_type"),
+                        )
+                        .join(work_types, work_types.c.id == jobs.c.work_type_id)
+                        .where(
+                            jobs.c.project_id == version.project_id,
+                            jobs.c.id.in_(comparison_job_ids),
+                        )
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            change_jobs = {int(row.id): _jsonable(dict(row)) for row in change_job_rows}
+        change_engineer_ids = {
+            int(assignment["engineer_id"])
+            for row in changes
+            for assignment in (row.old_assignment, row.new_assignment)
+            if assignment and assignment.get("engineer_id") is not None
+        }
+        change_engineer_names: dict[int, str] = {}
+        if change_engineer_ids:
+            change_engineer_names = {
+                int(row.id): str(row.name)
+                for row in (
+                    (
+                        await self._session.execute(
+                            select(engineers.c.id, engineers.c.name).where(
+                                engineers.c.project_id == version.project_id,
+                                engineers.c.id.in_(change_engineer_ids),
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+            }
         serialized_changes = []
         for row in changes:
             item = _jsonable(dict(row))
@@ -2878,12 +3179,169 @@ class SqlaDynamicPlanningRepository:
                 # Versions published before assignment values were normalized may
                 # contain a false diff (JSON date string versus Python date).
                 continue
+            if item["change_type"] == "DISPLACED":
+                final_unassigned = unassigned_by_job.get(int(item["job_id"]))
+                final_reason = (
+                    final_unassigned.get("primary_reason_code")
+                    if final_unassigned
+                    else None
+                )
+                item["reason"] = _resolved_displaced_reason(
+                    item.get("reason"), final_reason
+                )
+                item["reason_detail"] = _comparison_reason_detail(
+                    item["reason"],
+                    final_unassigned,
+                    int(item["job_id"]),
+                    comparison_snapshot,
+                )
+            item["job"] = change_jobs.get(int(item["job_id"]), {})
+            for assignment_key in ("old_assignment", "new_assignment"):
+                assignment = item.get(assignment_key)
+                if assignment and assignment.get("engineer_id") is not None:
+                    engineer_id = int(assignment["engineer_id"])
+                    assignment["engineer_name"] = change_engineer_names.get(
+                        engineer_id, f"Инженер #{engineer_id}"
+                    )
             serialized_changes.append(item)
+        newly_assigned_routes: dict[tuple[str, int], list[int]] = {}
+        for item in serialized_changes:
+            assignment = item.get("new_assignment")
+            if item.get("change_type") != "ASSIGNED" or not assignment:
+                continue
+            route_key = (
+                str(assignment.get("planning_date")),
+                int(assignment["engineer_id"]),
+            )
+            newly_assigned_routes.setdefault(route_key, []).append(int(item["job_id"]))
+        for item in serialized_changes:
+            assignment = item.get("new_assignment")
+            related_job_ids: list[int] = []
+            if assignment:
+                route_key = (
+                    str(assignment.get("planning_date")),
+                    int(assignment["engineer_id"]),
+                )
+                related_job_ids = [
+                    job_id
+                    for job_id in newly_assigned_routes.get(route_key, [])
+                    if job_id != int(item["job_id"])
+                ]
+            previous_unassigned = previous_unassigned_by_job.get(int(item["job_id"]))
+            item["explanation_context"] = {
+                "new_input_job": int(item["job_id"])
+                in set(input_changes["new_job_ids"]),
+                "related_assignment_job_ids": related_job_ids,
+                "previous_unassigned_reason": (
+                    _comparison_reason_detail(
+                        str(previous_unassigned.get("primary_reason_code") or ""),
+                        previous_unassigned,
+                        int(item["job_id"]),
+                        previous_comparison_snapshot,
+                    )
+                    if previous_unassigned is not None
+                    else None
+                ),
+            }
+        serialized_changed_job_ids = {
+            int(item["job_id"]) for item in serialized_changes
+        }
+        unchanged_assignment_count = sum(
+            int(row.job_id) not in serialized_changed_job_ids for row in rows
+        )
+        unassigned_changes = []
+        for job_id in unassigned_changed_ids:
+            previous_unassigned = previous_unassigned_by_job.get(job_id)
+            current_unassigned = unassigned_by_job[job_id]
+            unassigned_changes.append(
+                {
+                    "job_id": job_id,
+                    "change_type": (
+                        "UNASSIGNED_REASON_CHANGED"
+                        if previous_unassigned is not None
+                        else "NEW_UNASSIGNED"
+                    ),
+                    "job": change_jobs.get(job_id, {}),
+                    "previous_reason": (
+                        _comparison_reason_detail(
+                            str(previous_unassigned.get("primary_reason_code") or ""),
+                            previous_unassigned,
+                            job_id,
+                            previous_comparison_snapshot,
+                        )
+                        if previous_unassigned is not None
+                        else None
+                    ),
+                    "current_reason": _comparison_reason_detail(
+                        str(current_unassigned.get("primary_reason_code") or ""),
+                        current_unassigned,
+                        job_id,
+                        comparison_snapshot,
+                    ),
+                }
+            )
+        for job_id in removed_unassigned_ids:
+            previous_unassigned = previous_unassigned_by_job[job_id]
+            unassigned_changes.append(
+                {
+                    "job_id": job_id,
+                    "change_type": "UNASSIGNED_REMOVED",
+                    "job": change_jobs.get(job_id, {}),
+                    "previous_reason": _comparison_reason_detail(
+                        str(previous_unassigned.get("primary_reason_code") or ""),
+                        previous_unassigned,
+                        job_id,
+                        previous_comparison_snapshot,
+                    ),
+                    "current_reason": None,
+                }
+            )
+        unchanged_unassigned = [
+            {
+                "job_id": job_id,
+                "job": change_jobs.get(job_id, {}),
+                "reason": _comparison_reason_detail(
+                    str(unassigned_by_job[job_id].get("primary_reason_code") or ""),
+                    unassigned_by_job[job_id],
+                    job_id,
+                    comparison_snapshot,
+                ),
+            }
+            for job_id in unchanged_unassigned_ids
+        ]
         return {
             "version": _jsonable(dict(version)),
             "timezone": str(timezone_name),
             "assignments": [_jsonable(dict(row)) for row in rows],
             "changes": serialized_changes,
+            "comparison": {
+                "previous_version_number": (
+                    int(previous_version.version_number)
+                    if previous_version is not None
+                    else None
+                ),
+                "changed_count": len(serialized_changes) + len(unassigned_changes),
+                "unchanged_count": (
+                    unchanged_assignment_count + len(unchanged_unassigned)
+                ),
+                "unassigned_changes": unassigned_changes,
+                "unchanged_unassigned": unchanged_unassigned,
+                "triggers": serialized_triggers,
+                "input_changes": input_changes,
+                "metrics": {
+                    "previous": (
+                        _planning_metrics(
+                            previous_rows,
+                            metric_dates_by_version.get(int(previous_version.id), []),
+                        )
+                        if previous_version is not None
+                        else None
+                    ),
+                    "current": _planning_metrics(
+                        rows, metric_dates_by_version.get(int(version.id), [])
+                    ),
+                },
+            },
             "route_metrics": _route_metrics(rows),
         }
 
@@ -3041,6 +3499,153 @@ def _historical_day_result_matches_assignments(
     return True
 
 
+def _include_final_unassigned_rows(
+    daily_rows: list[Any], final_values: list[dict[str, Any]]
+) -> list[Any]:
+    """Merge the authoritative final horizon outcome into the selected day."""
+    result = [dict(item) for item in daily_rows]
+    by_job = {int(item["job_id"]): item for item in result}
+    for value in final_values:
+        if value.get("job_id") is None:
+            continue
+        job_id = int(value["job_id"])
+        if job_id in by_job:
+            current = by_job[job_id]
+            if value.get("primary_reason_code"):
+                current["primary_reason_code"] = value["primary_reason_code"]
+            current["diagnostic_flags"] = {
+                **(current.get("diagnostic_flags") or {}),
+                **(value.get("diagnostic_flags") or {}),
+            }
+            if value.get("drop_penalty") is not None:
+                current["drop_penalty"] = value["drop_penalty"]
+            current["_final_horizon_outcome"] = True
+            continue
+        item = {
+            "job_id": job_id,
+            "primary_reason_code": value.get("primary_reason_code"),
+            "diagnostic_flags": value.get("diagnostic_flags") or {},
+            "drop_penalty": value.get("drop_penalty"),
+            "_final_horizon_outcome": True,
+        }
+        result.append(item)
+        by_job[job_id] = item
+    return result
+
+
+def _snapshot_requirement_ids(
+    job: dict[str, Any], snapshot: dict[str, Any], field: str
+) -> list[int]:
+    values = job.get(field)
+    if values is None:
+        work_type_id = job.get("work_type_id")
+        requirements = snapshot.get(field, {})
+        values = requirements.get(str(work_type_id), requirements.get(work_type_id, []))
+    return sorted(
+        int(value.get("id") if isinstance(value, dict) else value)
+        for value in (values or [])
+    )
+
+
+def _resolved_displaced_reason(
+    saved_reason: str | None, final_unassigned_reason: str | None
+) -> str:
+    """Backfill old generic diffs without erasing event-specific causes."""
+    if final_unassigned_reason and saved_reason in {
+        None,
+        "",
+        "NOT_ASSIGNED_IN_NEW_HORIZON",
+    }:
+        return str(final_unassigned_reason)
+    return str(saved_reason or final_unassigned_reason or "NOT_ASSIGNED_IN_NEW_HORIZON")
+
+
+def _same_unassigned_reason(previous: dict[str, Any], current: dict[str, Any]) -> bool:
+    previous_code = str(
+        previous.get("primary_reason_code") or "NOT_ASSIGNED_WITHIN_HORIZON"
+    )
+    current_code = str(
+        current.get("primary_reason_code") or "NOT_ASSIGNED_WITHIN_HORIZON"
+    )
+    previous_normalized = reason(previous_code)["code"]
+    current_normalized = reason(current_code)["code"]
+    if previous_normalized != current_normalized:
+        return False
+    if previous_normalized != "NO_EQUIPMENT":
+        return True
+
+    def equipment_ids(value: dict[str, Any]) -> tuple[int, ...]:
+        diagnostics = value.get("diagnostic_flags") or {}
+        identifiers = {
+            int(identifier)
+            for identifier in (
+                diagnostics.get("equipment_type_ids")
+                or diagnostics.get("required_equipment_type_ids")
+                or []
+            )
+        }
+        identifiers.update(
+            int(item["id"])
+            for item in diagnostics.get("missing_equipment") or []
+            if isinstance(item, dict) and item.get("id") is not None
+        )
+        return tuple(sorted(identifiers))
+
+    previous_ids = equipment_ids(previous)
+    current_ids = equipment_ids(current)
+    # Old versions sometimes persisted only the public reason code. In that
+    # case there is not enough evidence to claim that the reason changed.
+    return not previous_ids or not current_ids or previous_ids == current_ids
+
+
+def _comparison_reason_detail(
+    reason_code: str,
+    final_unassigned: dict[str, Any] | None,
+    job_id: int,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    diagnostics = dict((final_unassigned or {}).get("diagnostic_flags") or {})
+    resolved_reason_code = reason_code or "NOT_ASSIGNED_WITHIN_HORIZON"
+    normalized = reason(resolved_reason_code)["code"]
+    if normalized == "NO_EQUIPMENT":
+        equipment_ids = diagnostics.get("equipment_type_ids") or diagnostics.get(
+            "required_equipment_type_ids"
+        )
+        if not equipment_ids:
+            snapshot_job = next(
+                (
+                    item
+                    for item in snapshot.get("jobs", [])
+                    if int(item["id"]) == job_id
+                ),
+                {},
+            )
+            equipment_ids = _snapshot_requirement_ids(
+                snapshot_job, snapshot, "required_equipment"
+            )
+        names = {
+            int(item["id"]): item.get("name")
+            for item in snapshot.get("equipment_types", [])
+        }
+        units = snapshot.get("equipment_units", {})
+        diagnostics["missing_equipment"] = [
+            {
+                "id": int(equipment_id),
+                "name": names.get(int(equipment_id)),
+                "available_units": int(
+                    units.get(str(equipment_id), units.get(int(equipment_id), 0)) or 0
+                ),
+            }
+            for equipment_id in equipment_ids or []
+        ]
+    return unassigned_reason(
+        resolved_reason_code,
+        solver_status=None,
+        diagnostic_flags=diagnostics,
+        final_horizon=True,
+    )
+
+
 def _changes(
     old: dict[int, dict[str, Any]],
     new: dict[int, dict[str, Any]],
@@ -3048,9 +3653,15 @@ def _changes(
     project_id: int,
 ) -> list[dict[str, Any]]:
     result = []
+    old_predecessors = _assignment_predecessors(old)
+    new_predecessors = _assignment_predecessors(new)
     for job_id in sorted(set(old) | set(new)):
         before = _jsonable(old.get(job_id))
         after = _jsonable(new.get(job_id))
+        if before is not None:
+            before["previous_job_id"] = old_predecessors.get(job_id)
+        if after is not None:
+            after["previous_job_id"] = new_predecessors.get(job_id)
         if before and not after:
             change_type, reason = "DISPLACED", "NOT_ASSIGNED_IN_NEW_HORIZON"
         elif after and not before:
@@ -3086,6 +3697,28 @@ def _changes(
     return result
 
 
+def _assignment_predecessors(
+    assignments: dict[int, dict[str, Any]],
+) -> dict[int, int | None]:
+    routes: dict[tuple[str, int], list[tuple[int, int]]] = {}
+    for job_id, assignment in assignments.items():
+        route_key = (
+            str(assignment.get("planning_date")),
+            int(assignment["engineer_id"]),
+        )
+        routes.setdefault(route_key, []).append(
+            (int(assignment.get("sequence") or 0), int(job_id))
+        )
+
+    result: dict[int, int | None] = {}
+    for route in routes.values():
+        previous_job_id: int | None = None
+        for _, job_id in sorted(route):
+            result[job_id] = previous_job_id
+            previous_job_id = job_id
+    return result
+
+
 def _same_assignment(
     before: dict[str, Any] | None, after: dict[str, Any] | None
 ) -> bool:
@@ -3095,13 +3728,367 @@ def _same_assignment(
         "planning_date",
         "engineer_id",
         "sequence",
+        "previous_job_id",
         "planned_start",
         "planned_finish",
-        "requirement_snapshot",
+        "travel_from_previous_min",
+        "waiting_before_job_min",
+        "distance_from_previous_meters",
     )
     normalized_before = _jsonable(before)
     normalized_after = _jsonable(after)
     return all(normalized_before.get(key) == normalized_after.get(key) for key in keys)
+
+
+def _row_field(row: Any, key: str, default: Any = None) -> Any:
+    if isinstance(row, dict):
+        return row.get(key, default)
+    mapping = getattr(row, "_mapping", row)
+    getter = getattr(mapping, "get", None)
+    if getter is not None:
+        return getter(key, default)
+    return getattr(row, key, default)
+
+
+def _planning_metrics(
+    rows: list[Any], planning_dates: list[Any] | tuple[Any, ...] = ()
+) -> dict[str, Any]:
+    """Build immutable per-day and per-engineer metrics for a plan version."""
+    day_routes: dict[str, dict[int, dict[str, Any]]] = {
+        str(_as_date(value)): {} for value in planning_dates
+    }
+    engineer_totals: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        planning_date = str(_row_field(row, "planning_date"))
+        engineer_id = int(_row_field(row, "engineer_id"))
+        engineer_name = _row_field(row, "engineer_name")
+        distance_meters = int(_row_field(row, "distance_from_previous_meters", 0) or 0)
+        route = day_routes.setdefault(planning_date, {}).setdefault(
+            engineer_id,
+            {
+                "engineer_id": engineer_id,
+                "engineer_name": engineer_name,
+                "assigned_jobs_count": 0,
+                "distance_meters": 0,
+            },
+        )
+        if not route.get("engineer_name") and engineer_name:
+            route["engineer_name"] = engineer_name
+        route["assigned_jobs_count"] += 1
+        route["distance_meters"] += distance_meters
+
+        total = engineer_totals.setdefault(
+            engineer_id,
+            {
+                "engineer_id": engineer_id,
+                "engineer_name": engineer_name,
+                "active_days_count": 0,
+                "assigned_jobs_count": 0,
+                "distance_meters": 0,
+            },
+        )
+        if not total.get("engineer_name") and engineer_name:
+            total["engineer_name"] = engineer_name
+        total["assigned_jobs_count"] += 1
+        total["distance_meters"] += distance_meters
+
+    days = []
+    for planning_date, routes_by_engineer in sorted(day_routes.items()):
+        routes = [
+            routes_by_engineer[engineer_id]
+            for engineer_id in sorted(routes_by_engineer)
+        ]
+        for route in routes:
+            engineer_totals[int(route["engineer_id"])]["active_days_count"] += 1
+        days.append(
+            {
+                "planning_date": planning_date,
+                "personnel_count": len(routes),
+                "assigned_jobs_count": sum(
+                    int(route["assigned_jobs_count"]) for route in routes
+                ),
+                "distance_meters": sum(
+                    int(route["distance_meters"]) for route in routes
+                ),
+                "engineers": routes,
+            }
+        )
+
+    engineers_values = [
+        engineer_totals[engineer_id] for engineer_id in sorted(engineer_totals)
+    ]
+    return {
+        "days": days,
+        "engineers": engineers_values,
+        "totals": {
+            "personnel_count": len(engineers_values),
+            "assigned_jobs_count": sum(
+                int(item["assigned_jobs_count"]) for item in engineers_values
+            ),
+            "distance_meters": sum(
+                int(item["distance_meters"]) for item in engineers_values
+            ),
+        },
+    }
+
+
+def _classify_carried_forward_jobs(
+    input_changes: dict[str, Any],
+    current_assignments: list[Any],
+    current_snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """Separate jobs outside the new calculation horizon from real removals."""
+    result = {**input_changes, "carried_forward_job_ids": []}
+    effective_start_value = (current_snapshot.get("project") or {}).get(
+        "effective_start_date"
+    )
+    if not effective_start_value:
+        return result
+    effective_start = _as_date(effective_start_value)
+    removed_ids = {int(value) for value in input_changes.get("removed_job_ids", [])}
+    carried_ids = sorted(
+        {
+            int(_row_field(row, "job_id"))
+            for row in current_assignments
+            if int(_row_field(row, "job_id")) in removed_ids
+            and _as_date(_row_field(row, "planning_date")) < effective_start
+        }
+    )
+    result["carried_forward_job_ids"] = carried_ids
+    result["removed_job_ids"] = sorted(removed_ids - set(carried_ids))
+    return result
+
+
+def _planning_input_changes(
+    previous: dict[str, Any], current: dict[str, Any]
+) -> dict[str, Any]:
+    """Return concrete input differences without claiming solver causality."""
+    empty = {
+        "snapshot_available": False,
+        "new_job_ids": [],
+        "removed_job_ids": [],
+        "carried_forward_job_ids": [],
+        "changed_job_ids": [],
+        "job_changes": [],
+        "schedule_changes": [],
+        "engineer_changes": [],
+        "equipment_changes": [],
+        "required_equipment_changed_work_type_ids": [],
+        "required_qualification_changed_work_type_ids": [],
+        "engineer_qualification_changed_ids": [],
+        "config_changed_fields": [],
+        "horizon_changed": False,
+        "horizon_change": {},
+    }
+    if not previous or not current:
+        return empty
+
+    def indexed(values: list[dict[str, Any]], key) -> dict[Any, dict[str, Any]]:
+        return {key(item): item for item in values}
+
+    def comparable(value: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: item
+            for key, item in value.items()
+            if key not in {"created_at", "updated_at"}
+        }
+
+    def changed_fields(
+        before: dict[str, Any] | None, after: dict[str, Any] | None
+    ) -> list[str]:
+        left = comparable(before or {})
+        right = comparable(after or {})
+        return sorted(
+            field
+            for field in set(left) | set(right)
+            if left.get(field) != right.get(field)
+        )
+
+    def field_changes(
+        before: dict[str, Any] | None, after: dict[str, Any] | None
+    ) -> list[dict[str, Any]]:
+        left = comparable(before or {})
+        right = comparable(after or {})
+        return [
+            {
+                "field": field,
+                "before": _jsonable(left.get(field)),
+                "after": _jsonable(right.get(field)),
+            }
+            for field in changed_fields(before, after)
+        ]
+
+    def changed_mapping_ids(key: str, identifiers: set[int]) -> list[int]:
+        left = {
+            str(identifier): value
+            for identifier, value in previous.get(key, {}).items()
+        }
+        right = {
+            str(identifier): value for identifier, value in current.get(key, {}).items()
+        }
+        return sorted(
+            int(identifier)
+            for identifier in identifiers
+            if left.get(str(identifier), []) != right.get(str(identifier), [])
+        )
+
+    previous_jobs = indexed(previous.get("jobs", []), lambda item: int(item["id"]))
+    current_jobs = indexed(current.get("jobs", []), lambda item: int(item["id"]))
+    previous_engineers = indexed(
+        previous.get("engineers", []), lambda item: int(item["id"])
+    )
+    current_engineers = indexed(
+        current.get("engineers", []), lambda item: int(item["id"])
+    )
+    previous_project = previous.get("project", {})
+    current_project = current.get("project", {})
+    previous_start = str(previous_project.get("effective_start_date") or "")
+    current_start = str(current_project.get("effective_start_date") or "")
+    previous_end = str(previous_project.get("maximum_horizon_end") or "")
+    current_end = str(current_project.get("maximum_horizon_end") or "")
+    overlap_start = max(previous_start, current_start)
+    overlap_end = min(previous_end, current_end)
+    schedule_key = lambda item: (  # noqa: E731 - compact snapshot key definition
+        int(item["engineer_id"]),
+        str(item["work_date"]),
+    )
+    previous_schedules = indexed(previous.get("schedules", []), schedule_key)
+    current_schedules = indexed(current.get("schedules", []), schedule_key)
+
+    schedule_changes = []
+    for engineer_id, planning_date in sorted(
+        set(previous_schedules) | set(current_schedules), key=lambda value: value
+    ):
+        if overlap_start and overlap_end and not (
+            overlap_start <= planning_date <= overlap_end
+        ):
+            continue
+        before = previous_schedules.get((engineer_id, planning_date))
+        after = current_schedules.get((engineer_id, planning_date))
+        if before == after:
+            continue
+        schedule_changes.append(
+            {
+                "engineer_id": engineer_id,
+                "engineer_name": (
+                    (current_engineers.get(engineer_id) or {}).get("name")
+                    or (previous_engineers.get(engineer_id) or {}).get("name")
+                ),
+                "planning_date": planning_date,
+                "before": before,
+                "after": after,
+            }
+        )
+
+    engineer_changes = []
+    for engineer_id in sorted(set(previous_engineers) | set(current_engineers)):
+        before = previous_engineers.get(engineer_id)
+        after = current_engineers.get(engineer_id)
+        if comparable(before or {}) == comparable(after or {}):
+            continue
+        engineer_changes.append(
+            {
+                "engineer_id": engineer_id,
+                "engineer_name": (after or before or {}).get("name"),
+                "removed": after is None,
+                "added": before is None,
+                "changed_fields": changed_fields(before, after),
+                "changes": field_changes(before, after),
+            }
+        )
+
+    previous_units = {
+        int(key): int(value or 0)
+        for key, value in previous.get("equipment_units", {}).items()
+    }
+    current_units = {
+        int(key): int(value or 0)
+        for key, value in current.get("equipment_units", {}).items()
+    }
+    equipment_names = {
+        int(item["id"]): item.get("name")
+        for item in [
+            *previous.get("equipment_types", []),
+            *current.get("equipment_types", []),
+        ]
+    }
+    equipment_changes = [
+        {
+            "equipment_type_id": equipment_id,
+            "equipment_name": equipment_names.get(equipment_id),
+            "before_units": previous_units.get(equipment_id, 0),
+            "after_units": current_units.get(equipment_id, 0),
+        }
+        for equipment_id in sorted(set(previous_units) | set(current_units))
+        if previous_units.get(equipment_id, 0) != current_units.get(equipment_id, 0)
+    ]
+
+    previous_config = previous.get("config", {})
+    current_config = current.get("config", {})
+    config_changed_fields = sorted(
+        key
+        for key in set(previous_config) | set(current_config)
+        if previous_config.get(key) != current_config.get(key)
+    )
+    horizon_fields = ("effective_start_date", "maximum_horizon_end")
+    horizon_change = {
+        field: {
+            "before": _jsonable(previous_project.get(field)),
+            "after": _jsonable(current_project.get(field)),
+        }
+        for field in horizon_fields
+        if previous_project.get(field) != current_project.get(field)
+    }
+    changed_job_ids = sorted(
+        job_id
+        for job_id in set(previous_jobs) & set(current_jobs)
+        if comparable(previous_jobs[job_id]) != comparable(current_jobs[job_id])
+    )
+    previous_work_type_ids = {
+        int(item["work_type_id"])
+        for item in previous_jobs.values()
+        if item.get("work_type_id") is not None
+    }
+    current_work_type_ids = {
+        int(item["work_type_id"])
+        for item in current_jobs.values()
+        if item.get("work_type_id") is not None
+    }
+    common_work_type_ids = previous_work_type_ids & current_work_type_ids
+    common_engineer_ids = set(previous_engineers) & set(current_engineers)
+
+    return {
+        "snapshot_available": True,
+        "new_job_ids": sorted(set(current_jobs) - set(previous_jobs)),
+        "removed_job_ids": sorted(set(previous_jobs) - set(current_jobs)),
+        "carried_forward_job_ids": [],
+        "changed_job_ids": changed_job_ids,
+        "job_changes": [
+            {
+                "job_id": job_id,
+                "changed_fields": changed_fields(
+                    previous_jobs[job_id], current_jobs[job_id]
+                ),
+                "changes": field_changes(previous_jobs[job_id], current_jobs[job_id]),
+            }
+            for job_id in changed_job_ids
+        ],
+        "schedule_changes": schedule_changes,
+        "engineer_changes": engineer_changes,
+        "equipment_changes": equipment_changes,
+        "required_equipment_changed_work_type_ids": changed_mapping_ids(
+            "required_equipment", common_work_type_ids
+        ),
+        "required_qualification_changed_work_type_ids": changed_mapping_ids(
+            "required_qualifications", common_work_type_ids
+        ),
+        "engineer_qualification_changed_ids": changed_mapping_ids(
+            "engineer_qualifications", common_engineer_ids
+        ),
+        "config_changed_fields": config_changed_fields,
+        "horizon_changed": bool(horizon_change),
+        "horizon_change": horizon_change,
+    }
 
 
 def _route_metrics(rows: list[Any]) -> dict[str, Any]:

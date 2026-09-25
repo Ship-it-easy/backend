@@ -25,7 +25,7 @@ from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job
 from planning.domain.entities.planning import PlanningInput
-from planning.domain.enums import TransportType
+from planning.domain.enums import ReasonCode, TransportType
 from planning.infrastructure.adapters.planning_solver_ortools import (
     OrToolsPlanningSolver,
 )
@@ -564,3 +564,49 @@ async def test_dataset_limit_cannot_displace_overdue_jobs_with_later_critical():
     assert saved["jobs"][0]["address"] == "job 1"
     assert {j.id for j in normalized.jobs} == {1, 2}
     assert [j.job_id for j in normalized.pre_unassigned] == [3]
+
+
+async def test_zero_equipment_is_reported_before_missing_current_shift():
+    from datetime import time
+
+    source = {
+        "project": {"timezone": "UTC"},
+        "config": asdict(config()),
+        "jobs": [
+            {
+                "id": 1,
+                "sla_date": DAY,
+                "priority": "LOW",
+                "work_type_id": 9,
+                "service_duration_min": 30,
+                "default_service_duration_min": 30,
+                "required_transport": None,
+                "time_window_start": time(8),
+                "time_window_end": time(15),
+                "latitude": 0,
+                "longitude": 0,
+                "address": "job 1",
+                "created_at": NOW,
+                "status": "NEW",
+            }
+        ],
+        "engineers": [],
+        "engineer_qualifications": {},
+        "required_qualifications": {},
+        "required_equipment": {9: {4}},
+        "equipment_units": {4: 0},
+    }
+
+    normalized = await PlanningInputNormalizer(AsyncMock()).normalize(
+        1, DAY, "UTC", source, snapshot_time=NOW
+    )
+
+    assert normalized.jobs == []
+    assert len(normalized.pre_unassigned) == 1
+    assert normalized.pre_unassigned[0].reason_code == (
+        ReasonCode.DAILY_EQUIPMENT_CAPACITY
+    )
+    assert normalized.pre_unassigned[0].diagnostic_flags == {
+        "required_equipment_type_ids": [4],
+        "available_units": {"4": 0},
+    }

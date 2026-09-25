@@ -66,6 +66,27 @@ def test_time_limit_does_not_replace_saved_job_reason() -> None:
     )
 
 
+def test_equipment_reason_names_the_missing_catalog_item_and_quantity() -> None:
+    value = unassigned_reason(
+        "EQUIPMENT_UNAVAILABLE_IN_HORIZON",
+        solver_status="SUCCESS",
+        diagnostic_flags={
+            "missing_equipment": [{"id": 4, "name": "Лестница", "available_units": 0}]
+        },
+    )
+
+    assert value["code"] == "NO_EQUIPMENT"
+    assert value["text"] == (
+        "Недоступно обязательное оборудование: Лестница (доступно: 0)"
+    )
+
+
+def test_engineer_unavailability_is_not_hidden_as_a_generic_shift_problem() -> None:
+    assert reason("ENGINEER_UNAVAILABLE")["text"] == (
+        "Назначенный инженер стал недоступен"
+    )
+
+
 def test_horizon_has_explicit_outcome() -> None:
     assert (
         unassigned_reason(

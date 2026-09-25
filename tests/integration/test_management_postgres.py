@@ -204,9 +204,7 @@ async def test_dispatcher_project_memberships_are_independent_and_filter_blocked
         project_ids = [await seed_project(session), await seed_project(session)]
         blocked_id = await seed_project(session)
         await session.execute(
-            update(projects)
-            .where(projects.c.id == blocked_id)
-            .values(status="BLOCKED")
+            update(projects).where(projects.c.id == blocked_id).values(status="BLOCKED")
         )
         values = owner_values(dispatcher_id, f"dispatcher-{uuid.uuid4().hex}")
         values.update(role=UserRoleEnum.DISPATCHER, project_id=None)
@@ -227,9 +225,7 @@ async def test_dispatcher_project_memberships_are_independent_and_filter_blocked
 
         access = SqlaProjectAccessRepository(session)
         assert await access.dispatcher_has_project(dispatcher_id, project_ids[0])
-        active = await access.list_dispatcher_projects(
-            dispatcher_id, active_only=True
-        )
+        active = await access.list_dispatcher_projects(dispatcher_id, active_only=True)
         assert {row["id"] for row in active} == set(project_ids)
 
         dispatchers = await SqlaAdminUserRepository(session).list_dispatchers()
@@ -251,18 +247,28 @@ async def test_dispatcher_project_memberships_are_independent_and_filter_blocked
         )
         await session.commit()
         assert single["project_id"] == project_ids[0]
-        assert await session.scalar(
-            select(users_table.c.project_id).where(users_table.c.id == dispatcher_id)
-        ) == project_ids[0]
+        assert (
+            await session.scalar(
+                select(users_table.c.project_id).where(
+                    users_table.c.id == dispatcher_id
+                )
+            )
+            == project_ids[0]
+        )
 
         multiple = await repository.replace_dispatcher_projects(
             dispatcher_id, project_ids, owner_id
         )
         await session.commit()
         assert multiple["project_id"] is None
-        assert await session.scalar(
-            select(users_table.c.project_id).where(users_table.c.id == dispatcher_id)
-        ) is None
+        assert (
+            await session.scalar(
+                select(users_table.c.project_id).where(
+                    users_table.c.id == dispatcher_id
+                )
+            )
+            is None
+        )
 
 
 async def test_concurrent_engineer_login_creation_maps_conflict(
@@ -317,9 +323,7 @@ async def seed_publication(session: AsyncSession) -> tuple[int, int, uuid.UUID]:
     user.update(role=UserRoleEnum.DISPATCHER, project_id=None)
     await session.execute(insert(users_table).values(**user))
     await session.execute(
-        insert(dispatcher_projects).values(
-            user_id=user_id, project_id=project_id
-        )
+        insert(dispatcher_projects).values(user_id=user_id, project_id=project_id)
     )
     work_type_id = await session.scalar(
         insert(work_types)
@@ -678,6 +682,16 @@ async def test_planning_board_reads_one_outcome_per_day_input(
             )
             .returning(project_plan_versions.c.id)
         )
+        await session.execute(
+            insert(planning_events).values(
+                project_id=project_id,
+                event_type="JOB_CREATED",
+                job_ids=[job_ids[0]],
+                initiator="SYSTEM",
+                state="PUBLISHED",
+                published_plan_version_id=version_id,
+            )
+        )
         day_result_id = await session.scalar(
             insert(planning_day_results)
             .values(
@@ -821,6 +835,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
         foreign_explanation = await repository.get_planning_job_explanation(
             another_project_id, int(day_result_id), job_ids[0]
         )
+        comparison = await repository.get_plan_version(project_id, int(version_id))
 
     assert day["counts"] == {"assigned": 1, "unassigned": 1, "cancelled": 1}
     assert day["engineer_columns"][0]["name"] == "Иван Петров"
@@ -835,9 +850,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
         "latitude": "58.01",
         "longitude": "56.23",
     }
-    assert day["engineer_columns"][0]["jobs"][0]["work_type"] == (
-        "Диагностика линии"
-    )
+    assert day["engineer_columns"][0]["jobs"][0]["work_type"] == ("Диагностика линии")
     assert day["engineer_columns"][0]["jobs"][0]["required_equipment"] == []
     assert day["engineer_columns"][0]["cancelled_jobs"][0]["job_id"] == (
         cancelled_job_id
@@ -857,6 +870,190 @@ async def test_planning_board_reads_one_outcome_per_day_input(
     assert board["plan_version"]["number"] == 2
     assert board["plan_version"]["status"] == "SUCCESS"
     assert day["day_result_id"] == day_result_id
+    assert comparison is not None
+    assert comparison["comparison"]["metrics"]["current"]["days"][0] == {
+        "planning_date": planning_date.isoformat(),
+        "personnel_count": 1,
+        "assigned_jobs_count": 1,
+        "distance_meters": 0,
+        "engineers": [
+            {
+                "engineer_id": int(engineer_id),
+                "engineer_name": "Иван Петров",
+                "assigned_jobs_count": 1,
+                "distance_meters": 0,
+            }
+        ],
+    }
+    assert comparison["comparison"]["input_changes"]["snapshot_available"] is True
+    assert comparison["comparison"]["triggers"][0]["event_type"] == "JOB_CREATED"
+    assert comparison["comparison"]["triggers"][0]["job_ids"] == [job_ids[0]]
+
+
+async def test_planning_board_explains_zero_equipment_without_a_daily_run(
+    pg_engine: AsyncEngine,
+) -> None:
+    planning_date = date(2026, 9, 24)
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        work_type_id = int(
+            await session.scalar(
+                insert(work_types)
+                .values(
+                    project_id=project_id,
+                    code="LADDER-WORK",
+                    name="Высотные работы",
+                    default_service_duration_min=60,
+                )
+                .returning(work_types.c.id)
+            )
+        )
+        equipment_id = int(
+            await session.scalar(
+                insert(equipment_types)
+                .values(
+                    project_id=project_id,
+                    code="LADDER",
+                    name="Лестница",
+                    available_units=0,
+                )
+                .returning(equipment_types.c.id)
+            )
+        )
+        await session.execute(
+            insert(work_type_required_equipment).values(
+                work_type_id=work_type_id,
+                equipment_type_id=equipment_id,
+            )
+        )
+        job_id = int(
+            await session.scalar(
+                insert(jobs)
+                .values(
+                    project_id=project_id,
+                    internal_code="ZERO-LADDER",
+                    status="NEW",
+                    address="Ленина, 10",
+                    latitude=58.01,
+                    longitude=56.23,
+                    sla_date=planning_date,
+                    work_type_id=work_type_id,
+                    service_duration_min=60,
+                )
+                .returning(jobs.c.id)
+            )
+        )
+        snapshot = {
+            "project": {
+                "maximum_horizon_end": planning_date.isoformat(),
+            },
+            "jobs": [
+                {
+                    "id": job_id,
+                    "work_type_id": work_type_id,
+                    "address": "Ленина, 10",
+                    "sla_date": planning_date.isoformat(),
+                    "service_duration_min": 60,
+                    "priority": "LOW",
+                    "status": "NEW",
+                }
+            ],
+            "engineers": [],
+            "schedules": [],
+            "required_equipment": {str(work_type_id): [equipment_id]},
+            "required_qualifications": {str(work_type_id): []},
+            "equipment_units": {str(equipment_id): 0},
+            "equipment_types": [
+                {"id": equipment_id, "name": "Лестница", "available_units": 0}
+            ],
+        }
+        batch_id = int(
+            await session.scalar(
+                insert(planning_batches)
+                .values(
+                    project_id=project_id,
+                    requested_start_date=planning_date,
+                    effective_start_date=planning_date,
+                    initial_horizon_end=planning_date,
+                    maximum_horizon_end=planning_date,
+                    status="PARTIAL",
+                    completion_reason="NO_FUTURE_OPPORTUNITIES",
+                    idempotency_key="zero-equipment-board",
+                    input_hash="zero-equipment-snapshot",
+                    configuration_version="1",
+                    input_snapshot=snapshot,
+                )
+                .returning(planning_batches.c.id)
+            )
+        )
+        previous_version_id = int(
+            await session.scalar(
+                insert(project_plan_versions)
+                .values(
+                    project_id=project_id,
+                    version_number=1,
+                    planning_batch_id=batch_id,
+                    input_hash="previous-zero-equipment-plan",
+                    trigger_source="MANUAL",
+                    is_current=False,
+                    unassigned_jobs=[
+                        {
+                            "job_id": job_id,
+                            "primary_reason_code": "NO_SHIFT_IN_HORIZON",
+                            "diagnostic_flags": {},
+                        }
+                    ],
+                    superseded_at=datetime(2026, 9, 24, tzinfo=timezone.utc),
+                )
+                .returning(project_plan_versions.c.id)
+            )
+        )
+        version_id = int(
+            await session.scalar(
+                insert(project_plan_versions)
+                .values(
+                    project_id=project_id,
+                    version_number=2,
+                    planning_batch_id=batch_id,
+                    input_hash="zero-equipment-plan",
+                    trigger_source="MANUAL",
+                    is_current=True,
+                    unassigned_jobs=[
+                        {
+                            "job_id": job_id,
+                            "primary_reason_code": ("EQUIPMENT_UNAVAILABLE_IN_HORIZON"),
+                            "diagnostic_flags": {"equipment_type_ids": [equipment_id]},
+                        }
+                    ],
+                )
+                .returning(project_plan_versions.c.id)
+            )
+        )
+        await session.commit()
+
+        repository = SqlaDynamicPlanningRepository(session)
+        board = await repository.get_planning_board_summary(
+            project_id, planning_date, 7
+        )
+        comparison = await repository.get_plan_version(project_id, version_id)
+
+    card = board["selected_day"]["unassigned"]["horizon"][0]
+    assert card["job_id"] == job_id
+    assert card["required_equipment"] == [{"id": equipment_id, "name": "Лестница"}]
+    assert card["primary_reason"]["code"] == "NO_EQUIPMENT"
+    assert card["primary_reason"]["text"] == (
+        "Недоступно обязательное оборудование: Лестница (доступно: 0)"
+    )
+    assert previous_version_id != version_id
+    assert comparison is not None
+    assert comparison["comparison"]["previous_version_number"] == 1
+    assert comparison["changes"] == []
+    assert comparison["comparison"]["changed_count"] == 1
+    unassigned_change = comparison["comparison"]["unassigned_changes"][0]
+    assert unassigned_change["previous_reason"]["code"] == "NO_SHIFT"
+    assert unassigned_change["current_reason"]["text"] == (
+        "Недоступно обязательное оборудование: Лестница (доступно: 0)"
+    )
 
 
 async def test_concurrent_manual_planning_starts_reuse_one_event(

@@ -93,64 +93,87 @@ class PlanningInputNormalizer:
             for job in jobs
         ]
         eligible: list[Job] = []
-        if not engineers:
-            pre_unassigned.extend(
-                UnassignedJob(
-                    job_id=job.id,
-                    drop_penalty=job.drop_penalty,
-                    reason_code=ReasonCode.NO_AVAILABLE_ENGINEER,
-                    diagnostic_flags={
-                        "planning_date": planning_date.isoformat(),
-                    },
-                )
-                for job in jobs_with_penalty
+        for job in jobs_with_penalty:
+            missing_equipment = sorted(
+                equipment_id
+                for equipment_id in job.required_equipment
+                if int(equipment_units.get(equipment_id, 0)) <= 0
             )
-        else:
-            for job in jobs_with_penalty:
-                if not compatible_by_job[job.id]:
-                    pre_unassigned.append(
-                        UnassignedJob(
-                            job_id=job.id,
-                            drop_penalty=job.drop_penalty,
-                            reason_code=ReasonCode.NO_COMPATIBLE_ENGINEER,
-                            diagnostic_flags={
-                                "required_qualification_ids": sorted(
-                                    job.required_qualifications
-                                ),
-                                "required_equipment_type_ids": sorted(
-                                    job.required_equipment
-                                ),
-                                "required_transport": (
-                                    job.required_transport.value
-                                    if job.required_transport
-                                    else None
-                                ),
+            # A zero stock is a deterministic hard constraint for every engineer.
+            # Resolve it before checking the day's shifts so an expired/empty shift
+            # list cannot hide the actual catalog problem from the dispatcher.
+            if missing_equipment:
+                pre_unassigned.append(
+                    UnassignedJob(
+                        job_id=job.id,
+                        drop_penalty=job.drop_penalty,
+                        reason_code=ReasonCode.DAILY_EQUIPMENT_CAPACITY,
+                        diagnostic_flags={
+                            "required_equipment_type_ids": missing_equipment,
+                            "available_units": {
+                                str(equipment_id): int(
+                                    equipment_units.get(equipment_id, 0)
+                                )
+                                for equipment_id in missing_equipment
                             },
-                        )
+                        },
                     )
-                elif not any(
-                    _fits_daily_window(job, engineer)
-                    for engineer in engineers
-                    if engineer.id in compatible_by_job[job.id]
-                ):
-                    # A dropped RoutingModel node still has a Time dimension.
-                    # Keeping an already expired or otherwise impossible window
-                    # in the model can make the whole solve fail instead of
-                    # returning the job as unassigned.
-                    pre_unassigned.append(
-                        UnassignedJob(
-                            job_id=job.id,
-                            drop_penalty=job.drop_penalty,
-                            reason_code=ReasonCode.DAILY_TIME_WINDOW_CONFLICT,
-                            diagnostic_flags={
-                                "window_start_min": job.window_start_min,
-                                "window_end_min": job.window_end_min,
-                                "required_minutes": job.duration_min,
-                            },
-                        )
+                )
+            elif not engineers:
+                pre_unassigned.append(
+                    UnassignedJob(
+                        job_id=job.id,
+                        drop_penalty=job.drop_penalty,
+                        reason_code=ReasonCode.NO_AVAILABLE_ENGINEER,
+                        diagnostic_flags={
+                            "planning_date": planning_date.isoformat(),
+                        },
                     )
-                else:
-                    eligible.append(job)
+                )
+            elif not compatible_by_job[job.id]:
+                pre_unassigned.append(
+                    UnassignedJob(
+                        job_id=job.id,
+                        drop_penalty=job.drop_penalty,
+                        reason_code=ReasonCode.NO_COMPATIBLE_ENGINEER,
+                        diagnostic_flags={
+                            "required_qualification_ids": sorted(
+                                job.required_qualifications
+                            ),
+                            "required_equipment_type_ids": sorted(
+                                job.required_equipment
+                            ),
+                            "required_transport": (
+                                job.required_transport.value
+                                if job.required_transport
+                                else None
+                            ),
+                        },
+                    )
+                )
+            elif not any(
+                _fits_daily_window(job, engineer)
+                for engineer in engineers
+                if engineer.id in compatible_by_job[job.id]
+            ):
+                # A dropped RoutingModel node still has a Time dimension.
+                # Keeping an already expired or otherwise impossible window
+                # in the model can make the whole solve fail instead of
+                # returning the job as unassigned.
+                pre_unassigned.append(
+                    UnassignedJob(
+                        job_id=job.id,
+                        drop_penalty=job.drop_penalty,
+                        reason_code=ReasonCode.DAILY_TIME_WINDOW_CONFLICT,
+                        diagnostic_flags={
+                            "window_start_min": job.window_start_min,
+                            "window_end_min": job.window_end_min,
+                            "required_minutes": job.duration_min,
+                        },
+                    )
+                )
+            else:
+                eligible.append(job)
 
         eligible.sort(
             key=lambda job: (
