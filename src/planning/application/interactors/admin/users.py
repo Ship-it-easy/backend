@@ -38,6 +38,12 @@ class ListOwnersInteractor(_AdminUserInteractor):
         return await self._repository.list_owners()
 
 
+class ListDispatchersInteractor(_AdminUserInteractor):
+    async def __call__(self) -> list[dict[str, Any]]:
+        await self._access.owner()
+        return await self._repository.list_dispatchers()
+
+
 class CreateOwnerInteractor(_AdminUserInteractor):
     def __init__(
         self,
@@ -55,6 +61,67 @@ class CreateOwnerInteractor(_AdminUserInteractor):
             login.strip(),
             self._hash(password),
             UserRoleEnum.OWNER,
+        )
+        await self._transaction_manager.commit()
+        return result
+
+
+async def _validate_projects(
+    repository: AdminUserRepository, project_ids: list[int]
+) -> list[int]:
+    normalized = list(dict.fromkeys(project_ids))
+    existing = await repository.get_existing_project_ids(normalized)
+    if existing != set(normalized):
+        raise ObjectNotFoundError("Project not found")
+    return normalized
+
+
+class CreateDispatcherInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        transaction_manager: TransactionManager,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._transaction_manager = transaction_manager
+
+    async def __call__(
+        self, login: str, password: str, project_ids: list[int]
+    ) -> dict[str, Any]:
+        owner = await self._access.owner()
+        normalized = await _validate_projects(self._repository, project_ids)
+        result = await self._repository.create_user(
+            login.strip(),
+            self._hash(password),
+            UserRoleEnum.DISPATCHER,
+        )
+        result = await self._repository.replace_dispatcher_projects(
+            UUID(result["id"]), normalized, owner.id
+        )
+        await self._transaction_manager.commit()
+        return result
+
+
+class ReplaceDispatcherProjectsInteractor(_AdminUserInteractor):
+    def __init__(
+        self,
+        access: ProjectAccess,
+        repository: AdminUserRepository,
+        password_hasher: PasswordHasher,
+        transaction_manager: TransactionManager,
+    ):
+        super().__init__(access, repository, password_hasher)
+        self._transaction_manager = transaction_manager
+
+    async def __call__(
+        self, user_id: UUID, project_ids: list[int]
+    ) -> dict[str, Any]:
+        owner = await self._access.owner()
+        normalized = await _validate_projects(self._repository, project_ids)
+        result = await self._repository.replace_dispatcher_projects(
+            user_id, normalized, owner.id
         )
         await self._transaction_manager.commit()
         return result
@@ -85,7 +152,7 @@ class CreateProjectUserInteractor(_AdminUserInteractor):
         role: UserRoleEnum | None,
         engineer_id: int | None,
     ) -> dict[str, Any]:
-        await self._access.owner()
+        owner = await self._access.owner()
         selected_role = role or UserRoleEnum.DISPATCHER
         if selected_role not in {
             UserRoleEnum.DISPATCHER,
@@ -118,9 +185,13 @@ class CreateProjectUserInteractor(_AdminUserInteractor):
             login.strip(),
             self._hash(password),
             selected_role,
-            project_id,
+            project_id if selected_role is UserRoleEnum.ENGINEER else None,
             selected_engineer_id,
         )
+        if selected_role is UserRoleEnum.DISPATCHER:
+            result = await self._repository.replace_dispatcher_projects(
+                UUID(result["id"]), [project_id], owner.id
+            )
         await self._transaction_manager.commit()
         return result
 

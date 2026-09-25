@@ -61,6 +61,15 @@ class UserCreate(OwnerCreate):
     engineer_id: int | None = None
 
 
+class DispatcherCreate(OwnerCreate):
+    project_ids: list[int] = Field(default_factory=list)
+
+
+class DispatcherProjectsPut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project_ids: list[int] = Field(default_factory=list)
+
+
 class PasswordReset(BaseModel):
     model_config = ConfigDict(extra="forbid")
     password: str = Field(min_length=1, max_length=128)

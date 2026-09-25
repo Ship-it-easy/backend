@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,7 @@ from planning.application.management_dto import (
     UserActivationState,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    dispatcher_projects,
     engineers,
     planning_config,
     planning_runs,
@@ -45,9 +46,9 @@ def _project(row: Any) -> dict[str, Any]:
     }
 
 
-def _user(row: Any) -> dict[str, Any]:
+def _user(row: Any, project_ids: list[int] | None = None) -> dict[str, Any]:
     role = row.role.value if hasattr(row.role, "value") else str(row.role).lower()
-    return {
+    result = {
         "id": str(row.id),
         "login": row.username,
         "role": role,
@@ -55,6 +56,9 @@ def _user(row: Any) -> dict[str, Any]:
         "engineer_id": row.engineer_id,
         "status": "ACTIVE" if row.is_active else "BLOCKED",
     }
+    if project_ids is not None:
+        result["project_ids"] = project_ids
+    return result
 
 
 def _constraint_name(error: IntegrityError) -> str | None:
@@ -224,19 +228,78 @@ class SqlaAdminUserRepository(AdminUserRepository):
         )
         return [_user(row) for row in rows]
 
-    async def list_project_users(self, project_id: int) -> list[dict[str, Any]]:
+    async def _dispatcher_project_ids(
+        self, user_ids: list[UUID]
+    ) -> dict[UUID, list[int]]:
+        if not user_ids:
+            return {}
+        rows = (
+            await self._session.execute(
+                select(
+                    dispatcher_projects.c.user_id,
+                    dispatcher_projects.c.project_id,
+                )
+                .where(dispatcher_projects.c.user_id.in_(user_ids))
+                .order_by(dispatcher_projects.c.project_id)
+            )
+        ).all()
+        result: dict[UUID, list[int]] = {user_id: [] for user_id in user_ids}
+        for user_id, project_id in rows:
+            result[user_id].append(int(project_id))
+        return result
+
+    async def list_dispatchers(self) -> list[dict[str, Any]]:
         rows = (
             (
                 await self._session.execute(
                     select(users_table)
-                    .where(users_table.c.project_id == project_id)
+                    .where(users_table.c.role == UserRoleEnum.DISPATCHER)
                     .order_by(users_table.c.username)
                 )
             )
             .mappings()
             .all()
         )
-        return [_user(row) for row in rows]
+        project_ids = await self._dispatcher_project_ids([row.id for row in rows])
+        return [_user(row, project_ids.get(row.id, [])) for row in rows]
+
+    async def list_project_users(self, project_id: int) -> list[dict[str, Any]]:
+        rows = (
+            (
+                await self._session.execute(
+                    select(users_table)
+                    .outerjoin(
+                        dispatcher_projects,
+                        and_(
+                            dispatcher_projects.c.user_id == users_table.c.id,
+                            dispatcher_projects.c.project_id == project_id,
+                        ),
+                    )
+                    .where(
+                        or_(
+                            users_table.c.project_id == project_id,
+                            dispatcher_projects.c.project_id == project_id,
+                        )
+                    )
+                    .order_by(users_table.c.username)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        dispatcher_ids = [
+            row.id for row in rows if row.role is UserRoleEnum.DISPATCHER
+        ]
+        project_ids = await self._dispatcher_project_ids(dispatcher_ids)
+        return [
+            _user(
+                row,
+                project_ids.get(row.id, [])
+                if row.role is UserRoleEnum.DISPATCHER
+                else None,
+            )
+            for row in rows
+        ]
 
     async def create_user(
         self,
@@ -313,6 +376,58 @@ class SqlaAdminUserRepository(AdminUserRepository):
             project_active=project.status == "ACTIVE",
             engineer_belongs_to_project=engineer_belongs,
         )
+
+    async def get_existing_project_ids(self, project_ids: list[int]) -> set[int]:
+        if not project_ids:
+            return set()
+        return set(
+            (
+                await self._session.execute(
+                    select(projects.c.id).where(projects.c.id.in_(project_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+    async def replace_dispatcher_projects(
+        self,
+        user_id: UUID,
+        project_ids: list[int],
+        assigned_by: UUID,
+    ) -> dict[str, Any]:
+        target = await self._target(user_id, for_update=True)
+        if target.role is not UserRoleEnum.DISPATCHER:
+            raise ObjectNotFoundError("Dispatcher not found")
+        await self._session.execute(
+            delete(dispatcher_projects).where(
+                dispatcher_projects.c.user_id == user_id
+            )
+        )
+        if project_ids:
+            await self._session.execute(
+                insert(dispatcher_projects),
+                [
+                    {
+                        "user_id": user_id,
+                        "project_id": project_id,
+                        "assigned_by": assigned_by,
+                    }
+                    for project_id in project_ids
+                ],
+            )
+        # Authorization uses dispatcher_projects exclusively. Keep project_id
+        # only as a compatibility mirror for clients that still understand a
+        # dispatcher with exactly one project.
+        legacy_project_id = project_ids[0] if len(project_ids) == 1 else None
+        await self._session.execute(
+            update(users_table)
+            .where(users_table.c.id == user_id)
+            .values(project_id=legacy_project_id)
+        )
+        result = _user(target, project_ids)
+        result["project_id"] = legacy_project_id
+        return result
 
     async def reset_password(self, user_id: UUID, password_hash: str) -> dict[str, str]:
         await self._target(user_id)

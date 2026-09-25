@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.adapters.address_search_nominatim import (
+    address_search_queries,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import geocoding_cache
-from planning.infrastructure.adapters.address_search_nominatim import address_search_queries
 
 
 class NominatimGeocoder:

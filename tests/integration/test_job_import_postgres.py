@@ -12,6 +12,7 @@ from auth.domain.user_role import UserRoleEnum
 from auth.infrastructure.persistence_sqla.mappings.user import users_table
 from auth.infrastructure.persistence_sqla.orm_registry import metadata_obj
 from planning.application.errors import ConflictError, InvalidPlanningRequest
+from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.adapters import job_import_csv as job_import_module
 from planning.infrastructure.adapters.address_search_nominatim import (
     NominatimAddressSearchProvider,
@@ -21,6 +22,7 @@ from planning.infrastructure.adapters.job_import_csv import (
     JobImportService,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    dispatcher_projects,
     job_import_batches,
     job_import_rows,
     jobs,
@@ -77,7 +79,12 @@ async def test_csv_validation_and_atomic_apply(monkeypatch):
                     is_active=True,
                     role=UserRoleEnum.DISPATCHER,
                     is_verified=True,
-                    project_id=project_id,
+                    project_id=None,
+                )
+            )
+            await session.execute(
+                insert(dispatcher_projects).values(
+                    user_id=actor_id, project_id=project_id
                 )
             )
             await session.commit()
@@ -101,7 +108,10 @@ async def test_csv_validation_and_atomic_apply(monkeypatch):
         monkeypatch.setattr(NominatimAddressSearchProvider, "search", address_search)
         access = SimpleNamespace(project=lambda *_args, **_kwargs: _actor(actor_id))
         scheduled = []
-        dispatch = SimpleNamespace(schedule=lambda *_args: None)
+        dispatch = SimpleNamespace(
+            schedule=lambda *_args: None,
+            address_provider_version="nominatim-v1",
+        )
         planner = SimpleNamespace(
             schedule_project=lambda project: scheduled.append(project)
         )
@@ -112,8 +122,15 @@ async def test_csv_validation_and_atomic_apply(monkeypatch):
         async with factory() as session:
             service = JobImportService(session, access, dispatch, planner)
             batch = await service.upload(project_id, "jobs.csv", source)
-        worker = JobImportExecutor(factory, None)
-        second_worker = JobImportExecutor(factory, None)
+        config = PlanningServiceConfig(
+            valhalla_url="http://test",
+            nominatim_url="http://test",
+            nominatim_viewbox="",
+            geoservice_timeout_sec=1,
+            matrix_block_size=40,
+        )
+        worker = JobImportExecutor(factory, config)
+        second_worker = JobImportExecutor(factory, config)
         async with worker._validation_lock(project_id) as first_lock:
             async with second_worker._validation_lock(project_id) as second_lock:
                 assert first_lock is True

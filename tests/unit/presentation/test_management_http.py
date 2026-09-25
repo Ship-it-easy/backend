@@ -30,6 +30,9 @@ from planning.presentation.http.project.router import project_router
 from planning.presentation.http.root_router import planning_router
 
 EXPECTED_ROUTES = {
+    ("GET", "/api/admin/dispatchers"),
+    ("POST", "/api/admin/dispatchers"),
+    ("PUT", "/api/admin/dispatchers/{user_id}/projects"),
     ("GET", "/api/admin/owners"),
     ("POST", "/api/admin/owners"),
     ("GET", "/api/admin/projects"),
@@ -43,6 +46,7 @@ EXPECTED_ROUTES = {
     ("POST", "/api/admin/users/{user_id}/reset-password"),
     ("POST", "/api/admin/users/{user_id}/block"),
     ("POST", "/api/admin/users/{user_id}/unblock"),
+    ("GET", "/api/project/available-projects"),
     ("GET", "/api/project/engineers"),
     ("POST", "/api/project/engineers"),
     ("GET", "/api/project/engineers/{engineer_id}"),
@@ -124,6 +128,21 @@ def test_csv_import_routes_replace_legacy_xlsx_job_routes() -> None:
     assert "/api/projects/{project_id}/job-imports/{batch_id}/revalidate" in paths
     assert "/api/projects/{project_id}/jobs/import/preview" not in paths
     assert "/api/projects/{project_id}/jobs/import/apply" not in paths
+
+
+def test_dispatcher_workspace_routes_are_explicitly_project_scoped() -> None:
+    app = FastAPI()
+    app.include_router(planning_router)
+    paths = app.openapi()["paths"]
+    required = {
+        "/api/projects/{project_id}/workspace/jobs",
+        "/api/projects/{project_id}/workspace/engineers",
+        "/api/projects/{project_id}/workspace/qualifications",
+        "/api/projects/{project_id}/workspace/equipment-types",
+        "/api/projects/{project_id}/workspace/work-types",
+        "/api/projects/{project_id}/workspace/address-suggestions",
+    }
+    assert required <= set(paths)
 
 
 def test_admin_request_validation_happens_before_interactor() -> None:

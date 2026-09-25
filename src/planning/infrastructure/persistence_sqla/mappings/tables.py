@@ -52,6 +52,38 @@ Index(
     postgresql_where=projects.c.status == "ACTIVE",
 )
 
+# Dispatcher authorization is intentionally independent from ``users.project_id``.
+# That column remains the engineer scope and a compatibility mirror only when a
+# dispatcher has exactly one project. Multi-project access lives in this table.
+dispatcher_projects = Table(
+    "dispatcher_projects",
+    metadata_obj,
+    Column(
+        "user_id",
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "project_id",
+        BigInteger,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "assigned_by",
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+    ),
+    Column(
+        "assigned_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+)
+Index("ix_dispatcher_projects_project_id", dispatcher_projects.c.project_id)
+
 work_types = Table(
     "work_types",
     metadata_obj,

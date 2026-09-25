@@ -306,7 +306,10 @@ async def test_yandex_geocoder_calls_api_and_caches_coordinate(monkeypatch) -> N
                                         "Components": [
                                             {"kind": "country", "name": "Россия"},
                                             {"kind": "locality", "name": "Москва"},
-                                            {"kind": "street", "name": "Тестовая улица"},
+                                            {
+                                                "kind": "street",
+                                                "name": "Тестовая улица",
+                                            },
                                             {"kind": "house", "name": "1"},
                                         ],
                                     },

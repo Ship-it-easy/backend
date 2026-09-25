@@ -45,7 +45,7 @@ services:
   valhalla:
     image: ghcr.io/valhalla/valhalla-scripted:latest
     environment:
-      tile_urls: ${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}
+      tile_urls: ${VALHALLA_TILE_URLS:-${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}}
       server_threads: ${VALHALLA_THREADS:-2}
     volumes:
       - valhalla-data:/custom_files
@@ -63,7 +63,7 @@ services:
   nominatim:
     image: mediagis/nominatim:5.3
     environment:
-      PBF_URL: ${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}
+      PBF_URL: ${NOMINATIM_PBF_URL:-${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}}
       NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:-nominatim}
       THREADS: ${NOMINATIM_THREADS:-2}
     volumes:
