@@ -144,6 +144,7 @@ def test_dispatcher_workspace_routes_are_explicitly_project_scoped() -> None:
         "/api/projects/{project_id}/workspace/equipment-types",
         "/api/projects/{project_id}/workspace/work-types",
         "/api/projects/{project_id}/workspace/address-suggestions",
+        "/api/projects/{project_id}/workspace/traffic/route",
     }
     assert required <= set(paths)
 

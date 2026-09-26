@@ -11,6 +11,7 @@ from typing import Any
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter, Query
 
+from planning.application.access import ProjectAccess
 from planning.application.interactors.project.address_search import (
     SearchAddressesInteractor,
 )
@@ -47,6 +48,7 @@ from planning.application.interactors.project.jobs import (
     ListProjectJobsInteractor,
     UpdateProjectJobInteractor,
 )
+from planning.application.interfaces.traffic_route_service import TrafficRouteService
 from planning.presentation.http.project.schemas import (
     AccessCreate,
     AccessPasswordReset,
@@ -63,8 +65,33 @@ from planning.presentation.http.project.schemas import (
     WorkTypeCreate,
     WorkTypePatch,
 )
+from planning.presentation.http.project.traffic import (
+    TrafficRouteRequest,
+    build_traffic_route_response,
+)
 
 router = APIRouter(prefix="/{project_id}/workspace")
+
+
+@router.post("/traffic/route")
+@inject
+async def scoped_traffic_route(
+    project_id: int,
+    body: TrafficRouteRequest,
+    access: FromDishka[ProjectAccess],
+    routes: FromDishka[TrafficRouteService],
+) -> dict:
+    return await build_project_traffic_route(project_id, body, access, routes)
+
+
+async def build_project_traffic_route(
+    project_id: int,
+    body: TrafficRouteRequest,
+    access: ProjectAccess,
+    routes: TrafficRouteService,
+) -> dict:
+    await access.project(project_id)
+    return await build_traffic_route_response(body, routes)
 
 
 @router.get("/qualifications")

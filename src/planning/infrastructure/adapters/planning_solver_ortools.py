@@ -35,6 +35,7 @@ from planning.infrastructure.adapters.ortools_routing.travel import (
     RoutingMatrices,
     prepare_travel_matrices,
     refine_district_times_for_routes,
+    refine_transit_times_for_routes,
 )
 from planning.infrastructure.adapters.travel_matrix_provider_factory import (
     TravelMatrixProviderFactory,
@@ -58,29 +59,64 @@ class OrToolsPlanningSolver:
         traffic_enabled = getattr(
             self._matrix_provider, "planning_traffic_enabled", False
         )
+        transit_enabled = "multimodal" in travel.minutes and callable(
+            getattr(self._matrix_provider, "get_matrix_for_departure", None)
+        )
+        transit_cache = {}
+
+        async def refine_transit(current_travel, current_result):
+            remaining = (
+                data.solve_deadline_monotonic - monotonic_time.monotonic()
+                if data.solve_deadline_monotonic is not None
+                else None
+            )
+            try:
+                async with asyncio.timeout(remaining):
+                    return await refine_transit_times_for_routes(
+                        data,
+                        current_travel,
+                        current_result,
+                        self._matrix_provider,
+                        transit_cache,
+                    )
+            except TimeoutError as error:
+                raise SolverTimeLimit("TRANSIT_MATRIX_TIME_LIMIT") from error
+
         correction_passes = 0
         correction_status = "not_needed"
-        if traffic_enabled and result.routes:
+        if (traffic_enabled or transit_enabled) and result.routes:
             # Static matrices are required by OR-Tools.  Correct the selected
             # arcs at their real departures.  A second pass handles the case
             # where the first correction changes the chosen order.
             correction_status = "converged"
-            for _ in range(3):
+            for _ in range(4):
                 before = [
                     (route.engineer_id, tuple(job.job_id for job in route.jobs))
                     for route in result.routes
                 ]
                 previous_result, previous_travel = result, travel
-                refined_travel = refine_district_times_for_routes(data, travel, result)
+                refined_travel = (
+                    refine_district_times_for_routes(data, travel, result)
+                    if traffic_enabled
+                    else travel
+                )
+                if transit_enabled:
+                    refined_travel = await refine_transit(refined_travel, result)
+                if refined_travel == travel:
+                    break
                 try:
                     result = await asyncio.to_thread(
                         self._solve_sync, data, refined_travel
                     )
                 except SolverTimeLimit:
+                    if transit_enabled:
+                        raise
                     result, travel = previous_result, previous_travel
                     correction_status = "fallback_time_limit"
                     break
                 except SolverNoFeasibleSolution:
+                    if transit_enabled:
+                        raise
                     result, travel = previous_result, previous_travel
                     correction_status = "fallback_infeasible"
                     break
@@ -90,10 +126,12 @@ class OrToolsPlanningSolver:
                     (route.engineer_id, tuple(job.job_id for job in route.jobs))
                     for route in result.routes
                 ]
-                if after == before:
+                if after == before and not transit_enabled:
                     break
             else:
                 correction_status = "max_passes_reached"
+            if transit_enabled and await refine_transit(travel, result) != travel:
+                raise SolverTimeLimit("TRANSIT_TIMETABLE_NOT_CONVERGED")
         result.travel_matrices = travel.minutes
         result.travel_time_seconds_matrices = travel.seconds
         result.distance_matrices = travel.meters

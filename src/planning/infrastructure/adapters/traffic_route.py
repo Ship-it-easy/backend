@@ -19,6 +19,10 @@ from planning.infrastructure.adapters.mosmetro import (
     MosMetroClient,
     build_metro_map_candidate,
 )
+from planning.infrastructure.adapters.valhalla_response import (
+    LONG_TRANSIT_ROUTE_SECONDS,
+    route_unavailable,
+)
 
 
 def decode_shape(encoded: str) -> list[list[float]]:
@@ -262,10 +266,7 @@ async def build_traffic_route(request, config, *, client=None):
                     "language": "ru-RU",
                 },
             )
-            valhalla_unreachable = (
-                response.status_code == 400
-                and response.json().get("error_code") in {441, 442}
-            )
+            valhalla_unreachable = route_unavailable(response)
             evaluated = []
             if not valhalla_unreachable:
                 response.raise_for_status()
@@ -277,6 +278,45 @@ async def build_traffic_route(request, config, *, client=None):
                     evaluate_trip(trip, current, request.profile, traffic_enabled)
                     for trip in candidates
                 ]
+            if request.profile == "multimodal" and (
+                valhalla_unreachable
+                or any(
+                    candidate["duration_seconds"] > LONG_TRANSIT_ROUTE_SECONDS
+                    for candidate in evaluated
+                )
+            ):
+                walking = await client.post(
+                    "/route",
+                    json={
+                        "locations": [
+                            {"lat": s.latitude, "lon": s.longitude}
+                            for s in (origin, destination)
+                        ],
+                        "costing": "pedestrian",
+                        "units": "kilometers",
+                        "shape_format": "polyline6",
+                        "date_time": {
+                            "type": 1,
+                            "value": current.astimezone(MOSCOW).strftime(
+                                "%Y-%m-%dT%H:%M"
+                            ),
+                        },
+                        "language": "ru-RU",
+                    },
+                )
+                if not route_unavailable(walking):
+                    walking.raise_for_status()
+                    fallback = evaluate_trip(
+                        walking.json()["trip"], current, "pedestrian", False
+                    )
+                    if valhalla_unreachable:
+                        fallback["provider"] = "PEDESTRIAN_FALLBACK"
+                        evaluated = [fallback]
+                    elif fallback["duration_seconds"] < min(
+                        candidate["duration_seconds"] for candidate in evaluated
+                    ):
+                        fallback["provider"] = "PEDESTRIAN_FASTER"
+                        evaluated.append(fallback)
             has_gtfs_transit = any(
                 segment.get("travel_mode") == "transit"
                 for candidate in evaluated
@@ -378,6 +418,12 @@ async def build_traffic_route(request, config, *, client=None):
         ),
     }
     if request.profile == "multimodal":
+        walking_fallback_legs = sum(
+            leg.get("provider") == "PEDESTRIAN_FALLBACK" for leg in legs
+        )
+        walking_faster_legs = sum(
+            leg.get("provider") == "PEDESTRIAN_FASTER" for leg in legs
+        )
         api_metro_legs = sum(leg.get("provider") == "MOSMETRO_HYBRID" for leg in legs)
         gtfs_metro_legs = sum(
             any(
@@ -403,17 +449,38 @@ async def build_traffic_route(request, config, *, client=None):
                 else (
                     "Наземный транспорт построен по расписанию GTFS в Valhalla."
                     if scheduled_legs
-                    else "Valhalla выбрала пеший маршрут для этого выезда. "
-                    "Он может быть быстрее поездки с пересадками, "
-                    "либо доступных рейсов нет."
+                    else (
+                        "Расписание общественного транспорта недоступно; "
+                        "использован пеший маршрут."
+                        if any(
+                            leg.get("provider") == "PEDESTRIAN_FALLBACK"
+                            for leg in legs
+                        )
+                        else (
+                            "Пеший маршрут быстрее предложенной поездки с "
+                            "транспортом для этого выезда."
+                            if walking_faster_legs
+                            else "Valhalla выбрала пеший маршрут для этого выезда. "
+                            "Он может быть быстрее поездки с пересадками, "
+                            "либо доступных рейсов нет."
+                        )
+                    )
                 )
             )
         )
         result["metro_legs"] = api_metro_legs + gtfs_metro_legs
         result["metro_gtfs_legs"] = gtfs_metro_legs
+        if walking_fallback_legs:
+            result["warnings"].append(
+                "Для части переездов нет транспорта; использован пеший путь."
+            )
+        if walking_faster_legs:
+            result["warnings"].append(
+                "Для части переездов пеший путь быстрее поездки с транспортом."
+            )
         result["warnings"].append(
-            "Планирование использует время начала смены; "
-            "на карте каждый участок пересчитан на время отправления."
+            "Планирование проверяет выбранные переезды на время отправления; "
+            "карта дополнительно показывает их подробный маршрут."
         )
     elif request.profile != "auto":
         result["warning"] = "Время маршрута без автомобильных коэффициентов пробок."

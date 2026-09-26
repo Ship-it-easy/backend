@@ -16,6 +16,10 @@ from planning.infrastructure.adapters.mosmetro import (
     MosMetroClient,
     metro_matrix_candidate,
 )
+from planning.infrastructure.adapters.valhalla_response import (
+    LONG_TRANSIT_ROUTE_SECONDS,
+    route_unavailable,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import travel_time_cache
 
 
@@ -137,30 +141,63 @@ class ValhallaTravelMatrixProvider:
                 if origin == destination:
                     times[i][j] = distances[i][j] = 0
                     return
+                departure_value = departure_at.astimezone(
+                    timezone(timedelta(hours=3))
+                ).strftime("%Y-%m-%dT%H:%M")
                 response = await client.post(
                     "/route",
                     json={
                         "locations": [_location(origin), _location(destination)],
                         "costing": profile,
-                        "date_time": {
-                            "type": 1,
-                            "value": departure_at.astimezone(
-                                timezone(timedelta(hours=3))
-                            ).strftime("%Y-%m-%dT%H:%M"),
-                        },
+                        "date_time": {"type": 1, "value": departure_value},
                         "units": "kilometers",
                     },
                 )
-                valhalla_unreachable = (
-                    response.status_code == 400
-                    and response.json().get("error_code") in {441, 442}
-                )
+                valhalla_unreachable = route_unavailable(response)
+                if valhalla_unreachable:
+                    # A multimodal graph without GTFS can reject two otherwise
+                    # walkable points with error 170. Walking is still valid for
+                    # an engineer who normally uses public transport.
+                    response = await client.post(
+                        "/route",
+                        json={
+                            "locations": [_location(origin), _location(destination)],
+                            "costing": "pedestrian",
+                            "date_time": {"type": 1, "value": departure_value},
+                            "units": "kilometers",
+                        },
+                    )
+                    valhalla_unreachable = route_unavailable(response)
                 if not valhalla_unreachable:
                     response.raise_for_status()
                     trip = response.json()["trip"]
                     summary = trip["summary"]
                     times[i][j] = math.ceil(float(summary["time"]))
                     distances[i][j] = math.ceil(float(summary["length"]) * 1000)
+                    if times[i][j] > LONG_TRANSIT_ROUTE_SECONDS:
+                        walking = await client.post(
+                            "/route",
+                            json={
+                                "locations": [
+                                    _location(origin),
+                                    _location(destination),
+                                ],
+                                "costing": "pedestrian",
+                                "date_time": {"type": 1, "value": departure_value},
+                                "units": "kilometers",
+                            },
+                        )
+                        if not route_unavailable(walking):
+                            walking.raise_for_status()
+                            walking_summary = walking.json()["trip"]["summary"]
+                            walking_seconds = math.ceil(
+                                float(walking_summary["time"])
+                            )
+                            if walking_seconds < times[i][j]:
+                                times[i][j] = walking_seconds
+                                distances[i][j] = math.ceil(
+                                    float(walking_summary["length"]) * 1000
+                                )
                 has_gtfs_transit = not valhalla_unreachable and any(
                     maneuver.get("travel_mode") == "transit"
                     for leg in trip.get("legs", [])

@@ -61,17 +61,25 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         assert any(item["id"] == project_id for item in available), (
             "Refuse to mutate a different project"
         )
-        assert account["login"].startswith("demo_routes_"), (
+        assert account["login"].startswith(("demo_routes_", "demo_transport_")), (
             "Use a dedicated demo account"
+        )
+        assert not (full and account["login"].startswith("demo_transport_")), (
+            "Use --plan-only for the transport demo"
         )
         record("dispatcher_login", project_id=manifest["project_id"])
         readiness = request(
             c,
             "GET",
             f"{planning}/board",
-            params={"from": manifest["planning_date"], "days": 7},
+            params={"days": 7},
         )
-        record("readiness", result=readiness)
+        record(
+            "readiness",
+            project_date=readiness.get("project_date"),
+            ready=readiness.get("readiness", {}).get("ready"),
+            problems=readiness.get("readiness", {}).get("problems", []),
+        )
         response = request(
             c,
             "POST",
@@ -91,7 +99,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             c,
             "GET",
             f"{planning}/board",
-            params={"from": manifest["planning_date"], "days": 7},
+            params={"days": 7},
         )
         day = request(
             c, "GET", f"{planning}/board/{manifest['planning_date']}"

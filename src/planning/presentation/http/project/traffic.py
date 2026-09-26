@@ -81,6 +81,12 @@ async def traffic_route(
     routes: FromDishka[TrafficRouteService],
 ) -> dict:
     await access.dispatcher()
+    return await build_traffic_route_response(body, routes)
+
+
+async def build_traffic_route_response(
+    body: TrafficRouteRequest, routes: TrafficRouteService
+) -> dict:
     # Valhalla interprets date_time as local to the origin, not as UTC.
     body.departure_at = body.departure_at.astimezone(MOSCOW)
     try:

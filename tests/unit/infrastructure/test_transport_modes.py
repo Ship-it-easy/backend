@@ -12,7 +12,9 @@ from planning.domain.entities.coordinate import Coordinate
 from planning.domain.enums import TransportType
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.adapters.ortools_routing.travel import (
+    RoutingMatrices,
     prepare_travel_matrices,
+    refine_transit_times_for_routes,
 )
 from planning.infrastructure.adapters.planning_solver_ortools import (
     OrToolsPlanningSolver,
@@ -23,6 +25,7 @@ from planning.infrastructure.adapters.travel_matrix_provider_valhalla import (
 )
 from planning.presentation.http.project.schemas import EngineerCreate, EngineerPatch
 from planning.presentation.http.project.traffic import TrafficRouteRequest
+from planning.presentation.http.project_workspace import build_project_traffic_route
 from tests.unit.infrastructure.test_routing_regressions import (
     Provider,
     data,
@@ -71,6 +74,90 @@ async def test_transit_snapshot_is_scoped_to_date_and_departure():
         provider.get_matrix_for_departure.call_args.args[2].date()
         == tomorrow.planning_date
     )
+
+
+async def test_selected_transit_legs_are_repriced_at_their_own_departures():
+    planning = data(
+        [job(1), job(2)],
+        [engineer(transport_type=TransportType.PUBLIC_TRANSPORT)],
+    )
+    start = datetime(2030, 1, 1, 8, tzinfo=timezone.utc)
+    first_finish = start + timedelta(minutes=91)
+    route = SimpleNamespace(
+        engineer_id=1,
+        planned_start=start,
+        jobs=[
+            SimpleNamespace(job_id=1, planned_finish=first_finish),
+            SimpleNamespace(job_id=2, planned_finish=first_finish + timedelta(hours=1)),
+        ],
+    )
+    base = [[0 if i == j else 60 for j in range(3)] for i in range(3)]
+    travel = RoutingMatrices(
+        {"multimodal": [row[:] for row in base]},
+        {"multimodal": [row[:] for row in base]},
+        {"multimodal": [row[:] for row in base]},
+    )
+    departures = []
+
+    async def dated_pair(coordinates, profile, departure):
+        departures.append(departure)
+        duration = 1800 if departure == first_finish else 60
+        return TravelMatrix(
+            [[0, duration], [duration, 0]],
+            [[0, 100], [100, 0]],
+            profile,
+            "TEST",
+        )
+
+    provider = SimpleNamespace(get_matrix_for_departure=dated_pair)
+    refined = await refine_transit_times_for_routes(
+        planning, travel, SimpleNamespace(routes=[route]), provider, {}
+    )
+    assert departures == [start, first_finish]
+    assert refined.minutes["multimodal"][2][0] == 1
+    assert refined.minutes["multimodal"][0][1] == 30
+    assert refined.seconds["multimodal"][0][1] == 1800
+
+
+async def test_solver_updates_later_transit_leg_before_publishing_schedule():
+    class TimedProvider:
+        async def get_matrix_for_departure(self, coordinates, profile, departure):
+            size = len(coordinates)
+            duration = 1800 if size == 2 and departure.hour >= 9 else 60
+            return TravelMatrix(
+                [[0 if i == j else duration for j in range(size)] for i in range(size)],
+                [[0 if i == j else 100 for j in range(size)] for i in range(size)],
+                profile,
+                "TEST",
+            )
+
+    planning = data(
+        [
+            job(1, window_start_min=490, window_end_min=510, duration_min=90),
+            job(2, window_start_min=600, window_end_min=660, duration_min=30),
+        ],
+        [engineer(transport_type=TransportType.PUBLIC_TRANSPORT)],
+    )
+    result = await OrToolsPlanningSolver(TimedProvider()).solve(planning)
+    assert [item.job_id for item in result.routes[0].jobs] == [1, 2]
+    assert result.routes[0].jobs[1].travel_from_previous_min == 30
+    assert PlanningValidator().validate(planning, result) == []
+
+
+async def test_project_scoped_traffic_route_does_not_use_legacy_dispatcher_scope():
+    access = SimpleNamespace(project=AsyncMock(), dispatcher=AsyncMock())
+    routes = SimpleNamespace(build=AsyncMock(return_value={"ok": True}))
+    request = TrafficRouteRequest(
+        departure_at="2026-09-26T08:00:00+03:00",
+        profile="bicycle",
+        stops=[
+            {"latitude": 55.7, "longitude": 37.5},
+            {"latitude": 55.8, "longitude": 37.6},
+        ],
+    )
+    assert await build_project_traffic_route(7, request, access, routes) == {"ok": True}
+    access.project.assert_awaited_once_with(7)
+    access.dispatcher.assert_not_called()
 
 
 async def test_mixed_team_uses_each_engineers_travel_times():
@@ -144,7 +231,75 @@ async def test_transit_provider_uses_dated_route_pairs_and_does_not_cache_as_roa
     session.execute.assert_not_called()
 
 
-async def test_transit_matrix_never_substitutes_walking_pairs():
+async def test_transit_provider_walks_when_gtfs_graph_is_unconnected():
+    provider = ValhallaTravelMatrixProvider(
+        AsyncMock(), PlanningServiceConfig("http://test", "http://test", "", 1, 40)
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+
+    async def response_for_costing(_path, *, json):
+        request = httpx.Request("POST", "http://test/route")
+        if json["costing"] == "multimodal":
+            return httpx.Response(400, request=request, json={"error_code": 170})
+        return httpx.Response(
+            200,
+            request=request,
+            json={"trip": {"summary": {"time": 600, "length": 1}}},
+        )
+
+    client.post.side_effect = response_for_costing
+    with patch(
+        "planning.infrastructure.adapters.travel_matrix_provider_valhalla.httpx.AsyncClient",
+        return_value=client,
+    ):
+        result = await provider.get_matrix_for_departure(
+            [Coordinate(55.7, 37.5), Coordinate(55.8, 37.6)],
+            "multimodal",
+            datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+        )
+    assert result.travel_time_seconds[0][1] == 600
+    assert result.distance_meters[0][1] == 1000
+    assert {call.kwargs["json"]["costing"] for call in client.post.call_args_list} == {
+        "multimodal",
+        "pedestrian",
+    }
+
+
+async def test_transit_provider_avoids_overnight_wait_when_walking_is_faster():
+    provider = ValhallaTravelMatrixProvider(
+        AsyncMock(), PlanningServiceConfig("http://test", "http://test", "", 1, 40)
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+
+    async def response_for_costing(_path, *, json):
+        seconds = 23740 if json["costing"] == "multimodal" else 10909
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", "http://test/route"),
+            json={"trip": {"summary": {"time": seconds, "length": 17}}},
+        )
+
+    client.post.side_effect = response_for_costing
+    with patch(
+        "planning.infrastructure.adapters.travel_matrix_provider_valhalla.httpx.AsyncClient",
+        return_value=client,
+    ):
+        result = await provider.get_matrix_for_departure(
+            [Coordinate(55.7, 37.5), Coordinate(55.8, 37.6)],
+            "multimodal",
+            datetime(2026, 9, 27, 20, 30, tzinfo=timezone.utc),
+        )
+    assert result.travel_time_seconds[0][1] == 10909
+    assert result.travel_time_seconds[1][0] == 10909
+    assert {call.kwargs["json"]["costing"] for call in client.post.call_args_list} == {
+        "multimodal",
+        "pedestrian",
+    }
+
+
+async def test_transit_matrix_keeps_multimodal_values_when_available():
     config = PlanningServiceConfig("http://test", "http://test", "", 1, 40)
     provider = ValhallaTravelMatrixProvider(AsyncMock(), config)
     provider.get_matrix = AsyncMock(
@@ -174,7 +329,7 @@ async def test_transit_matrix_never_substitutes_walking_pairs():
     assert client.post.call_count == 6
     assert matrix.travel_time_seconds[0][2] == 120
     assert matrix.travel_time_seconds[0][1] == 120
-    assert not matrix.source.endswith("WALKING_FALLBACK")
+    assert matrix.source == "VALHALLA_TRANSIT"
 
 
 @pytest.mark.parametrize("profile", ["pedestrian", "bicycle", "multimodal"])
@@ -201,3 +356,55 @@ async def test_map_uses_transport_profile_without_car_traffic(profile):
     if profile == "multimodal":
         assert payload["date_time"]["type"] == 1
         assert "departure_options" not in result
+
+
+async def test_multimodal_map_falls_back_to_walk_when_gtfs_is_missing():
+    request = TrafficRouteRequest(
+        departure_at="2026-09-26T08:00:00+03:00",
+        profile="multimodal",
+        stops=[
+            {"latitude": 55.8, "longitude": 37.4},
+            {"latitude": 55.81, "longitude": 37.41},
+        ],
+    )
+    client = AsyncMock()
+
+    async def response_for_costing(_path, *, json):
+        http_request = httpx.Request("POST", "http://local/route")
+        if json["costing"] == "multimodal":
+            return httpx.Response(400, request=http_request, json={"error_code": 170})
+        return httpx.Response(200, request=http_request, json={"trip": trip(600)})
+
+    client.post.side_effect = response_for_costing
+    result = await build_traffic_route(request, SimpleNamespace(), client=client)
+    assert result["duration_seconds"] == 600
+    assert result["legs"][0]["provider"] == "PEDESTRIAN_FALLBACK"
+    assert "использован пеший маршрут" in result["warning"]
+    assert any("использован пеший путь" in value for value in result["warnings"])
+
+
+async def test_multimodal_map_prefers_walk_to_overnight_wait():
+    request = TrafficRouteRequest(
+        departure_at="2026-09-27T23:30:00+03:00",
+        profile="multimodal",
+        stops=[
+            {"latitude": 55.8, "longitude": 37.4},
+            {"latitude": 55.81, "longitude": 37.41},
+        ],
+    )
+    client = AsyncMock()
+
+    async def response_for_costing(_path, *, json):
+        seconds = 23740 if json["costing"] == "multimodal" else 10909
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", "http://local/route"),
+            json={"trip": trip(seconds)},
+        )
+
+    client.post.side_effect = response_for_costing
+    result = await build_traffic_route(request, SimpleNamespace(), client=client)
+    assert result["duration_seconds"] == 10909
+    assert result["legs"][0]["provider"] == "PEDESTRIAN_FASTER"
+    assert "Пеший маршрут быстрее" in result["warning"]
+    assert any("пеший путь быстрее" in value for value in result["warnings"])
