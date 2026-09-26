@@ -12,10 +12,10 @@ import httpx
 
 def board_query_params(manifest: dict, *, verify_only: bool) -> dict | None:
     # The board endpoint only accepts the project's *current* seven-day range.
-    # A published comparison can still be shown after its preparation day.
+    # The manifest's date can be tomorrow or a past comparison date.
     if verify_only:
         return None
-    return {"from": manifest["planning_date"], "days": 7}
+    return {"days": 7}
 
 
 def run(
@@ -93,8 +93,11 @@ def run(
         assert any(item["id"] == project_id for item in available), (
             "Refuse to mutate a different project"
         )
-        assert account["login"].startswith("demo_routes_"), (
+        assert account["login"].startswith(("demo_routes_", "demo_transport_")), (
             "Use a dedicated demo account"
+        )
+        assert not (full and account["login"].startswith("demo_transport_")), (
+            "Use --plan-only for the transport demo"
         )
         record("dispatcher_login", project_id=manifest["project_id"])
         readiness = request(
@@ -106,6 +109,7 @@ def run(
         record(
             "readiness",
             ready=(readiness.get("readiness") or {}).get("ready"),
+            problems=(readiness.get("readiness") or {}).get("problems", []),
             project_date=readiness.get("project_date"),
             plan_version_id=(readiness.get("plan_version") or {}).get("id"),
             days_count=len(readiness.get("days") or []),

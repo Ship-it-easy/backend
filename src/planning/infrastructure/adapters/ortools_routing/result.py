@@ -26,7 +26,7 @@ def empty_result(data: PlanningInput) -> PlanningResult:
     """Вернуть прежний EMPTY-результат без обращения к дорожному провайдеру."""
     drop_cost = sum(item.drop_penalty for item in data.pre_unassigned)
     profiles = {
-        "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+        TransportType(engineer.transport_type).routing_profile
         for engineer in data.engineers
     }
     empty_matrices = {profile: [] for profile in profiles}
@@ -186,7 +186,7 @@ def _extract_route(
     previous_node = manager.IndexToNode(index)
     route_jobs: list[RouteJob] = []
     total_travel = total_service = total_waiting = 0
-    profile = "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+    profile = TransportType(engineer.transport_type).routing_profile
     matrix = travel.minutes[profile]
     distance_matrix = travel.meters[profile]
     route_distance = 0

@@ -198,9 +198,7 @@ def required_baseline_travel_arcs(
     jobs_by_id = {job.id: job for job in (data.baseline_jobs or data.jobs)}
     required: set[tuple[str, float, float, float, float]] = set()
     for engineer in engineers:
-        profile = (
-            "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-        )
+        profile = TransportType(engineer.transport_type).routing_profile
         previous = engineer.coordinate
         for job_id in route_job_ids[engineer.id]:
             destination = jobs_by_id[job_id].coordinate
@@ -258,9 +256,7 @@ def calculate_fifo_baseline(
         job_ids = route_job_ids[engineer.id]
         if not job_ids:
             continue
-        profile = (
-            "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-        )
+        profile = TransportType(engineer.transport_type).routing_profile
         matrix = distance_matrices.get(profile)
         expected_size = len(jobs) + len(data.engineers)
         if (
@@ -504,9 +500,7 @@ def validate_fifo_baseline(
         if [item.job_id for item in route.jobs] != expected_by_engineer[engineer_id]:
             _validation_failed(f"job sequence mismatch for route {engineer_id}")
 
-        profile = (
-            "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-        )
+        profile = TransportType(engineer.transport_type).routing_profile
         matrix = distance_matrices.get(profile)
         if (
             matrix is None

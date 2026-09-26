@@ -81,9 +81,7 @@ class RouteChecks:
         calculated_travel = calculated_service = calculated_waiting = 0
         calculated_distance = 0
         actual_travel_time_units = 0
-        profile = (
-            "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-        )
+        profile = TransportType(engineer.transport_type).routing_profile
         for item in route.jobs:
             job = self.jobs.get(item.job_id)
             if job is None:

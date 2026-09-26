@@ -16,10 +16,15 @@ class PlanningServiceConfig:
     nominatim_viewbox: str
     geoservice_timeout_sec: float
     matrix_block_size: int
+    matrix_candidate_limit: int | None = None
     use_yandex_geocoder: bool = False
     yandex_geocoder_url: str = "https://geocode-maps.yandex.ru"
     yandex_geocoder_api_key: str = ""
     yandex_geocoder_bbox: str = ""
+    traffic_model_enabled: bool = True
+    mosmetro_url: str = ""
+    mosmetro_max_access_meters: int = 2500
+    mosmetro_waiting_seconds: int = 180
     baseline_comparison_enabled: bool = True
 
     @staticmethod
@@ -30,12 +35,21 @@ class PlanningServiceConfig:
             nominatim_viewbox=getenv("NOMINATIM_VIEWBOX", "35.0,57.0,40.5,54.0"),
             geoservice_timeout_sec=float(getenv("GEOSERVICE_TIMEOUT_SEC", "15")),
             matrix_block_size=int(getenv("MATRIX_BLOCK_SIZE", "40")),
+            matrix_candidate_limit=(
+                int(value) if (value := getenv("MATRIX_CANDIDATE_LIMIT")) else None
+            ),
             use_yandex_geocoder=_env_flag("USE_YANDEX_GEOCODER"),
             yandex_geocoder_url=getenv(
                 "YANDEX_GEOCODER_URL", "https://geocode-maps.yandex.ru"
             ),
             yandex_geocoder_api_key=getenv("YANDEX_GEOCODER_API_KEY", ""),
             yandex_geocoder_bbox=getenv("YANDEX_GEOCODER_BBOX", ""),
+            traffic_model_enabled=_env_flag("TRAFFIC_MODEL_ENABLED", True),
+            mosmetro_url=getenv("MOSMETRO_URL", ""),
+            mosmetro_max_access_meters=int(
+                getenv("MOSMETRO_MAX_ACCESS_METERS", "2500")
+            ),
+            mosmetro_waiting_seconds=int(getenv("MOSMETRO_WAITING_SECONDS", "180")),
             baseline_comparison_enabled=_env_flag(
                 "BASELINE_COMPARISON_ENABLED", True
             ),

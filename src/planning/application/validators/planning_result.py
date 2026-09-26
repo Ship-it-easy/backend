@@ -89,9 +89,7 @@ def _check_matrices(
     """
     expected_size = len(data.jobs) + len(data.engineers)
     for profile in {
-        "auto"
-        if engineers[route.engineer_id].transport_type == TransportType.CAR
-        else "pedestrian"
+        TransportType(engineers[route.engineer_id].transport_type).routing_profile
         for route in result.routes
         if route.engineer_id in engineers
     }:

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import math
 from datetime import datetime, timedelta, timezone
@@ -11,21 +12,232 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from planning.application.interfaces.travel_matrix_provider import TravelMatrix
 from planning.domain.entities.coordinate import Coordinate
 from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.adapters.mosmetro import (
+    MosMetroClient,
+    metro_matrix_candidate,
+)
+from planning.infrastructure.adapters.valhalla_response import (
+    LONG_TRANSIT_ROUTE_SECONDS,
+    route_unavailable,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import travel_time_cache
 
 
 def _cache_key(origin: Coordinate, destination: Coordinate, profile: str) -> str:
     value = (
         f"{origin.latitude:.6f}:{origin.longitude:.6f}:"
-        f"{destination.latitude:.6f}:{destination.longitude:.6f}:{profile}:osm"
+        f"{destination.latitude:.6f}:{destination.longitude:.6f}:{profile}:osm-freeflow-v2"
     )
     return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _deduplicate_coordinates(
+    coordinates: list[Coordinate],
+) -> tuple[list[Coordinate], list[int]]:
+    """Return unique points and a map from each input position to its point.
+
+    Coordinates are rounded in the cache key to six decimals, so use the same
+    precision here. This keeps duplicate geocoding results from producing
+    duplicate Valhalla calls while preserving the original matrix shape.
+    """
+    unique: list[Coordinate] = []
+    by_key: dict[tuple[float, float], int] = {}
+    positions: list[int] = []
+    for coordinate in coordinates:
+        key = (round(coordinate.latitude, 6), round(coordinate.longitude, 6))
+        index = by_key.get(key)
+        if index is None:
+            index = len(unique)
+            by_key[key] = index
+            unique.append(coordinate)
+        positions.append(index)
+    return unique, positions
+
+
+def _expand_matrix(
+    values: list[list[int | None]], positions: list[int]
+) -> list[list[int | None]]:
+    return [[values[source][target] for target in positions] for source in positions]
+
+
+def _limit_missing_pairs(
+    missing: set[tuple[int, int]],
+    coordinates: list[Coordinate],
+    limit: int | None,
+) -> set[tuple[int, int]]:
+    """Keep only the nearest unresolved destinations for each origin.
+
+    Cached values are deliberately not removed: the limit applies only to new
+    Valhalla calls. A missing pair outside the shortlist remains unavailable
+    to the solver, so the returned matrix shape is unchanged.
+    """
+    if limit is None or limit <= 0:
+        return missing
+    result: set[tuple[int, int]] = set()
+    by_source: dict[int, list[int]] = {}
+    for source, target in missing:
+        if source != target:
+            by_source.setdefault(source, []).append(target)
+    for source, targets in by_source.items():
+        targets.sort(
+            key=lambda target: _haversine_distance_meters(
+                coordinates[source], coordinates[target]
+            )
+        )
+        result.update((source, target) for target in targets[:limit])
+    result.update((index, index) for index in range(len(coordinates)))
+    return result
+
+
+def _haversine_distance_meters(origin: Coordinate, destination: Coordinate) -> float:
+    """Return great-circle distance for candidate ranking."""
+    latitude_1 = math.radians(origin.latitude)
+    latitude_2 = math.radians(destination.latitude)
+    delta_latitude = latitude_2 - latitude_1
+    delta_longitude = math.radians(destination.longitude - origin.longitude)
+    haversine = (
+        math.sin(delta_latitude / 2) ** 2
+        + math.cos(latitude_1)
+        * math.cos(latitude_2)
+        * math.sin(delta_longitude / 2) ** 2
+    )
+    return 2 * 6_371_000 * math.asin(math.sqrt(min(1.0, haversine)))
 
 
 class ValhallaTravelMatrixProvider:
     def __init__(self, session: AsyncSession, config: PlanningServiceConfig):
         self._session = session
         self._config = config
+        self.planning_traffic_enabled = config.traffic_model_enabled
+        self._metro = MosMetroClient(
+            getattr(config, "mosmetro_url", ""),
+            config.geoservice_timeout_sec,
+        )
+
+    async def get_matrix_for_departure(
+        self, coordinates: list[Coordinate], profile: str, departure_at: datetime
+    ) -> TravelMatrix:
+        """Transit needs dated route pairs: Valhalla has no transit matrix API.
+
+        Event snapshots own reuse; never put timetable results in the road cache.
+        Planning uses shift start as an approximation, map legs use actual times.
+        """
+        if profile != "multimodal":
+            raise ValueError("Departure-specific pairs are for public transport")
+        coordinates, positions = _deduplicate_coordinates(coordinates)
+        size = len(coordinates)
+        # The solver must see only real multimodal values. A walking value in
+        # this matrix would make a public-transport engineer appear able to
+        # travel faster than the route shown later on the map.
+        times: list[list[int | None]] = [[None] * size for _ in range(size)]
+        distances: list[list[int | None]] = [[None] * size for _ in range(size)]
+        async with httpx.AsyncClient(
+            base_url=self._config.valhalla_url,
+            timeout=max(60, self._config.geoservice_timeout_sec),
+        ) as client:
+
+            async def fetch(i: int, j: int) -> None:
+                origin, destination = coordinates[i], coordinates[j]
+                if origin == destination:
+                    times[i][j] = distances[i][j] = 0
+                    return
+                departure_value = departure_at.astimezone(
+                    timezone(timedelta(hours=3))
+                ).strftime("%Y-%m-%dT%H:%M")
+                response = await client.post(
+                    "/route",
+                    json={
+                        "locations": [_location(origin), _location(destination)],
+                        "costing": profile,
+                        "date_time": {"type": 1, "value": departure_value},
+                        "units": "kilometers",
+                    },
+                )
+                valhalla_unreachable = route_unavailable(response)
+                if valhalla_unreachable:
+                    # A multimodal graph without GTFS can reject two otherwise
+                    # walkable points with error 170. Walking is still valid for
+                    # an engineer who normally uses public transport.
+                    response = await client.post(
+                        "/route",
+                        json={
+                            "locations": [_location(origin), _location(destination)],
+                            "costing": "pedestrian",
+                            "date_time": {"type": 1, "value": departure_value},
+                            "units": "kilometers",
+                        },
+                    )
+                    valhalla_unreachable = route_unavailable(response)
+                if not valhalla_unreachable:
+                    response.raise_for_status()
+                    trip = response.json()["trip"]
+                    summary = trip["summary"]
+                    times[i][j] = math.ceil(float(summary["time"]))
+                    distances[i][j] = math.ceil(float(summary["length"]) * 1000)
+                    if times[i][j] > LONG_TRANSIT_ROUTE_SECONDS:
+                        walking = await client.post(
+                            "/route",
+                            json={
+                                "locations": [
+                                    _location(origin),
+                                    _location(destination),
+                                ],
+                                "costing": "pedestrian",
+                                "date_time": {"type": 1, "value": departure_value},
+                                "units": "kilometers",
+                            },
+                        )
+                        if not route_unavailable(walking):
+                            walking.raise_for_status()
+                            walking_summary = walking.json()["trip"]["summary"]
+                            walking_seconds = math.ceil(
+                                float(walking_summary["time"])
+                            )
+                            if walking_seconds < times[i][j]:
+                                times[i][j] = walking_seconds
+                                distances[i][j] = math.ceil(
+                                    float(walking_summary["length"]) * 1000
+                                )
+                has_gtfs_transit = not valhalla_unreachable and any(
+                    maneuver.get("travel_mode") == "transit"
+                    for leg in trip.get("legs", [])
+                    for maneuver in leg.get("maneuvers", [])
+                )
+                if self._metro.enabled and not has_gtfs_transit:
+                    try:
+                        metro = await metro_matrix_candidate(
+                            self._metro,
+                            (origin.latitude, origin.longitude),
+                            (destination.latitude, destination.longitude),
+                            self._config.mosmetro_max_access_meters,
+                            self._config.mosmetro_waiting_seconds,
+                            departure_at,
+                        )
+                    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                        metro = None
+                    if metro and (times[i][j] is None or metro[0] < times[i][j]):
+                        times[i][j], distances[i][j] = metro
+
+            # Keep at most eight requests/tasks alive. Creating a task for every
+            # matrix cell exhausts memory when the planning batch is large.
+            batch: list[asyncio.Task[None]] = []
+            for i in range(size):
+                for j in range(size):
+                    batch.append(asyncio.create_task(fetch(i, j)))
+                    if len(batch) == 8:
+                        await asyncio.gather(*batch)
+                        batch.clear()
+            if batch:
+                await asyncio.gather(*batch)
+        source = (
+            "VALHALLA_TRANSIT+MOSMETRO" if self._metro.enabled else "VALHALLA_TRANSIT"
+        )
+        return TravelMatrix(
+            _expand_matrix(times, positions),
+            _expand_matrix(distances, positions),
+            profile,
+            source,
+        )
 
     async def get_matrix(
         self,
@@ -33,6 +245,9 @@ class ValhallaTravelMatrixProvider:
         profile: str,
         cache_ttl_days: int | None = None,
     ) -> TravelMatrix:
+        if profile == "multimodal":
+            raise ValueError("Public transport requires a planning departure date")
+        coordinates, positions = _deduplicate_coordinates(coordinates)
         size = len(coordinates)
         times: list[list[int | None]] = [[None] * size for _ in range(size)]
         distances: list[list[int | None]] = [[None] * size for _ in range(size)]
@@ -65,6 +280,12 @@ class ValhallaTravelMatrixProvider:
                 distances[pair[0]][pair[1]] = int(row.distance_meters)
             else:
                 missing.add(pair)
+        missing = _limit_missing_pairs(
+            missing, coordinates, self._config.matrix_candidate_limit
+        )
+        for index in range(size):
+            if times[index][index] is None or distances[index][index] is None:
+                times[index][index] = distances[index][index] = 0
 
         block = max(1, self._config.matrix_block_size)
         async with httpx.AsyncClient(
@@ -92,6 +313,9 @@ class ValhallaTravelMatrixProvider:
                                     _location(coordinates[j]) for j in target_ids
                                 ],
                                 "costing": profile,
+                                "costing_options": {
+                                    profile: {"speed_types": ["freeflow"]}
+                                },
                                 "units": "kilometers",
                             },
                         )
@@ -136,6 +360,7 @@ class ValhallaTravelMatrixProvider:
                                 _location(coordinates[j]),
                             ],
                             "costing": profile,
+                            "costing_options": {profile: {"speed_types": ["freeflow"]}},
                             "units": "kilometers",
                         },
                     )
@@ -193,7 +418,12 @@ class ValhallaTravelMatrixProvider:
             )
         if values:
             await self._session.commit()
-        return TravelMatrix(times, distances, profile, "VALHALLA_LOCAL")
+        return TravelMatrix(
+            _expand_matrix(times, positions),
+            _expand_matrix(distances, positions),
+            profile,
+            "VALHALLA_LOCAL",
+        )
 
 
 def _location(coordinate: Coordinate) -> dict[str, float]:

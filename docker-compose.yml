@@ -17,6 +17,8 @@ services:
         condition: service_healthy
       nominatim:
         condition: service_healthy
+      mosmetro:
+        condition: service_healthy
     command: >-
       sh -c "alembic upgrade head &&
       gunicorn -c conf/gunicorn.conf.py 'auth.run:make_app()'"
@@ -47,8 +49,11 @@ services:
     environment:
       tile_urls: ${VALHALLA_TILE_URLS:-${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}}
       server_threads: ${VALHALLA_THREADS:-2}
+      build_transit: "True"
+      build_time_zones: "True"
     volumes:
       - valhalla-data:/custom_files
+      - ./data/gtfs:/gtfs_feeds:ro
     ports:
       - "8002:8002"
     networks:
@@ -59,6 +64,28 @@ services:
       timeout: 5s
       retries: 60
       start_period: 10m
+
+  mosmetro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >-
+      uvicorn services.mosmetro_wrapper.app:app
+      --host 0.0.0.0 --port 8083
+    environment:
+      MOSMETRO_API_URL: ${MOSMETRO_API_URL:-https://prodapp.mosmetro.ru/api}
+      ROUTER_API_URL: ${ROUTER_API_URL:-https://mosmetro.ru/router/api/routes}
+      MOSMETRO_REQUEST_TIMEOUT_SECONDS: ${MOSMETRO_REQUEST_TIMEOUT_SECONDS:-20}
+      MOSMETRO_SCHEMA_CACHE_SECONDS: ${MOSMETRO_SCHEMA_CACHE_SECONDS:-3600}
+    ports:
+      - "8083:8083"
+    networks:
+      - custom
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
   nominatim:
     image: mediagis/nominatim:5.3

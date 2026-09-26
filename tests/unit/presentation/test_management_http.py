@@ -96,6 +96,9 @@ EXPECTED_ROUTES = {
     ("GET", "/api/project/planning/versions/{version_id}"),
     ("POST", "/api/project/planning/runs/{run_id}/publish"),
     ("GET", "/api/project/daily-plans/{planning_date}"),
+    ("GET", "/api/project/traffic/model"),
+    ("GET", "/api/project/traffic/profiles"),
+    ("POST", "/api/project/traffic/route"),
     ("GET", "/api/engineer/assignments"),
     ("GET", "/api/engineer/assignments/route-state"),
     ("GET", "/api/engineer/assignments/{assignment_id}"),
@@ -147,6 +150,7 @@ def test_dispatcher_workspace_routes_are_explicitly_project_scoped() -> None:
         "/api/projects/{project_id}/workspace/equipment-types",
         "/api/projects/{project_id}/workspace/work-types",
         "/api/projects/{project_id}/workspace/address-suggestions",
+        "/api/projects/{project_id}/workspace/traffic/route",
     }
     assert required <= set(paths)
 

@@ -4,6 +4,7 @@ from time import perf_counter
 
 import pytest
 
+from planning.application.interfaces.travel_matrix_provider import TravelMatrix
 from planning.application.services.baseline_fifo import (
     BaselineCalculationError,
     _hash,
@@ -76,6 +77,35 @@ def test_future_day_is_applicable_even_after_today_shift():
         },
     )
     assert baseline_applicable(planning)[0] is True
+
+
+@pytest.mark.parametrize("transport", list(TransportType))
+@pytest.mark.asyncio
+async def test_fifo_uses_the_engineers_transport_matrix_after_main_merge(transport):
+    planning = baseline_data([job(1)], [engineer(transport_type=transport)])
+    required = required_baseline_travel_arcs(planning)
+    profile = transport.routing_profile
+    assert {arc[0] for arc in required} == {profile}
+
+    class Provider:
+        async def get_matrix(self, coordinates, requested_profile, cache_ttl_days=None):
+            assert requested_profile == profile
+            return TravelMatrix(matrix(2, 60), matrix(2, 123), profile, "TEST")
+
+        async def get_matrix_for_departure(
+            self, coordinates, requested_profile, departure
+        ):
+            assert requested_profile == "multimodal"
+            assert departure.date() == planning.planning_date
+            return TravelMatrix(matrix(2, 60), matrix(2, 123), profile, "TEST")
+
+    travel = await prepare_travel_matrices_for_jobs(
+        planning, planning.baseline_jobs, Provider(), required_arcs=required
+    )
+    result = calculate_fifo_baseline(planning, travel.meters)
+    validate_fifo_baseline(planning, result, travel.meters)
+    assert result.assigned_jobs_count == 1
+    assert result.total_distance_meters == 123
 
 
 @pytest.mark.asyncio

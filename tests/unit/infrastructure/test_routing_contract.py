@@ -173,6 +173,7 @@ async def test_empty_input_keeps_fixed_distance_and_pre_unassigned_without_io():
 async def test_travel_rounding_and_timezone_are_preserved():
     planning = data([job(1)], timezone="Asia/Yekaterinburg")
     provider = AsyncMock()
+    provider.planning_traffic_enabled = False
     provider.get_matrix.return_value = TravelMatrix(
         [[0, 61], [61, 0]], [[0, 11], [11, 0]], "auto", "TEST"
     )

@@ -35,6 +35,7 @@ from planning.application.interfaces.project_management_repositories import (
     ProjectCatalogRepository,
     ProjectJobsRepository,
 )
+from planning.application.interfaces.traffic_route_service import TrafficRouteService
 from planning.application.interfaces.transaction_manager import TransactionManager
 from planning.entrypoint.config import PlanningServiceConfig
 from planning.infrastructure.adapters.admin_management_repositories_sqla import (
@@ -87,6 +88,9 @@ from planning.infrastructure.adapters.project_management_repositories_sqla impor
     SqlaEngineerManagementRepository,
     SqlaProjectCatalogRepository,
     SqlaProjectJobsRepository,
+)
+from planning.infrastructure.adapters.traffic_route_service import (
+    ValhallaTrafficRouteService,
 )
 from planning.infrastructure.adapters.transaction_manager_sqla import (
     SqlAlchemyTransactionManager,
@@ -190,6 +194,9 @@ class PlanningAdaptersProvider(Provider):
     )
     static_matrix_provider = provide(StaticTravelMatrixProvider)
     valhalla_matrix_provider = provide(ValhallaTravelMatrixProvider)
+    traffic_route_service = provide(
+        ValhallaTrafficRouteService, provides=TrafficRouteService
+    )
     matrix_factory = provide(TravelMatrixProviderFactory)
     @provide
     def solver_factory(

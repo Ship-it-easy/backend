@@ -22,7 +22,18 @@ class JobPlanningState(StrEnum):
 
 class TransportType(StrEnum):
     CAR = "CAR"
-    NONE = "NONE"
+    NONE = "NONE"  # Backward-compatible pedestrian value.
+    BICYCLE = "BICYCLE"
+    PUBLIC_TRANSPORT = "PUBLIC_TRANSPORT"
+
+    @property
+    def routing_profile(self) -> str:
+        return {
+            self.CAR: "auto",
+            self.NONE: "pedestrian",
+            self.BICYCLE: "bicycle",
+            self.PUBLIC_TRANSPORT: "multimodal",
+        }[self]
 
 
 class PlanningRunStatus(StrEnum):
