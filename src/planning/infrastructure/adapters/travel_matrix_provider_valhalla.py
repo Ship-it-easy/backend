@@ -48,32 +48,12 @@ class ValhallaTravelMatrixProvider:
         if profile != "multimodal":
             raise ValueError("Departure-specific pairs are for public transport")
         size = len(coordinates)
-        # A route request for every directed pair scales quadratically and can
-        # consume the entire solver deadline. A walking matrix supplies a valid
-        # fallback; sample longer trips from each origin before second choices.
-        walking = await self.get_matrix(coordinates, "pedestrian")
-        times = [row[:] for row in walking.travel_time_seconds]
-        distances = [row[:] for row in walking.distance_meters]
-        ranked_by_origin = [
-            sorted(
-                (j for j in range(size) if i != j and times[i][j] is not None),
-                key=lambda j: times[i][j],
-                reverse=True,
-            )
-            for i in range(size)
-        ]
-        pair_count = sum(len(targets) for targets in ranked_by_origin)
-        max_pairs = max(1, getattr(self._config, "transit_matrix_route_limit", 256))
-        selected_pairs = []
-        maximum_rank = max((len(targets) for targets in ranked_by_origin), default=0)
-        for rank in range(maximum_rank):
-            for i, targets in enumerate(ranked_by_origin):
-                if rank < len(targets):
-                    selected_pairs.append((i, targets[rank]))
-                    if len(selected_pairs) >= max_pairs:
-                        break
-            if len(selected_pairs) >= max_pairs:
-                break
+        # The solver must see only real multimodal values. A walking value in
+        # this matrix would make a public-transport engineer appear able to
+        # travel faster than the route shown later on the map.
+        times: list[list[int | None]] = [[None] * size for _ in range(size)]
+        distances: list[list[int | None]] = [[None] * size for _ in range(size)]
+        selected_pairs = [(i, j) for i in range(size) for j in range(size)]
         limit = asyncio.Semaphore(8)
         async with httpx.AsyncClient(
             base_url=self._config.valhalla_url,
@@ -138,8 +118,6 @@ class ValhallaTravelMatrixProvider:
         source = (
             "VALHALLA_TRANSIT+MOSMETRO" if self._metro.enabled else "VALHALLA_TRANSIT"
         )
-        if len(selected_pairs) < pair_count:
-            source += "+WALKING_FALLBACK"
         return TravelMatrix(times, distances, profile, source)
 
     async def get_matrix(

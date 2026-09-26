@@ -70,7 +70,7 @@ services:
       context: .
       dockerfile: Dockerfile
     command: >-
-      uv run uvicorn services.mosmetro_wrapper.app:app
+      uvicorn services.mosmetro_wrapper.app:app
       --host 0.0.0.0 --port 8083
     environment:
       MOSMETRO_API_URL: ${MOSMETRO_API_URL:-https://prodapp.mosmetro.ru/api}

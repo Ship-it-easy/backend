@@ -256,6 +256,12 @@ async def build_metro_map_candidate(
     metro_segments = []
     elapsed = 0
     part_total = sum(max(0, int(part.get("duration", 0))) for part in journey.parts)
+    # MosMetro returns total route time, while a part contains only ride time.
+    # The remaining seconds describe transfers and must be placed before the
+    # following line so its departure time is accurate.
+    transfer_remaining = max(0, journey.duration_seconds - part_total)
+    transfer_boundaries = max(0, len(journey.parts) - 1)
+    previous_last_point: list[float] | None = None
     for index, part in enumerate(journey.parts):
         nodes = part.get("nodes") or []
         points = []
@@ -265,6 +271,31 @@ async def build_metro_map_candidate(
                 points.append([station.latitude, station.longitude])
         if len(points) < 2:
             continue
+        if previous_last_point is not None and transfer_boundaries:
+            transfer_seconds = math.ceil(transfer_remaining / transfer_boundaries)
+            transfer_remaining -= transfer_seconds
+            transfer_boundaries -= 1
+            entered = departure + timedelta(
+                seconds=first_walk["duration_seconds"] + elapsed
+            )
+            metro_segments.append(
+                {
+                    "road": "Пересадка",
+                    "travel_mode": "transit",
+                    "travel_type": "transfer",
+                    "transit": None,
+                    "corridor_id": None,
+                    "traffic_source": "mosmetro",
+                    "direction": "both",
+                    "points": [previous_last_point, points[0]],
+                    "departure_at": entered.isoformat(),
+                    "baseline_seconds": transfer_seconds,
+                    "duration_seconds": transfer_seconds,
+                    "coefficient": 1,
+                    "quality": "mosmetro_route",
+                }
+            )
+            elapsed += transfer_seconds
         seconds = max(0, int(part.get("duration", 0)))
         if index == 0:
             seconds += waiting_seconds
@@ -295,16 +326,9 @@ async def build_metro_map_candidate(
         )
         elapsed += seconds
         metro_points.extend(points if not metro_points else points[1:])
+        previous_last_point = points[-1]
     if not metro_segments:
         return None
-    # Prefer API total when part durations are absent or differ.
-    metro_seconds = journey.duration_seconds + waiting_seconds
-    if part_total:
-        correction = metro_seconds - sum(
-            segment["duration_seconds"] for segment in metro_segments
-        )
-        metro_segments[-1]["duration_seconds"] += correction
-        metro_segments[-1]["baseline_seconds"] += correction
     final_departure = metro_departure + timedelta(seconds=journey.duration_seconds)
     final_walk = await pedestrian_leg(
         valhalla_client,

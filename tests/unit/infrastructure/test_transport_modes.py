@@ -144,9 +144,8 @@ async def test_transit_provider_uses_dated_route_pairs_and_does_not_cache_as_roa
     session.execute.assert_not_called()
 
 
-async def test_large_transit_matrix_has_bounded_route_requests():
+async def test_transit_matrix_never_substitutes_walking_pairs():
     config = PlanningServiceConfig("http://test", "http://test", "", 1, 40)
-    config.transit_matrix_route_limit = 2
     provider = ValhallaTravelMatrixProvider(AsyncMock(), config)
     provider.get_matrix = AsyncMock(
         return_value=TravelMatrix(
@@ -172,10 +171,10 @@ async def test_large_transit_matrix_has_bounded_route_requests():
             "multimodal",
             datetime(2026, 9, 25, 8, tzinfo=timezone.utc),
         )
-    assert client.post.call_count == 2
+    assert client.post.call_count == 6
     assert matrix.travel_time_seconds[0][2] == 120
-    assert matrix.travel_time_seconds[0][1] == 100
-    assert matrix.source.endswith("WALKING_FALLBACK")
+    assert matrix.travel_time_seconds[0][1] == 120
+    assert not matrix.source.endswith("WALKING_FALLBACK")
 
 
 @pytest.mark.parametrize("profile", ["pedestrian", "bicycle", "multimodal"])

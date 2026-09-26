@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
 
 import httpx
@@ -41,6 +41,29 @@ class FakeMetro:
 
     async def station(self, station_id):
         return self.by_id.get(station_id)
+
+
+class TransferMetro(FakeMetro):
+    async def route(self, origin_id, destination_id):
+        return MetroJourney(
+            800,
+            [
+                {
+                    "duration": 300,
+                    "nodes": [
+                        {"id": 1, "name": "Первая", "lineName": "Линия 1"},
+                        {"id": 2, "name": "Вторая", "lineName": "Линия 1"},
+                    ],
+                },
+                {
+                    "duration": 400,
+                    "nodes": [
+                        {"id": 2, "name": "Вторая", "lineName": "Линия 2"},
+                        {"id": 1, "name": "Первая", "lineName": "Линия 2"},
+                    ],
+                },
+            ],
+        )
 
 
 def test_api_fallback_rejects_night_and_trip_past_closing():
@@ -95,3 +118,39 @@ async def test_map_candidate_contains_walk_and_metro_segments():
         "to_stop": "Вторая",
     }
     assert valhalla.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_map_candidate_places_transfer_before_next_line():
+    valhalla = AsyncMock()
+    valhalla.post.return_value = httpx.Response(
+        200,
+        request=httpx.Request("POST", "http://valhalla/route"),
+        json={"trip": trip(120, road="Пешком")},
+    )
+    departure = datetime(2026, 9, 25, 8, tzinfo=MOSCOW)
+    candidate = await build_metro_map_candidate(
+        TransferMetro(),
+        valhalla,
+        (55.799, 37.399),
+        (55.901, 37.501),
+        departure,
+        evaluate_trip,
+        2500,
+        180,
+    )
+    assert candidate is not None
+    transfer = next(
+        segment
+        for segment in candidate["segments"]
+        if segment["travel_type"] == "transfer"
+    )
+    second_line = [
+        segment
+        for segment in candidate["segments"]
+        if (segment.get("transit") or {}).get("route") == "Линия 2"
+    ][0]
+    assert transfer["duration_seconds"] == 100
+    second_departure = datetime.fromisoformat(second_line["departure_at"])
+    transfer_departure = datetime.fromisoformat(transfer["departure_at"])
+    assert second_departure == transfer_departure + timedelta(seconds=100)
