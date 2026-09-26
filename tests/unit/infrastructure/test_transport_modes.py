@@ -202,9 +202,9 @@ async def test_transit_provider_uses_dated_route_pairs_and_does_not_cache_as_roa
         request=httpx.Request("POST", "http://test/route"),
         json={"trip": {"summary": {"time": 123.2, "length": 1.5}}},
     )
-    provider = ValhallaTravelMatrixProvider(
-        session, PlanningServiceConfig("http://test", "http://test", "", 1, 40)
-    )
+    config = PlanningServiceConfig("http://test", "http://test", "", 1, 40)
+    config.valhalla_transit_use_rail = False
+    provider = ValhallaTravelMatrixProvider(session, config)
     provider.get_matrix = AsyncMock(
         return_value=TravelMatrix(
             [[0, 600], [600, 0]],
@@ -224,6 +224,7 @@ async def test_transit_provider_uses_dated_route_pairs_and_does_not_cache_as_roa
     for call in client.post.call_args_list:
         assert call.args == ("/route",)
         assert call.kwargs["json"]["costing"] == "multimodal"
+        assert call.kwargs["json"]["costing_options"] == {"transit": {"use_rail": 0}}
         assert call.kwargs["json"]["date_time"] == {
             "type": 1,
             "value": "2030-01-01T11:00",
@@ -264,6 +265,67 @@ async def test_transit_provider_walks_when_gtfs_graph_is_unconnected():
         "multimodal",
         "pedestrian",
     }
+
+
+async def test_transit_provider_keeps_unreachable_pair_when_walk_is_unavailable():
+    provider = ValhallaTravelMatrixProvider(
+        AsyncMock(), PlanningServiceConfig("http://test", "http://test", "", 1, 40)
+    )
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = httpx.Response(
+        400,
+        request=httpx.Request("POST", "http://test/route"),
+        json={"error_code": 170},
+    )
+    with patch(
+        "planning.infrastructure.adapters.travel_matrix_provider_valhalla.httpx.AsyncClient",
+        return_value=client,
+    ):
+        result = await provider.get_matrix_for_departure(
+            [Coordinate(55.7, 37.5), Coordinate(55.8, 37.6)],
+            "multimodal",
+            datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+        )
+    assert result.travel_time_seconds[0][1] is None
+    assert result.distance_meters[0][1] is None
+
+
+async def test_metro_competes_with_bus_when_gtfs_rail_is_disabled():
+    config = PlanningServiceConfig("http://test", "http://test", "", 1, 40)
+    config.valhalla_transit_use_rail = False
+    config.mosmetro_url = "http://metro"
+    provider = ValhallaTravelMatrixProvider(AsyncMock(), config)
+    client = AsyncMock()
+    client.__aenter__.return_value = client
+    client.post.return_value = httpx.Response(
+        200,
+        request=httpx.Request("POST", "http://test/route"),
+        json={
+            "trip": {
+                "summary": {"time": 1200, "length": 4},
+                "legs": [{"maneuvers": [{"travel_mode": "transit"}]}],
+            }
+        },
+    )
+    with (
+        patch(
+            "planning.infrastructure.adapters.travel_matrix_provider_valhalla.httpx.AsyncClient",
+            return_value=client,
+        ),
+        patch(
+            "planning.infrastructure.adapters.travel_matrix_provider_valhalla.metro_matrix_candidate",
+            new=AsyncMock(return_value=(600, 3000)),
+        ) as metro,
+    ):
+        result = await provider.get_matrix_for_departure(
+            [Coordinate(55.7, 37.5), Coordinate(55.8, 37.6)],
+            "multimodal",
+            datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+        )
+    assert result.travel_time_seconds[0][1] == 600
+    assert result.distance_meters[0][1] == 3000
+    assert metro.await_count == 2
 
 
 async def test_transit_provider_avoids_overnight_wait_when_walking_is_faster():
@@ -348,13 +410,15 @@ async def test_map_uses_transport_profile_without_car_traffic(profile):
         request=httpx.Request("POST", "http://local/route"),
         json={"trip": trip(600)},
     )
-    result = await build_traffic_route(request, SimpleNamespace(), client=client)
+    config = SimpleNamespace(valhalla_transit_use_rail=False)
+    result = await build_traffic_route(request, config, client=client)
     payload = client.post.call_args.kwargs["json"]
     assert payload["costing"] == profile
     assert result["duration_seconds"] == 600
     assert result["delay_seconds"] == 0
     if profile == "multimodal":
         assert payload["date_time"]["type"] == 1
+        assert payload["costing_options"] == {"transit": {"use_rail": 0}}
         assert "departure_options" not in result
 
 

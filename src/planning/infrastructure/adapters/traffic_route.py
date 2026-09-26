@@ -21,6 +21,7 @@ from planning.infrastructure.adapters.mosmetro import (
 )
 from planning.infrastructure.adapters.valhalla_response import (
     LONG_TRANSIT_ROUTE_SECONDS,
+    multimodal_costing_options,
     route_unavailable,
 )
 
@@ -256,6 +257,10 @@ async def build_traffic_route(request, config, *, client=None):
                     "costing_options": (
                         {"auto": {"speed_types": ["freeflow"]}}
                         if request.profile == "auto"
+                        else multimodal_costing_options(
+                            getattr(config, "valhalla_transit_use_rail", True)
+                        )
+                        if request.profile == "multimodal"
                         else {}
                     ),
                     "date_time": {
@@ -325,7 +330,10 @@ async def build_traffic_route(request, config, *, client=None):
             if (
                 request.profile == "multimodal"
                 and metro.enabled
-                and not has_gtfs_transit
+                and (
+                    not has_gtfs_transit
+                    or not getattr(config, "valhalla_transit_use_rail", True)
+                )
             ):
                 try:
                     metro_candidate = await build_metro_map_candidate(
@@ -453,8 +461,7 @@ async def build_traffic_route(request, config, *, client=None):
                         "Расписание общественного транспорта недоступно; "
                         "использован пеший маршрут."
                         if any(
-                            leg.get("provider") == "PEDESTRIAN_FALLBACK"
-                            for leg in legs
+                            leg.get("provider") == "PEDESTRIAN_FALLBACK" for leg in legs
                         )
                         else (
                             "Пеший маршрут быстрее предложенной поездки с "

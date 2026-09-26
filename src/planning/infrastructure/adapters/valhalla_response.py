@@ -14,3 +14,8 @@ def route_unavailable(response: httpx.Response) -> bool:
         return response.json().get("error_code") in {170, 441, 442}
     except (TypeError, ValueError):
         return False
+
+
+def multimodal_costing_options(use_rail: bool) -> dict:
+    """Avoid the local GTFS rail route that crashes Valhalla when configured."""
+    return {} if use_rail else {"transit": {"use_rail": 0}}

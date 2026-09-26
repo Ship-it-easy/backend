@@ -18,6 +18,7 @@ from planning.infrastructure.adapters.mosmetro import (
 )
 from planning.infrastructure.adapters.valhalla_response import (
     LONG_TRANSIT_ROUTE_SECONDS,
+    multimodal_costing_options,
     route_unavailable,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import travel_time_cache
@@ -131,6 +132,9 @@ class ValhallaTravelMatrixProvider:
         # travel faster than the route shown later on the map.
         times: list[list[int | None]] = [[None] * size for _ in range(size)]
         distances: list[list[int | None]] = [[None] * size for _ in range(size)]
+        costing_options = multimodal_costing_options(
+            self._config.valhalla_transit_use_rail
+        )
         async with httpx.AsyncClient(
             base_url=self._config.valhalla_url,
             timeout=max(60, self._config.geoservice_timeout_sec),
@@ -138,6 +142,7 @@ class ValhallaTravelMatrixProvider:
 
             async def fetch(i: int, j: int) -> None:
                 origin, destination = coordinates[i], coordinates[j]
+                trip = None
                 if origin == destination:
                     times[i][j] = distances[i][j] = 0
                     return
@@ -149,6 +154,7 @@ class ValhallaTravelMatrixProvider:
                     json={
                         "locations": [_location(origin), _location(destination)],
                         "costing": profile,
+                        "costing_options": costing_options,
                         "date_time": {"type": 1, "value": departure_value},
                         "units": "kilometers",
                     },
@@ -190,20 +196,20 @@ class ValhallaTravelMatrixProvider:
                         if not route_unavailable(walking):
                             walking.raise_for_status()
                             walking_summary = walking.json()["trip"]["summary"]
-                            walking_seconds = math.ceil(
-                                float(walking_summary["time"])
-                            )
+                            walking_seconds = math.ceil(float(walking_summary["time"]))
                             if walking_seconds < times[i][j]:
                                 times[i][j] = walking_seconds
                                 distances[i][j] = math.ceil(
                                     float(walking_summary["length"]) * 1000
                                 )
-                has_gtfs_transit = not valhalla_unreachable and any(
+                has_gtfs_transit = trip is not None and any(
                     maneuver.get("travel_mode") == "transit"
                     for leg in trip.get("legs", [])
                     for maneuver in leg.get("maneuvers", [])
                 )
-                if self._metro.enabled and not has_gtfs_transit:
+                if self._metro.enabled and (
+                    not has_gtfs_transit or not self._config.valhalla_transit_use_rail
+                ):
                     try:
                         metro = await metro_matrix_candidate(
                             self._metro,

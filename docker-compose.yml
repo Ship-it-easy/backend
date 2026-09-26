@@ -45,7 +45,8 @@ services:
       - "5432:${POSTGRES_PORT}"
 
   valhalla:
-    image: ghcr.io/valhalla/valhalla-scripted:latest
+    image: ghcr.io/valhalla/valhalla-scripted:3.9.0
+    restart: unless-stopped
     environment:
       tile_urls: ${VALHALLA_TILE_URLS:-${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}}
       server_threads: ${VALHALLA_THREADS:-2}

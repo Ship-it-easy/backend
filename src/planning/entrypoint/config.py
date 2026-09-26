@@ -26,6 +26,7 @@ class PlanningServiceConfig:
     mosmetro_max_access_meters: int = 2500
     mosmetro_waiting_seconds: int = 180
     baseline_comparison_enabled: bool = True
+    valhalla_transit_use_rail: bool = True
 
     @staticmethod
     def from_env() -> "PlanningServiceConfig":
@@ -50,7 +51,6 @@ class PlanningServiceConfig:
                 getenv("MOSMETRO_MAX_ACCESS_METERS", "2500")
             ),
             mosmetro_waiting_seconds=int(getenv("MOSMETRO_WAITING_SECONDS", "180")),
-            baseline_comparison_enabled=_env_flag(
-                "BASELINE_COMPARISON_ENABLED", True
-            ),
+            baseline_comparison_enabled=_env_flag("BASELINE_COMPARISON_ENABLED", True),
+            valhalla_transit_use_rail=_env_flag("VALHALLA_TRANSIT_USE_RAIL", True),
         )
