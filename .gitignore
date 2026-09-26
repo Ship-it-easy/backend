@@ -173,5 +173,5 @@ todo/
 # Local database snapshots made before migrations
 /db-backups/
 
-# Local GTFS schedules are large and refreshed outside Git.
-/data/gtfs/
+# Keep the prepared transit feeds in Git LFS; ignore downloaded source archives.
+/data/gtfs/*.zip

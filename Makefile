@@ -32,6 +32,7 @@ help:
 	@echo "    make test              — Запустить тесты с покрытием (-n auto)"
 	@echo ""
 	@echo "  Полный стек (Docker):"
+	@echo "    make start             — Подготовить env и запустить Docker Compose"
 	@echo "    make up                — Поднять всё (инфраструктура + backend)"
 	@echo "    make down              — Остановить всё"
 	@echo ""
@@ -92,6 +93,10 @@ test:
 	uv run pytest tests/ --cov=auth --cov-report=term-missing -n auto
 
 # Полный стек (Docker)
+
+.PHONY: start
+start:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1
 
 .PHONY: up
 up:
