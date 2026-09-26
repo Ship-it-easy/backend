@@ -66,9 +66,10 @@ PROFILES = (
 )
 
 
-async def prepare(day: date) -> dict:
+async def prepare(day: date, manifest_dir: Path = Path("/tmp")) -> dict:
     stamp = day.strftime("%Y%m%d")
-    manifest_path = Path(f"/tmp/transport-demo-{stamp}.json")
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = manifest_dir / f"transport-demo-{stamp}.json"
     engine = create_async_engine(PostgresConfig.from_env().uri)
     try:
         async with engine.begin() as connection:
@@ -242,6 +243,15 @@ if __name__ == "__main__":
         type=date.fromisoformat,
         default=datetime.now(ZoneInfo("Europe/Moscow")).date(),
     )
+    parser.add_argument(
+        "--manifest-dir",
+        type=Path,
+        default=Path("/tmp"),
+        help="Directory for saved demo account credentials",
+    )
+    args = parser.parse_args()
     print(
-        json.dumps(asyncio.run(prepare(parser.parse_args().date)), ensure_ascii=False)
+        json.dumps(
+            asyncio.run(prepare(args.date, args.manifest_dir)), ensure_ascii=False
+        )
     )

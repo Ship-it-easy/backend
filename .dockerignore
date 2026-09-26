@@ -3,6 +3,8 @@
 .env
 .env.docker
 .env.*
+letsencrypt
+compose.demo.yml
 db-backups
 data/gtfs
 __pycache__

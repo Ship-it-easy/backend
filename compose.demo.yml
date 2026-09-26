@@ -1,0 +1,145 @@
+name: ship-it-demo
+
+services:
+  traefik:
+    image: traefik:v3.7
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=ship-it-demo-edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in .env.demo}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - edge
+
+  frontend:
+    build:
+      context: ../ship-it-frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - edge
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=ship-it-demo-edge
+      - traefik.http.routers.frontend.rule=Host(`${DEMO_DOMAIN:?Set DEMO_DOMAIN in .env.demo}`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.priority=1
+      - traefik.http.routers.frontend.tls.certresolver=le
+      - traefik.http.services.frontend.loadbalancer.server.port=80
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.demo
+    command: >-
+      sh -c "alembic upgrade head &&
+      gunicorn -c conf/gunicorn.conf.py --workers 1 'auth.run:make_app()'"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valhalla:
+        condition: service_healthy
+      nominatim:
+        condition: service_healthy
+    volumes:
+      - demo-manifests:/demo-manifests
+    networks:
+      - edge
+      - core
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=ship-it-demo-edge
+      - traefik.http.routers.api.rule=Host(`${DEMO_DOMAIN:?Set DEMO_DOMAIN in .env.demo}`) && PathPrefix(`/api/`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.priority=100
+      - traefik.http.routers.api.tls.certresolver=le
+      - traefik.http.services.api.loadbalancer.server.port=8000
+
+  postgres:
+    image: postgres:13.0-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASS:?Set POSTGRES_PASS in .env.demo}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-app_db}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-app_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valhalla:
+    image: ghcr.io/valhalla/valhalla-scripted:3.9.0
+    restart: unless-stopped
+    environment:
+      tile_urls: ${OSM_PBF_URL:?Set OSM_PBF_URL in .env.demo}
+      server_threads: ${VALHALLA_THREADS:-1}
+      build_time_zones: "True"
+    volumes:
+      - valhalla-data:/custom_files
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8002/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+      start_period: 90m
+
+  nominatim:
+    image: mediagis/nominatim:5.3
+    restart: unless-stopped
+    environment:
+      PBF_URL: ${OSM_PBF_URL:?Set OSM_PBF_URL in .env.demo}
+      NOMINATIM_PASSWORD: ${NOMINATIM_PASSWORD:?Set NOMINATIM_PASSWORD in .env.demo}
+      THREADS: ${NOMINATIM_THREADS:-1}
+      GUNICORN_WORKERS: 1
+      IMPORT_STYLE: address
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 512MB
+      POSTGRES_AUTOVACUUM_WORK_MEM: 64MB
+      POSTGRES_WORK_MEM: 16MB
+    shm_size: 512m
+    volumes:
+      - nominatim-data:/var/lib/postgresql/16/main
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/status?format=json"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+      start_period: 90m
+
+volumes:
+  postgres-data:
+  valhalla-data:
+  nominatim-data:
+  demo-manifests:
+
+networks:
+  edge:
+    name: ship-it-demo-edge
+  core:
+    name: ship-it-demo-core

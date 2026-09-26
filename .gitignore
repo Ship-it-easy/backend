@@ -122,6 +122,7 @@ celerybeat.pid
 # Environments
 .env
 .env.docker
+.env.demo
 .venv
 env/
 venv/
@@ -172,5 +173,6 @@ todo/
 
 # Local database snapshots made before migrations
 /db-backups/
+/letsencrypt/
 # Historical local GTFS data is not used by the road-only stack.
 /data/gtfs/
