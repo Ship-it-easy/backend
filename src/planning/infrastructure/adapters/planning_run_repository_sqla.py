@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from dataclasses import asdict
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
@@ -20,15 +21,20 @@ from planning.application.errors import (
 )
 from planning.domain.entities.planning import PlanningInput, PlanningResult
 from planning.domain.enums import ACTIVE_BATCH_STATUSES, PlanningRunStatus
+from planning.infrastructure.adapters.baseline_audit_persistence import (
+    replace_baseline_audit_rows,
+)
 from planning.infrastructure.persistence_sqla.mappings.tables import (
     engineer_qualifications,
     engineer_schedules,
     engineers,
     equipment_types,
     jobs,
+    planning_baseline_results,
     planning_batches,
     planning_config,
     planning_equipment_assignments,
+    planning_plan_comparisons,
     planning_route_jobs,
     planning_routes,
     planning_runs,
@@ -38,6 +44,8 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     work_type_required_qualifications,
     work_types,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class SqlaPlanningRunRepository:
@@ -380,6 +388,7 @@ class SqlaPlanningRunRepository:
                 solver_version=_ortools_version(),
                 solver_time_ms=result.solver_time_ms,
                 travel_matrix_hash=matrix_hash,
+                travel_snapshot=_serialize_travel_snapshot(data.travel_snapshot),
                 validation_errors=result.validation_errors,
                 config_snapshot=_jsonable(
                     {
@@ -405,8 +414,183 @@ class SqlaPlanningRunRepository:
                 ),
             )
         )
+        if status == PlanningRunStatus.SUCCESS.value and result.baseline_result:
+            try:
+                async with self._session.begin_nested():
+                    await self._save_baseline(run_id, data, result)
+            except Exception as error:
+                # Baseline is an analytical sidecar. Its persistence must never
+                # roll back an otherwise publishable optimized plan. Keep a
+                # minimal marker so the retry scanner can recover this run.
+                audit_context = {
+                    "project_id": data.project_id,
+                    "planning_run_id": run_id,
+                    "planning_date": data.planning_date.isoformat(),
+                    "plan_version": None,
+                    "algorithm_version": result.baseline_result.algorithm_version,
+                    "input_hash": result.baseline_result.input_hash,
+                    "duration_ms": 0,
+                    "jobs_count": len(data.baseline_jobs or data.jobs),
+                    "engineers_count": len(data.engineers),
+                }
+                logger.error(
+                    "baseline_persistence_failed",
+                    extra={
+                        **audit_context,
+                        "error_type": type(error).__name__,
+                    },
+                )
+                try:
+                    async with self._session.begin_nested():
+                        await self._save_baseline_failure_marker(run_id, data, result)
+                except Exception as marker_error:
+                    logger.error(
+                        "baseline_failure_marker_persistence_failed",
+                        extra={
+                            **audit_context,
+                            "error_type": type(marker_error).__name__,
+                        },
+                    )
         if commit:
             await self._session.commit()
+
+    async def _save_baseline(
+        self,
+        run_id: int,
+        data: PlanningInput,
+        result: PlanningResult,
+    ) -> None:
+        baseline = result.baseline_result
+        if baseline is None:
+            return
+        baseline_id = await self._session.scalar(
+            insert(planning_baseline_results)
+            .values(
+                project_id=data.project_id,
+                planning_run_id=run_id,
+                planning_date=data.planning_date,
+                status=baseline.status,
+                algorithm_version=baseline.algorithm_version,
+                snapshot_version="DAY_INPUT_V1",
+                input_hash=baseline.input_hash,
+                travel_matrix_hash=baseline.travel_matrix_hash,
+                result_hash=baseline.result_hash,
+                input_jobs_count=baseline.input_jobs_count,
+                assigned_jobs_count=baseline.assigned_jobs_count,
+                unassigned_jobs_count=baseline.unassigned_jobs_count,
+                window_hit_count=baseline.window_hit_count,
+                window_miss_count=baseline.window_miss_count,
+                window_hit_rate=baseline.window_hit_rate,
+                active_engineer_count=baseline.active_engineer_count,
+                total_distance_meters=baseline.total_distance_meters,
+                earliest_shift_start=baseline.earliest_shift_start,
+                calculation_time_ms=baseline.calculation_time_ms,
+                failure_code=baseline.failure_code,
+                failure_message=baseline.failure_message,
+                started_at=(
+                    datetime.now(timezone.utc)
+                    if baseline.status in {"READY", "FAILED"}
+                    else None
+                ),
+                finished_at=(
+                    datetime.now(timezone.utc)
+                    if baseline.status
+                    in {
+                        "READY",
+                        "FAILED",
+                        "NOT_APPLICABLE_SHIFT_STARTED",
+                    }
+                    else None
+                ),
+                attempt_count=(0 if baseline.status == "PENDING" else 1),
+                last_attempt_at=(
+                    None if baseline.status == "PENDING" else datetime.now(timezone.utc)
+                ),
+                next_retry_at=(
+                    datetime.now(timezone.utc) + timedelta(minutes=2)
+                    if baseline.status == "FAILED"
+                    else None
+                ),
+                result_payload=_jsonable(asdict(baseline)),
+                distance_matrices=_jsonable(result.baseline_distance_matrices),
+            )
+            .returning(planning_baseline_results.c.id)
+        )
+        if baseline_id is None:
+            raise RuntimeError("Failed to persist baseline result")
+        await replace_baseline_audit_rows(
+            self._session,
+            baseline_result_id=int(baseline_id),
+            project_id=data.project_id,
+            baseline=baseline,
+        )
+        comparison = result.baseline_comparison
+        if comparison is None:
+            return
+        await self._session.execute(
+            insert(planning_plan_comparisons).values(
+                project_id=data.project_id,
+                planning_run_id=run_id,
+                baseline_result_id=baseline_id,
+                formula_version=comparison.formula_version,
+                coverage_comparable=comparison.coverage_comparable,
+                baseline_assigned_job_ids_hash=(
+                    comparison.baseline_assigned_job_ids_hash
+                ),
+                optimized_assigned_job_ids_hash=(
+                    comparison.optimized_assigned_job_ids_hash
+                ),
+                baseline_metrics=_jsonable(comparison.baseline_metrics),
+                optimized_metrics=_jsonable(comparison.optimized_metrics),
+                deltas=_jsonable(comparison.deltas),
+                engineer_metrics=_jsonable(comparison.engineer_metrics),
+            )
+        )
+
+    async def _save_baseline_failure_marker(
+        self,
+        run_id: int,
+        data: PlanningInput,
+        result: PlanningResult,
+    ) -> None:
+        baseline = result.baseline_result
+        if baseline is None:
+            return
+        now = datetime.now(timezone.utc)
+        not_applicable = baseline.status == "NOT_APPLICABLE_SHIFT_STARTED"
+        status = "NOT_APPLICABLE_SHIFT_STARTED" if not_applicable else "FAILED"
+        failure_code = None if not_applicable else "BASELINE_STORAGE_ERROR"
+        failure_message = (
+            None if not_applicable else "Не удалось сохранить контрольный результат"
+        )
+        payload = {
+            **asdict(baseline),
+            "status": status,
+            "failure_code": failure_code,
+            "failure_message": failure_message,
+        }
+        await self._session.execute(
+            insert(planning_baseline_results).values(
+                project_id=data.project_id,
+                planning_run_id=run_id,
+                planning_date=data.planning_date,
+                status=status,
+                algorithm_version=baseline.algorithm_version,
+                snapshot_version="DAY_INPUT_V1",
+                input_hash=baseline.input_hash,
+                input_jobs_count=baseline.input_jobs_count,
+                earliest_shift_start=baseline.earliest_shift_start,
+                failure_code=failure_code,
+                failure_message=failure_message,
+                started_at=None if not_applicable else now,
+                finished_at=now,
+                attempt_count=0 if not_applicable else 1,
+                last_attempt_at=None if not_applicable else now,
+                next_retry_at=None if not_applicable else now + timedelta(minutes=2),
+                result_payload=_jsonable(payload),
+                distance_matrices={},
+            )
+        )
 
     async def fail_run(self, run_id: int, code: str, message: str) -> None:
         await self._session.rollback()
@@ -535,10 +719,35 @@ class SqlaPlanningRunRepository:
         return _jsonable([dict(row) for row in rows])
 
 
+def _serialize_travel_snapshot(
+    snapshot: dict[
+        tuple[str, float, float, float, float], tuple[int | None, int | None]
+    ],
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "profile": key[0],
+            "origin_latitude": key[1],
+            "origin_longitude": key[2],
+            "destination_latitude": key[3],
+            "destination_longitude": key[4],
+            "travel_time_seconds": value[0],
+            "distance_meters": value[1],
+        }
+        for key, value in sorted(snapshot.items())
+    ]
+
+
 def _jsonable(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, (set, frozenset)):
+        items = [_jsonable(item) for item in value]
+        return sorted(
+            items,
+            key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
+        )
+    if isinstance(value, (list, tuple)):
         return [_jsonable(item) for item in value]
     if isinstance(value, (datetime, date, time)):
         return value.isoformat().replace("+00:00", "Z")

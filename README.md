@@ -128,6 +128,10 @@ Timezone должен совпадать с timezone проекта. Все аб
   `/planning/versions/{version_id}`;
 - семидневная доска текущего плана: `GET /api/project/planning/board`;
 - результат отдельного дня: `GET /api/project/planning/board/{planning_date}`;
+- сохранённое сравнение оптимального плана с FIFO:
+  `GET /api/project/planning/current/days/{planning_date}/comparison`;
+- идемпотентный повтор неуспешного FIFO-расчёта на исходном snapshot:
+  `POST /api/project/planning/runs/{planning_run_id}/baseline/retry`;
 - объяснение решения по заявке:
   `GET /api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation`;
 - CSV-пакет заявок: `POST /api/projects/{project_id}/job-imports`, просмотр
@@ -164,6 +168,9 @@ Read model связывает каждую дату опубликованной
 Ночной запуск настраивается полями `nightly_planning_enabled` и
 `nightly_planning_time` активной конфигурации проекта. Он использует тот же
 алгоритм защиты и публикации, что и ручной запуск.
+
+Методика, контракт API и сценарий показа FIFO-сравнения описаны в
+[docs/FIFO_BASELINE_COMPARISON.md](docs/FIFO_BASELINE_COMPARISON.md).
 
 ## Файловая структура
 
@@ -230,6 +237,20 @@ Read model связывает каждую дату опубликованной
 Для быстрого запуска solver без геосервисов укажи в `planning_config.travel_provider`
 значение `STATIC_TEST`. Для дорожных матриц OpenStreetMap используется
 `VALHALLA_LOCAL`.
+
+### Начальный владелец
+
+Миграция Alembic `b42e5c18a906` создаёт активного и подтверждённого владельца
+с логином `owner`, если такого логина ещё нет. Пароль сгенерирован отдельно;
+в репозитории хранится только его bcrypt-хэш. Получите исходный пароль у
+оператора развёртывания и смените его после первого входа. Миграция не
+перезаписывает пароль существующего владельца; если логин `owner` уже занят
+пользователем другой роли, она останавливается с ошибкой. При откате миграции
+учётная запись сохраняется вместе с созданными через неё данными.
+
+После `docker compose --env-file .env.docker up -d --build backend` контейнер
+сам выполнит `alembic upgrade head`. Войдите в frontend как `owner`, затем
+создайте район и диспетчера в кабинете владельца.
 
 По умолчанию адреса по-прежнему геокодируются через Nominatim. Чтобы целиком
 переключить геокодирование планов, адресные подсказки и CSV-импорт на Yandex,

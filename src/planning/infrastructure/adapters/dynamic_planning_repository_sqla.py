@@ -29,12 +29,14 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     job_status_history,
     jobs,
     plan_changes,
+    planning_baseline_results,
     planning_batch_days,
     planning_batch_jobs,
     planning_batches,
     planning_cancelled_job_snapshots,
     planning_day_results,
     planning_events,
+    planning_plan_comparisons,
     planning_route_jobs,
     planning_routes,
     planning_runs,
@@ -1127,6 +1129,16 @@ class SqlaDynamicPlanningRepository:
             .mappings()
             .all()
         )
+        run_ids = [int(run.id) for run in run_rows]
+        if run_ids:
+            await self._session.execute(
+                update(planning_baseline_results)
+                .where(
+                    planning_baseline_results.c.planning_run_id.in_(run_ids),
+                    planning_baseline_results.c.plan_version_id.is_(None),
+                )
+                .values(plan_version_id=version_id)
+            )
         for run in run_rows:
             values = {
                 "plan_version_id": version_id,
@@ -1673,6 +1685,140 @@ class SqlaDynamicPlanningRepository:
             round((monotonic() - started) * 1000),
         )
         return result
+
+    async def get_baseline_comparison(
+        self, project_id: int, planning_date: date
+    ) -> dict[str, Any]:
+        version = (
+            (
+                await self._session.execute(
+                    select(project_plan_versions).where(
+                        project_plan_versions.c.project_id == project_id,
+                        project_plan_versions.c.is_current.is_(True),
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        context = {
+            "project_id": project_id,
+            "date": planning_date.isoformat(),
+            "plan_version": int(version.version_number) if version else None,
+            "plan_version_id": int(version.id) if version else None,
+            "algorithm": {
+                "baseline": "FIFO_V2",
+                "optimized": "Маршрутная оптимизация OR-Tools",
+            },
+            "methodology": (
+                "FIFO распределяет заявки по времени поступления, каждый раз "
+                "проверяя инженеров в фиксированном порядке. Перед каждой "
+                "заявкой заложено 20 минут. Оборудование и временные окна не "
+                "ограничивают назначение, а фактический пробег берётся из "
+                "дорожной матрицы."
+            ),
+        }
+        if version is None:
+            return {**context, "status": "NO_DAILY_RESULT"}
+        day_result = (
+            (
+                await self._session.execute(
+                    select(planning_day_results).where(
+                        planning_day_results.c.plan_version_id == version.id,
+                        planning_day_results.c.planning_date == planning_date,
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if day_result is None:
+            return {**context, "status": "NO_DAILY_RESULT"}
+        run = (
+            (
+                await self._session.execute(
+                    select(
+                        planning_runs.c.timezone,
+                        planning_runs.c.normalized_input_hash,
+                        planning_runs.c.input_snapshot,
+                        planning_runs.c.input_jobs_count,
+                    ).where(planning_runs.c.id == day_result.planning_run_id)
+                )
+            )
+            .mappings()
+            .one()
+        )
+        context = {
+            **context,
+            "planning_run_id": int(day_result.planning_run_id),
+            "timezone": str(run.timezone),
+            "input_hash": run.normalized_input_hash,
+            "input_jobs_count": int(run.input_jobs_count or 0),
+            "input_engineers_count": len(
+                (run.input_snapshot or {}).get("engineers", [])
+            ),
+        }
+        baseline = (
+            (
+                await self._session.execute(
+                    select(planning_baseline_results).where(
+                        planning_baseline_results.c.project_id == project_id,
+                        planning_baseline_results.c.planning_run_id
+                        == day_result.planning_run_id,
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if baseline is None:
+            return {**context, "status": "NOT_AVAILABLE_LEGACY_PLAN"}
+        base = {
+            **context,
+            "algorithm": {
+                **context["algorithm"],
+                "baseline": str(baseline.algorithm_version),
+            },
+            "status": str(baseline.status),
+            "calculated_at": baseline.finished_at or baseline.created_at,
+            "snapshot_version": baseline.snapshot_version,
+            "failure_code": baseline.failure_code,
+            "failure_message": baseline.failure_message,
+            "earliest_shift_start": baseline.earliest_shift_start,
+            "attempt_count": int(baseline.attempt_count or 0),
+            "next_retry_at": baseline.next_retry_at,
+            "last_attempt_at": baseline.last_attempt_at,
+        }
+        comparison = (
+            (
+                await self._session.execute(
+                    select(planning_plan_comparisons).where(
+                        planning_plan_comparisons.c.project_id == project_id,
+                        planning_plan_comparisons.c.planning_run_id
+                        == day_result.planning_run_id,
+                    )
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if comparison is None:
+            return _jsonable(base)
+        engineers = [
+            {key: value for key, value in item.items() if key != "engineer_id"}
+            for item in (comparison.engineer_metrics or [])
+        ]
+        return _jsonable(
+            {
+                **base,
+                "coverage_comparable": bool(comparison.coverage_comparable),
+                "baseline": comparison.baseline_metrics,
+                "optimized": comparison.optimized_metrics,
+                "delta": comparison.deltas,
+                "engineers": engineers,
+                "formula_version": comparison.formula_version,
+            }
+        )
 
     async def _planning_board_day(
         self, project_id: int, planning_date: date, *, version: Any | None
@@ -3964,8 +4110,10 @@ def _planning_input_changes(
     for engineer_id, planning_date in sorted(
         set(previous_schedules) | set(current_schedules), key=lambda value: value
     ):
-        if overlap_start and overlap_end and not (
-            overlap_start <= planning_date <= overlap_end
+        if (
+            overlap_start
+            and overlap_end
+            and not (overlap_start <= planning_date <= overlap_end)
         ):
             continue
         before = previous_schedules.get((engineer_id, planning_date))

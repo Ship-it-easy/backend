@@ -10,7 +10,22 @@ from pathlib import Path
 import httpx
 
 
-def run(manifest_path: Path, output: Path, full: bool = True):
+def board_query_params(manifest: dict, *, verify_only: bool) -> dict | None:
+    # The board endpoint only accepts the project's *current* seven-day range.
+    # The manifest's date can be tomorrow or a past comparison date.
+    if verify_only:
+        return None
+    return {"days": 7}
+
+
+def run(
+    manifest_path: Path,
+    output: Path,
+    full: bool = True,
+    base_url: str = "http://localhost:8000",
+    *,
+    verify_only: bool = False,
+):
     manifest = json.loads(manifest_path.read_text())
     checks = []
 
@@ -27,8 +42,10 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         return r.json() if r.content else None
 
     project_id = manifest["project_id"]
+    selected_date = manifest.get("comparison_date", manifest["planning_date"])
     workspace = f"/api/projects/{project_id}/workspace"
     planning = f"/api/projects/{project_id}/planning"
+    board_params = board_query_params(manifest, verify_only=verify_only)
 
     def wait_event(client, response):
         event_id = response.get("planning_event_id")
@@ -48,7 +65,22 @@ def run(manifest_path: Path, output: Path, full: bool = True):
     def plan(client):
         return request(client, "GET", f"{planning}/current")
 
-    with httpx.Client(base_url="http://localhost:8000", timeout=30) as c:
+    def wait_comparison(client):
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            comparison = request(
+                client,
+                "GET",
+                f"{planning}/current/days/{selected_date}/comparison",
+            )
+            if comparison["status"] == "READY":
+                return comparison
+            if comparison["status"] not in {"PENDING", "RUNNING"}:
+                raise AssertionError(json.dumps(comparison, ensure_ascii=False))
+            time.sleep(0.5)
+        raise AssertionError("FIFO baseline comparison timed out")
+
+    with httpx.Client(base_url=base_url, timeout=30) as c:
         account = manifest["accounts"][0]
         request(
             c,
@@ -72,40 +104,70 @@ def run(manifest_path: Path, output: Path, full: bool = True):
             c,
             "GET",
             f"{planning}/board",
-            params={"days": 7},
+            params=board_params,
         )
         record(
             "readiness",
+            ready=(readiness.get("readiness") or {}).get("ready"),
+            problems=(readiness.get("readiness") or {}).get("problems", []),
             project_date=readiness.get("project_date"),
-            ready=readiness.get("readiness", {}).get("ready"),
-            problems=readiness.get("readiness", {}).get("problems", []),
+            plan_version_id=(readiness.get("plan_version") or {}).get("id"),
+            days_count=len(readiness.get("days") or []),
         )
-        response = request(
-            c,
-            "POST",
-            f"{planning}/events/manual",
-            headers={"Idempotency-Key": str(uuid.uuid4())},
-        )
-        event = wait_event(c, response)
-        current = plan(c)
-        assert current["assignments"], current
-        record(
-            "manual_plan",
-            event_id=event["id"],
-            assignments=len(current["assignments"]),
-            version_id=(current.get("version") or {}).get("id"),
-        )
+        if not verify_only:
+            response = request(
+                c,
+                "POST",
+                f"{planning}/events/manual",
+                headers={"Idempotency-Key": str(uuid.uuid4())},
+            )
+            event = wait_event(c, response)
+            current = plan(c)
+            assert current["assignments"], current
+            record(
+                "manual_plan",
+                event_id=event["id"],
+                assignments=len(current["assignments"]),
+                version_id=(current.get("version") or {}).get("id"),
+            )
+        else:
+            current = plan(c)
+            assert current["assignments"], "No published demo plan to verify"
+            record(
+                "published_plan",
+                assignments=len(current["assignments"]),
+                version_id=(current.get("version") or {}).get("id"),
+            )
         board = request(
             c,
             "GET",
             f"{planning}/board",
-            params={"days": 7},
+            params=board_params,
         )
-        day = request(
-            c, "GET", f"{planning}/board/{manifest['planning_date']}"
-        )
+        day = request(c, "GET", f"{planning}/board/{selected_date}")
         record("board_and_day", board_keys=list(board), day_keys=list(day))
-        if not full:
+        if manifest.get("baseline_showcase"):
+            comparison = wait_comparison(c)
+            assert comparison["coverage_comparable"] is True, comparison
+            baseline_metrics = comparison["baseline"]
+            optimized_metrics = comparison["optimized"]
+            assert (
+                baseline_metrics["assigned_jobs_count"]
+                == optimized_metrics["assigned_jobs_count"]
+            ), comparison
+            assert (
+                optimized_metrics["total_distance_meters"]
+                < baseline_metrics["total_distance_meters"]
+            ), comparison
+            record(
+                "fifo_baseline_comparison",
+                date=selected_date,
+                coverage_comparable=True,
+                baseline=baseline_metrics,
+                optimized=optimized_metrics,
+                delta=comparison["delta"],
+            )
+        if not full or verify_only:
             return
         job = request(
             c,
@@ -180,9 +242,7 @@ def run(manifest_path: Path, output: Path, full: bool = True):
         record("engineer_restored", event_id=event["id"], engineer_id=engineer_id)
         request(c, "GET", f"{planning}/versions")
         record("plan_history")
-        with httpx.Client(
-            base_url="http://localhost:8000", timeout=30
-        ) as engineer_client:
+        with httpx.Client(base_url=base_url, timeout=30) as engineer_client:
             account = manifest["accounts"][1]
             request(
                 engineer_client,
@@ -209,5 +269,17 @@ if __name__ == "__main__":
         "--output", type=Path, default=Path("/private/tmp/routes-demo-smoke.json")
     )
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="Read the published demo; never start or change planning",
+    )
+    parser.add_argument("--base-url", default="http://localhost:8000")
     args = parser.parse_args()
-    run(args.manifest, args.output, not args.plan_only)
+    run(
+        args.manifest,
+        args.output,
+        not args.plan_only,
+        args.base_url,
+        verify_only=args.verify_only,
+    )

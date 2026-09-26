@@ -9,4 +9,3 @@ class InteractorProvider(Provider):
 
     log_in = provide(LogInInteractor)
     log_out = provide(LogOutInteractor)
-

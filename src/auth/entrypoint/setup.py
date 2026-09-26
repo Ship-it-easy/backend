@@ -1,4 +1,14 @@
-from logging import DEBUG, WARNING, FileHandler, StreamHandler, basicConfig, getLogger
+import json
+from datetime import datetime, timezone
+from logging import (
+    DEBUG,
+    WARNING,
+    FileHandler,
+    Formatter,
+    StreamHandler,
+    basicConfig,
+    getLogger,
+)
 from typing import Iterable
 
 from dishka import AsyncContainer, Provider, make_async_container
@@ -46,6 +56,64 @@ def configure_app(app: FastAPI, root_router: APIRouter) -> None:
     init_planning_error_handlers(app)
 
 
+_PLANNING_AUDIT_EVENTS = {
+    "baseline_calculation_started",
+    "baseline_assignment_completed",
+    "baseline_distance_calculated",
+    "baseline_validation_completed",
+    "baseline_calculation_ready",
+    "baseline_calculation_failed",
+    "baseline_persistence_failed",
+    "baseline_failure_marker_persistence_failed",
+    "baseline_retry_scheduled",
+    "planning_comparison_viewed",
+    "planning_comparison_engineers_expanded",
+}
+_PLANNING_AUDIT_FIELDS = (
+    "project_id",
+    "planning_run_id",
+    "planning_date",
+    "plan_version",
+    "algorithm_version",
+    "input_hash",
+    "duration_ms",
+    "jobs_count",
+    "engineers_count",
+    "status",
+    "attempt_count",
+    "failure_code",
+    "error_type",
+    "coverage_comparable",
+    "result_hash",
+    "delay_seconds",
+)
+
+
+class PlanningAuditFormatter(Formatter):
+    """Keep ordinary logs readable, emit audit events as safe JSON records."""
+
+    def format(self, record):
+        event = record.getMessage()
+        if event not in _PLANNING_AUDIT_EVENTS:
+            return super().format(record)
+        payload = {
+            "timestamp": datetime.fromtimestamp(
+                record.created, timezone.utc
+            ).isoformat(),
+            "level": record.levelname,
+            "event": event,
+            **{field: getattr(record, field, None) for field in _PLANNING_AUDIT_FIELDS},
+        }
+        if record.exc_info:
+            error = record.exc_info[1]
+            origin = getattr(error, "orig", error)
+            diagnostics = getattr(origin, "diag", None)
+            payload["exception_type"] = type(error).__name__
+            payload["sqlstate"] = getattr(origin, "sqlstate", None)
+            payload["constraint_name"] = getattr(diagnostics, "constraint_name", None)
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
 def configure_logging(level=DEBUG):
     format = (
         "[%(asctime)s.%(msecs)03d] %(module)15s:%(lineno)-3d "
@@ -58,6 +126,10 @@ def configure_logging(level=DEBUG):
 
     stream_handler = StreamHandler()
     stream_handler.setLevel(level)
+
+    audit_formatter = PlanningAuditFormatter(format, datefmt=datefmt)
+    file_handler.setFormatter(audit_formatter)
+    stream_handler.setFormatter(audit_formatter)
 
     basicConfig(
         level=level,

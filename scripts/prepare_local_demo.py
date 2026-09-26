@@ -44,9 +44,26 @@ LOCATIONS = [
     ("Пермь, Монастырская, 12", 58.015679, 56.233412),
 ]
 
+# Two deliberately separated city clusters. Jobs alternate between them in
+# FIFO order, while the optimizer can keep each car inside its own cluster.
+# This makes the comparison visually obvious without changing either
+# algorithm or fabricating metrics.
+BASELINE_SHOWCASE_LOCATIONS = [
+    ("Москва, Тверская улица, 13", 55.761350, 37.609056),
+    ("Москва, Хабаровская улица, 9", 55.818923, 37.825137),
+    ("Москва, Тверская улица, 31", 55.769008, 37.596534),
+    ("Москва, Хабаровская улица, 9", 55.818923, 37.825137),
+    ("Москва, Тверская улица, 15", 55.762373, 37.607898),
+    ("Москва, Хабаровская улица, 9", 55.818923, 37.825137),
+    ("Москва, Тверская улица, 13", 55.761350, 37.609056),
+    ("Москва, Хабаровская улица, 9", 55.818923, 37.825137),
+]
 
-async def prepare(day: date, suffix: str = "") -> dict:
-    stamp = day.strftime("%Y%m%d") + suffix
+
+async def prepare(
+    day: date, suffix: str = "", *, baseline_showcase: bool = False
+) -> dict:
+    stamp = day.strftime("%Y%m%d") + suffix + ("-fifo" if baseline_showcase else "")
     manifest_path = Path(f"/private/tmp/routes-demo-{stamp}.json")
     engine = create_async_engine(PostgresConfig.from_env().uri)
     try:
@@ -69,7 +86,11 @@ async def prepare(day: date, suffix: str = "") -> dict:
 
             project_id = await add(
                 projects,
-                name=f"Демо маршрутов · {day.isoformat()}{suffix}",
+                name=(
+                    f"Демо FIFO vs оптимизатор · {day.isoformat()}{suffix}"
+                    if baseline_showcase
+                    else f"Демо маршрутов · {day.isoformat()}{suffix}"
+                ),
                 internal_code=f"DEMO-{stamp}",
                 planning_timezone="Asia/Yekaterinburg",
             )
@@ -127,6 +148,15 @@ async def prepare(day: date, suffix: str = "") -> dict:
                 )
             )
             engineer_ids = []
+            engineer_locations = (
+                [
+                    BASELINE_SHOWCASE_LOCATIONS[0],
+                    BASELINE_SHOWCASE_LOCATIONS[1],
+                    BASELINE_SHOWCASE_LOCATIONS[2],
+                ]
+                if baseline_showcase
+                else LOCATIONS
+            )
             for i, (name, transport) in enumerate(
                 (
                     ("Алексей · авто", "CAR"),
@@ -134,7 +164,7 @@ async def prepare(day: date, suffix: str = "") -> dict:
                     ("Иван · пешком", "NONE"),
                 )
             ):
-                address, lat, lon = LOCATIONS[i]
+                address, lat, lon = engineer_locations[i]
                 engineer_id = await add(
                     engineers,
                     project_id=project_id,
@@ -158,16 +188,35 @@ async def prepare(day: date, suffix: str = "") -> dict:
                         dict(
                             engineer_id=engineer_id,
                             work_date=day + timedelta(days=offset),
-                            shift_start=time(8),
-                            shift_end=time(16),
+                            shift_start=(
+                                time(0)
+                                if baseline_showcase and offset == 0
+                                else time(8)
+                            ),
+                            shift_end=(
+                                time(0, 1)
+                                if baseline_showcase and offset == 0
+                                else time(16)
+                            ),
                         )
                         for offset in range(30)
                     ],
                 )
             job_ids = []
-            for i in range(14):
-                address, lat, lon = LOCATIONS[i % len(LOCATIONS)]
-                work_id = repair_id if i in (1, 5, 9, 13) else install_id
+            job_count = 8 if baseline_showcase else 14
+            job_locations = (
+                BASELINE_SHOWCASE_LOCATIONS if baseline_showcase else LOCATIONS
+            )
+            received_at = datetime.now(ZoneInfo("Asia/Yekaterinburg"))
+            for i in range(job_count):
+                address, lat, lon = job_locations[i % len(job_locations)]
+                work_id = (
+                    install_id
+                    if baseline_showcase
+                    else repair_id
+                    if i in (1, 5, 9, 13)
+                    else install_id
+                )
                 job_ids.append(
                     await add(
                         jobs,
@@ -175,12 +224,20 @@ async def prepare(day: date, suffix: str = "") -> dict:
                         internal_code=f"DEMO-JOB-{stamp}-{i}",
                         external_id=f"ДЕМО-{i + 1:02}",
                         status="NEW",
+                        received_at=received_at,
+                        ingest_sequence=i + 1,
                         address=address,
                         latitude=lat,
                         longitude=lon,
-                        sla_date=day
-                        + timedelta(
-                            days=(-1 if i < 2 else 0 if i < 6 else 1 if i < 10 else 3)
+                        sla_date=(
+                            day + timedelta(days=1)
+                            if baseline_showcase
+                            else day
+                            + timedelta(
+                                days=(
+                                    -1 if i < 2 else 0 if i < 6 else 1 if i < 10 else 3
+                                )
+                            )
                         ),
                         time_window_start=time(8),
                         time_window_end=time(15),
@@ -220,9 +277,13 @@ async def prepare(day: date, suffix: str = "") -> dict:
             result = dict(
                 project_id=project_id,
                 planning_date=day.isoformat(),
+                comparison_date=(
+                    day + timedelta(days=1) if baseline_showcase else day
+                ).isoformat(),
                 engineer_ids=engineer_ids,
                 job_ids=job_ids,
                 work_type_ids=[install_id, repair_id],
+                baseline_showcase=baseline_showcase,
                 accounts=accounts,
                 manifest=str(manifest_path),
             )
@@ -241,9 +302,22 @@ if __name__ == "__main__":
         default=datetime.now(ZoneInfo("Asia/Yekaterinburg")).date(),
     )
     parser.add_argument("--suffix", default="")
+    parser.add_argument(
+        "--baseline-showcase",
+        action="store_true",
+        help="Create alternating west/east jobs for a clear FIFO comparison",
+    )
     args = parser.parse_args()
     print(
         json.dumps(
-            asyncio.run(prepare(args.date, args.suffix)), ensure_ascii=False, indent=2
+            asyncio.run(
+                prepare(
+                    args.date,
+                    args.suffix,
+                    baseline_showcase=args.baseline_showcase,
+                )
+            ),
+            ensure_ascii=False,
+            indent=2,
         )
     )

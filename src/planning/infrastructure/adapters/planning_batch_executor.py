@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from time import monotonic
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, select, text, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from planning.application.services.dynamic_today_planning import (
@@ -20,6 +20,10 @@ from planning.application.validators.dynamic_plan import DynamicPlanValidator
 from planning.application.validators.planning_batch import PlanningBatchValidator
 from planning.application.validators.planning_result import PlanningValidator
 from planning.entrypoint.config import PlanningServiceConfig
+from planning.infrastructure.adapters.baseline_retry_sqla import (
+    MAX_BASELINE_ATTEMPTS,
+    SqlaBaselineRetryOperations,
+)
 from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
     StaleDynamicSnapshot,
@@ -41,6 +45,7 @@ from planning.infrastructure.adapters.travel_matrix_provider_valhalla import (
     ValhallaTravelMatrixProvider,
 )
 from planning.infrastructure.persistence_sqla.mappings.tables import (
+    planning_baseline_results,
     planning_batch_days,
     planning_batches,
     planning_config,
@@ -86,8 +91,10 @@ class InProcessPlanningBatchExecutor:
         self._config = config
         self._tasks: dict[int, asyncio.Task] = {}
         self._project_tasks: dict[int, asyncio.Task] = {}
+        self._baseline_retry_tasks: dict[tuple[int, int], asyncio.Task] = {}
         self._nightly_task: asyncio.Task | None = None
         self._event_scan_task: asyncio.Task | None = None
+        self._last_baseline_recovery = 0.0
 
     def schedule(self, batch_id: int) -> None:
         current = self._tasks.get(batch_id)
@@ -228,6 +235,8 @@ class InProcessPlanningBatchExecutor:
             self.schedule(batch_id)
         for project_id in project_ids:
             self.schedule_project(project_id)
+        if self._config.baseline_comparison_enabled:
+            await self._recover_baseline_retries()
         if self._nightly_task is None or self._nightly_task.done():
             self._nightly_task = asyncio.create_task(
                 self._nightly_loop(), name="dynamic-planning-nightly-scheduler"
@@ -242,7 +251,13 @@ class InProcessPlanningBatchExecutor:
             self._nightly_task.cancel()
         if self._event_scan_task is not None:
             self._event_scan_task.cancel()
-        tasks = [*self._tasks.values(), *self._project_tasks.values()]
+        for task in self._baseline_retry_tasks.values():
+            task.cancel()
+        tasks = [
+            *self._tasks.values(),
+            *self._project_tasks.values(),
+            *self._baseline_retry_tasks.values(),
+        ]
         tasks.extend(
             task
             for task in (self._nightly_task, self._event_scan_task)
@@ -278,11 +293,54 @@ class InProcessPlanningBatchExecutor:
                     ]
                 for project_id in project_ids:
                     self.schedule_project(project_id)
+                if (
+                    self._config.baseline_comparison_enabled
+                    and monotonic() - self._last_baseline_recovery >= 60
+                ):
+                    await self._recover_baseline_retries()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("dynamic_planning_event_scan_failed")
             await asyncio.sleep(1)
+
+    async def _recover_baseline_retries(self) -> None:
+        """Recover stale attempts without resetting a live worker in another process."""
+        self._last_baseline_recovery = monotonic()
+        now = datetime.now(timezone.utc)
+        stale_before = now - timedelta(minutes=5)
+        async with self._sessionmaker() as session:
+            await session.execute(
+                update(planning_baseline_results)
+                .where(
+                    planning_baseline_results.c.status == "RUNNING",
+                    or_(
+                        planning_baseline_results.c.started_at.is_(None),
+                        planning_baseline_results.c.started_at < stale_before,
+                    ),
+                )
+                .values(
+                    status="FAILED",
+                    failure_code="BASELINE_PROCESS_RESTARTED",
+                    failure_message="Контрольный расчёт прерван перезапуском",
+                    next_retry_at=now,
+                )
+            )
+            await session.commit()
+            queued_baselines = (
+                await session.execute(
+                    select(
+                        planning_baseline_results.c.project_id,
+                        planning_baseline_results.c.planning_run_id,
+                    ).where(
+                        planning_baseline_results.c.status.in_(("PENDING", "FAILED")),
+                        planning_baseline_results.c.attempt_count
+                        < MAX_BASELINE_ATTEMPTS,
+                    )
+                )
+            ).all()
+        for project_id, planning_run_id in queued_baselines:
+            self._schedule_baseline_retry(int(project_id), int(planning_run_id))
 
     async def _enqueue_due_nightly_events(self) -> None:
         scheduled_project_ids: set[int] = set()
@@ -453,7 +511,9 @@ class InProcessPlanningBatchExecutor:
         )
         today_service = DynamicTodayPlanningService(
             PlanningInputNormalizer(geocoder),
-            OrToolsPlanningSolverFactory(matrix_factory),
+            OrToolsPlanningSolverFactory(
+                matrix_factory, self._config.baseline_comparison_enabled
+            ),
             PlanningValidator(),
             repository,
         )
@@ -671,7 +731,9 @@ class InProcessPlanningBatchExecutor:
                 service = MultiDayPlanningService(
                     batch_repository,
                     PlanningInputNormalizer(geocoder),
-                    OrToolsPlanningSolverFactory(matrix_factory),
+                    OrToolsPlanningSolverFactory(
+                        matrix_factory, self._config.baseline_comparison_enabled
+                    ),
                     PlanningValidator(),
                     PlanningBatchValidator(),
                 )
@@ -692,6 +754,10 @@ class InProcessPlanningBatchExecutor:
                 data,
                 result,
             )
+        if self._config.baseline_comparison_enabled:
+            # Queue rows already exist durably at this point. Start workers before
+            # the current version is switched, but never await their completion.
+            await self._schedule_project_baseline_retries(project_id)
         fresh_context = await repository.load_context(project_id, planning_date)
         if fresh_context["source_hash"] != context["source_hash"]:
             raise StaleDynamicSnapshot("Planning inputs changed during calculation")
@@ -713,6 +779,115 @@ class InProcessPlanningBatchExecutor:
         await repository.complete(
             [int(item["id"]) for item in events], version_id, input_hash
         )
+        if self._config.baseline_comparison_enabled:
+            await self._schedule_project_baseline_retries(project_id)
+
+    async def _schedule_project_baseline_retries(self, project_id: int) -> None:
+        async with self._sessionmaker() as session:
+            run_ids = (
+                await session.scalars(
+                    select(planning_baseline_results.c.planning_run_id).where(
+                        planning_baseline_results.c.project_id == project_id,
+                        planning_baseline_results.c.status.in_(("PENDING", "FAILED")),
+                        planning_baseline_results.c.attempt_count
+                        < MAX_BASELINE_ATTEMPTS,
+                    )
+                )
+            ).all()
+        for planning_run_id in run_ids:
+            self._schedule_baseline_retry(project_id, int(planning_run_id))
+
+    def _schedule_baseline_retry(
+        self, project_id: int, planning_run_id: int
+    ) -> None:
+        key = (project_id, planning_run_id)
+        current = self._baseline_retry_tasks.get(key)
+        if current is not None and not current.done():
+            return
+        task = asyncio.create_task(
+            self._retry_baseline_until_terminal(project_id, planning_run_id),
+            name=f"baseline-retry-{project_id}-{planning_run_id}",
+        )
+        self._baseline_retry_tasks[key] = task
+        task.add_done_callback(lambda _: self._baseline_retry_tasks.pop(key, None))
+
+    async def _retry_baseline_until_terminal(
+        self, project_id: int, planning_run_id: int
+    ) -> None:
+        while True:
+            async with self._sessionmaker() as session:
+                row = (
+                    (
+                        await session.execute(
+                            select(
+                                planning_baseline_results.c.status,
+                                planning_baseline_results.c.attempt_count,
+                                planning_baseline_results.c.next_retry_at,
+                                planning_baseline_results.c.plan_version_id,
+                                planning_baseline_results.c.algorithm_version,
+                                planning_baseline_results.c.input_hash,
+                                planning_baseline_results.c.input_jobs_count,
+                                planning_runs.c.planning_date,
+                                planning_runs.c.input_snapshot,
+                            )
+                            .select_from(
+                                planning_baseline_results.join(
+                                    planning_runs,
+                                    planning_runs.c.id
+                                    == planning_baseline_results.c.planning_run_id,
+                                )
+                            ).where(
+                                planning_baseline_results.c.project_id == project_id,
+                                planning_baseline_results.c.planning_run_id
+                                == planning_run_id,
+                            )
+                        )
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+            if row is None or row.status not in {"PENDING", "FAILED"}:
+                return
+            if int(row.attempt_count or 0) >= MAX_BASELINE_ATTEMPTS:
+                return
+            retry_at = (
+                row.next_retry_at
+                if row.status == "FAILED"
+                else datetime.now(timezone.utc)
+            ) or datetime.now(timezone.utc)
+            delay = max(
+                0.0, (retry_at - datetime.now(timezone.utc)).total_seconds()
+            )
+            if row.status == "FAILED":
+                logger.info(
+                    "baseline_retry_scheduled",
+                    extra={
+                        "project_id": project_id,
+                        "planning_run_id": planning_run_id,
+                        "planning_date": row.planning_date.isoformat(),
+                        "plan_version": row.plan_version_id,
+                        "algorithm_version": row.algorithm_version,
+                        "input_hash": row.input_hash,
+                        "duration_ms": int(delay * 1000),
+                        "jobs_count": int(row.input_jobs_count or 0),
+                        "engineers_count": len(
+                            (row.input_snapshot or {}).get("engineers", [])
+                        ),
+                        "attempt_count": int(row.attempt_count or 0) + 1,
+                        "delay_seconds": delay,
+                    },
+                )
+            if delay:
+                await asyncio.sleep(delay)
+            async with self._sessionmaker() as session:
+                matrix_factory = TravelMatrixProviderFactory(
+                    StaticTravelMatrixProvider(),
+                    ValhallaTravelMatrixProvider(session, self._config),
+                )
+                operations = SqlaBaselineRetryOperations(session, matrix_factory)
+                result = await operations.run_queued(project_id, planning_run_id)
+            if result.get("status") != "FAILED":
+                return
 
     async def _run(self, batch_id: int) -> None:
         async with self._advisory_lock(1_397_244_752, batch_id) as locked:
@@ -720,6 +895,11 @@ class InProcessPlanningBatchExecutor:
                 return
             async with self._sessionmaker() as session:
                 repository = SqlaPlanningBatchRepository(session)
+                project_id = await session.scalar(
+                    select(planning_batches.c.project_id).where(
+                        planning_batches.c.id == batch_id
+                    )
+                )
                 geocoder = create_geocoder(session, self._config)
                 matrix_factory = TravelMatrixProviderFactory(
                     StaticTravelMatrixProvider(),
@@ -728,7 +908,9 @@ class InProcessPlanningBatchExecutor:
                 service = MultiDayPlanningService(
                     repository,
                     PlanningInputNormalizer(geocoder),
-                    OrToolsPlanningSolverFactory(matrix_factory),
+                    OrToolsPlanningSolverFactory(
+                        matrix_factory, self._config.baseline_comparison_enabled
+                    ),
                     PlanningValidator(),
                     PlanningBatchValidator(),
                 )
@@ -758,6 +940,13 @@ class InProcessPlanningBatchExecutor:
                     )
                     await session.commit()
                     await service.execute(batch_id)
+                    if (
+                        self._config.baseline_comparison_enabled
+                        and project_id is not None
+                    ):
+                        await self._schedule_project_baseline_retries(
+                            int(project_id)
+                        )
                 except Exception as error:
                     logger.exception(
                         "planning_batch_failed planning_batch_id=%s", batch_id

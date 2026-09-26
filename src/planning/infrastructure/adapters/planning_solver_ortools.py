@@ -10,6 +10,11 @@ import time as monotonic_time
 
 from planning.application.errors import SolverNoFeasibleSolution, SolverTimeLimit
 from planning.application.interfaces.travel_matrix_provider import TravelMatrixProvider
+from planning.application.services.baseline_fifo import (
+    baseline_applicable,
+    not_applicable_result,
+    pending_result,
+)
 from planning.domain.entities.planning import PlanningInput, PlanningResult
 from planning.domain.traffic import INTERVAL_MINUTES, QUALITY, VERSION
 from planning.infrastructure.adapters.ortools_routing.lexicographic import (
@@ -43,15 +48,20 @@ from planning.infrastructure.adapters.travel_matrix_provider_factory import (
 
 __all__ = ["OrToolsPlanningSolver", "OrToolsPlanningSolverFactory", "_objective_ranges"]
 
-
 class OrToolsPlanningSolver:
-    def __init__(self, matrix_provider: TravelMatrixProvider):
+    def __init__(
+        self,
+        matrix_provider: TravelMatrixProvider,
+        baseline_comparison_enabled: bool = True,
+    ):
         self._matrix_provider = matrix_provider
+        self._baseline_comparison_enabled = baseline_comparison_enabled
 
     async def solve(self, data: PlanningInput) -> PlanningResult:
         """Рассчитать один день; вход уже подготовлен прикладными сервисами."""
         if not data.jobs or not data.engineers:
-            return empty_result(data)
+            result = empty_result(data)
+            return await self._maybe_attach_baseline(data, result)
 
         travel = await prepare_travel_matrices(data, self._matrix_provider)
         # OR-Tools выполняет синхронный поиск; не блокируем цикл обработки HTTP.
@@ -147,6 +157,26 @@ class OrToolsPlanningSolver:
             "time_aware_correction_passes": correction_passes,
             "time_aware_correction_status": correction_status,
         }
+        return await self._maybe_attach_baseline(data, result)
+
+    async def _maybe_attach_baseline(
+        self, data: PlanningInput, result: PlanningResult
+    ) -> PlanningResult:
+        if not self._baseline_comparison_enabled:
+            return result
+        return await self._attach_baseline(data, result)
+
+    async def _attach_baseline(
+        self, data: PlanningInput, result: PlanningResult
+    ) -> PlanningResult:
+        applicable, _ = baseline_applicable(data)
+        if not applicable:
+            result.baseline_result = not_applicable_result(data)
+            return result
+        # Persist a durable queue item together with the validated optimal run.
+        # The executor calculates it out-of-band, so road-provider latency or a
+        # baseline failure cannot delay publication of the working plan.
+        result.baseline_result = pending_result(data)
         return result
 
     def _solve_sync(
@@ -165,9 +195,17 @@ class OrToolsPlanningSolver:
 
 
 class OrToolsPlanningSolverFactory:
-    def __init__(self, matrix_factory: TravelMatrixProviderFactory):
+    def __init__(
+        self,
+        matrix_factory: TravelMatrixProviderFactory,
+        baseline_comparison_enabled: bool = True,
+    ):
         self._matrix_factory = matrix_factory
+        self._baseline_comparison_enabled = baseline_comparison_enabled
 
     def create(self, provider: str) -> OrToolsPlanningSolver:
         matrix_provider = self._matrix_factory.create(provider)
-        return OrToolsPlanningSolver(matrix_provider)
+        return OrToolsPlanningSolver(
+            matrix_provider,
+            self._baseline_comparison_enabled,
+        )

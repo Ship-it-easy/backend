@@ -42,13 +42,32 @@ async def prepare_travel_matrices(
     data: PlanningInput, matrix_provider: TravelMatrixProvider
 ) -> RoutingMatrices:
     """Загрузить матрицы в рамках общего дедлайна события."""
-    coordinates = [job.coordinate for job in data.jobs] + [
+    return await prepare_travel_matrices_for_jobs(data, data.jobs, matrix_provider)
+
+
+async def prepare_travel_matrices_for_jobs(
+    data: PlanningInput,
+    jobs: list,
+    matrix_provider: TravelMatrixProvider,
+    *,
+    required_arcs: set[tuple[str, float, float, float, float]] | None = None,
+) -> RoutingMatrices:
+    """Получить дорожный snapshot для заданного набора заявок.
+
+    FIFO использует полный нормализованный дневной вход, тогда как оптимизатор
+    может заранее исключить заявки из-за собственных ограничений.
+    """
+    coordinates = [job.coordinate for job in jobs] + [
         engineer.coordinate for engineer in data.engineers
     ]
-    profiles = {
-        TransportType(engineer.transport_type).routing_profile
-        for engineer in data.engineers
-    }
+    profiles = (
+        {key[0] for key in required_arcs}
+        if required_arcs is not None
+        else {
+            TransportType(engineer.transport_type).routing_profile
+            for engineer in data.engineers
+        }
+    )
 
     remaining = (
         data.solve_deadline_monotonic - monotonic_time.monotonic()
@@ -58,7 +77,7 @@ async def prepare_travel_matrices(
     try:
         async with asyncio.timeout(remaining):
             raw_matrices = await _load_snapshot_matrices(
-                data, coordinates, profiles, matrix_provider
+                data, coordinates, profiles, matrix_provider, required_arcs
             )
     except TimeoutError as error:
         raise SolverTimeLimit("MATRIX_TIME_LIMIT") from error
@@ -277,6 +296,7 @@ async def _load_snapshot_matrices(
     coordinates: list[Coordinate],
     profiles: set[str],
     matrix_provider: TravelMatrixProvider,
+    required_arcs: set[tuple[str, float, float, float, float]] | None = None,
 ) -> dict[str, TravelMatrix]:
     result = {}
     for profile in sorted(profiles):
@@ -300,7 +320,17 @@ async def _load_snapshot_matrices(
             ]
             for a in coordinates
         ]
-        if any(key not in data.travel_snapshot for row in keys for key in row):
+        needed = (
+            {key for row in keys for key in row}
+            if required_arcs is None
+            else {
+                key
+                for row in keys
+                for key in row
+                if (profile, *key[1:]) in required_arcs
+            }
+        )
+        if any(key not in data.travel_snapshot for key in needed):
             try:
                 dated_provider = getattr(
                     matrix_provider, "get_matrix_for_departure", None
@@ -326,6 +356,8 @@ async def _load_snapshot_matrices(
                 raise RuntimeError("INVALID_TRAVEL_MATRIX_SHAPE")
             for i, row in enumerate(keys):
                 for j, key in enumerate(row):
+                    if key not in needed:
+                        continue
                     # Все кандидаты события используют первое полученное значение
                     # пары, даже если следующий запрос содержит другие точки.
                     data.travel_snapshot.setdefault(
@@ -336,8 +368,14 @@ async def _load_snapshot_matrices(
                         ),
                     )
         result[profile] = TravelMatrix(
-            [[data.travel_snapshot[key][0] for key in row] for row in keys],
-            [[data.travel_snapshot[key][1] for key in row] for row in keys],
+            [
+                [data.travel_snapshot[key][0] if key in needed else None for key in row]
+                for row in keys
+            ],
+            [
+                [data.travel_snapshot[key][1] if key in needed else None for key in row]
+                for row in keys
+            ],
             profile,
             "EVENT_SNAPSHOT",
         )

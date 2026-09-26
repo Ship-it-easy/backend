@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -16,14 +17,27 @@ from planning.application.interactors.admin.users import BlockUserInteractor
 from planning.application.interactors.project.planning import (
     PublishPlanningRunInteractor,
 )
+from planning.application.interfaces.travel_matrix_provider import TravelMatrix
+from planning.application.services.baseline_fifo import _hash, pending_result
+from planning.domain.entities.planning import (
+    PlanningConfig,
+    PlanningInput,
+    PlanningResult,
+)
 from planning.infrastructure.adapters.admin_management_repositories_sqla import (
     SqlaAdminUserRepository,
+)
+from planning.infrastructure.adapters.baseline_retry_sqla import (
+    SqlaBaselineRetryOperations,
 )
 from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
 )
 from planning.infrastructure.adapters.planning_management_repository_sqla import (
     SqlaPlanningManagementRepository,
+)
+from planning.infrastructure.adapters.planning_run_repository_sqla import (
+    SqlaPlanningRunRepository,
 )
 from planning.infrastructure.adapters.project_access_repository_sqla import (
     SqlaProjectAccessRepository,
@@ -43,11 +57,16 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     equipment_types,
     jobs,
     plan_versions,
+    planning_baseline_results,
+    planning_baseline_route_jobs,
+    planning_baseline_routes,
+    planning_baseline_unassigned_jobs,
     planning_batch_days,
     planning_batches,
     planning_cancelled_job_snapshots,
     planning_day_results,
     planning_events,
+    planning_plan_comparisons,
     planning_route_jobs,
     planning_routes,
     planning_runs,
@@ -101,6 +120,413 @@ async def seed_project(session: AsyncSession) -> int:
             .returning(projects.c.id)
         )
     )
+
+
+def baseline_config() -> PlanningConfig:
+    return PlanningConfig(
+        id=1,
+        version=1,
+        sla_overdue_base=10_000,
+        sla_overdue_per_day=1_000,
+        sla_today=9_000,
+        sla_tomorrow=4_000,
+        sla_2_3_days=2_000,
+        sla_later=500,
+        skill_one_engineer=500,
+        skill_two_engineers=250,
+        equipment_one_unit=500,
+        equipment_two_units=250,
+        window_30=300,
+        window_60=150,
+        window_120=50,
+        travel_cost_per_minute=1,
+        solver_time_limit_sec=2,
+        max_jobs_per_run=100,
+        travel_provider="STATIC_TEST",
+    )
+
+
+async def test_baseline_initial_storage_failure_leaves_retryable_marker(
+    pg_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planning_date = date(2026, 9, 27)
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        snapshot = {
+            "project_id": project_id,
+            "planning_date": planning_date.isoformat(),
+            "timezone": "UTC",
+            "snapshot_time": "2026-09-26T07:00:00Z",
+            "jobs": [],
+            "engineers": [],
+        }
+        run_id = await session.scalar(
+            insert(planning_runs)
+            .values(
+                project_id=project_id,
+                planning_date=planning_date,
+                timezone="UTC",
+                status="RUNNING",
+                input_snapshot=snapshot,
+                normalized_input_hash=_hash(snapshot),
+            )
+            .returning(planning_runs.c.id)
+        )
+        await session.commit()
+        data = PlanningInput(
+            project_id=project_id,
+            planning_date=planning_date,
+            timezone="UTC",
+            config=baseline_config(),
+            jobs=[],
+            engineers=[],
+            equipment_units={},
+            pre_unassigned=[],
+            input_jobs_count=0,
+            sla_critical_job_ids=frozenset(),
+            snapshot=snapshot,
+        )
+        result = PlanningResult(
+            routes=[],
+            unassigned=[],
+            solver_status="OPTIMAL",
+            objective=0,
+            drop_cost=0,
+            travel_cost=0,
+            solver_time_ms=1,
+            baseline_result=pending_result(data),
+        )
+        repository = SqlaPlanningRunRepository(session)
+        original_save = repository._save_baseline
+
+        async def fail_after_initial_insert(*args, **kwargs):
+            await original_save(*args, **kwargs)
+            raise RuntimeError("audit insert failed")
+
+        monkeypatch.setattr(repository, "_save_baseline", fail_after_initial_insert)
+        await repository.save_result(int(run_id), data, result)
+
+        saved_run = await session.scalar(
+            select(planning_runs.c.status).where(planning_runs.c.id == run_id)
+        )
+        marker = (
+            (
+                await session.execute(
+                    select(planning_baseline_results).where(
+                        planning_baseline_results.c.planning_run_id == run_id
+                    )
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert saved_run == "SUCCESS"
+        assert marker.status == "FAILED"
+        assert marker.failure_code == "BASELINE_STORAGE_ERROR"
+        assert marker.input_hash == _hash(snapshot)
+        assert marker.attempt_count == 1
+        assert marker.next_retry_at is not None
+        assert marker.result_payload["status"] == "FAILED"
+
+
+async def test_baseline_queue_and_retry_reuse_result_without_duplicates(
+    pg_engine: AsyncEngine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planning_date = date(2026, 9, 26)
+    now = datetime(2026, 9, 25, 6, tzinfo=timezone.utc)
+    snapshot = {
+        "snapshot_time": now.isoformat().replace("+00:00", "Z"),
+        "project_id": 1,
+        "planning_date": planning_date.isoformat(),
+        "timezone": "UTC",
+        "baseline_earliest_shift_start_min": 480,
+        "equipment_units": {},
+        "jobs": [
+            {
+                "id": 101,
+                "sla_date": planning_date.isoformat(),
+                "duration_min": 60,
+                "coordinate": {"latitude": 55.75, "longitude": 37.61},
+                "window_start_min": 480,
+                "window_end_min": 900,
+                "required_transport": "CAR",
+                "required_qualifications": [],
+                "required_equipment": [],
+                "created_at": now.isoformat().replace("+00:00", "Z"),
+                "received_at": now.isoformat().replace("+00:00", "Z"),
+                "ingest_sequence": 1,
+                "priority": "LOW",
+                "drop_penalty": 4_000,
+            }
+        ],
+        "engineers": [
+            {
+                "id": 201,
+                "name": "Тестовый инженер",
+                "transport_type": "CAR",
+                "coordinate": {"latitude": 55.74, "longitude": 37.60},
+                "shift_start_min": 480,
+                "shift_end_min": 960,
+                "qualifications": [],
+                "created_at": now.isoformat().replace("+00:00", "Z"),
+            }
+        ],
+    }
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        snapshot["project_id"] = project_id
+        work_type_id = await session.scalar(
+            insert(work_types)
+            .values(
+                project_id=project_id,
+                code=f"RETRY-{uuid.uuid4().hex}",
+                name="Повторный расчёт",
+                default_service_duration_min=60,
+                required_transport="CAR",
+            )
+            .returning(work_types.c.id)
+        )
+        engineer_id = await session.scalar(
+            insert(engineers)
+            .values(
+                project_id=project_id,
+                internal_code=f"RETRY-{uuid.uuid4().hex}",
+                name="Тестовый инженер",
+                transport_type="CAR",
+                start_address="Старт",
+                start_latitude=55.74,
+                start_longitude=37.60,
+            )
+            .returning(engineers.c.id)
+        )
+        job_id = await session.scalar(
+            insert(jobs)
+            .values(
+                project_id=project_id,
+                internal_code=f"RETRY-{uuid.uuid4().hex}",
+                status="NEW",
+                address="Точка",
+                latitude=55.75,
+                longitude=37.61,
+                sla_date=planning_date,
+                work_type_id=work_type_id,
+                service_duration_min=60,
+            )
+            .returning(jobs.c.id)
+        )
+        snapshot["jobs"][0]["id"] = int(job_id)
+        snapshot["engineers"][0]["id"] = int(engineer_id)
+        coordinates = ((55.75, 37.61), (55.74, 37.60))
+        travel_snapshot = [
+            {
+                "profile": "auto",
+                "origin_latitude": origin[0],
+                "origin_longitude": origin[1],
+                "destination_latitude": destination[0],
+                "destination_longitude": destination[1],
+                "travel_time_seconds": 0 if origin == destination else 120,
+                "distance_meters": 0 if origin == destination else 2_000,
+            }
+            for origin in coordinates
+            for destination in coordinates
+            if not (origin == coordinates[1] and destination == coordinates[0])
+        ]
+        run_id = await session.scalar(
+            insert(planning_runs)
+            .values(
+                project_id=project_id,
+                planning_date=planning_date,
+                timezone="UTC",
+                status="SUCCESS",
+                solver_status="OPTIMAL",
+                objective=1,
+                drop_cost=0,
+                travel_cost=1,
+                input_jobs_count=1,
+                assigned_jobs_count=1,
+                config_snapshot=asdict(baseline_config()),
+                input_snapshot=snapshot,
+                travel_snapshot=travel_snapshot,
+                normalized_input_hash=_hash(snapshot),
+                used_engineer_count=1,
+                total_distance_meters=1_500,
+            )
+            .returning(planning_runs.c.id)
+        )
+        route_id = await session.scalar(
+            insert(planning_routes)
+            .values(
+                planning_run_id=run_id,
+                engineer_id=engineer_id,
+                planned_start=datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+                planned_finish=datetime(2026, 9, 26, 9, tzinfo=timezone.utc),
+                total_travel_min=0,
+                total_service_min=60,
+                total_waiting_min=0,
+                total_distance_meters=1_500,
+            )
+            .returning(planning_routes.c.id)
+        )
+        await session.execute(
+            insert(planning_route_jobs).values(
+                planning_route_id=route_id,
+                planning_run_id=run_id,
+                job_id=job_id,
+                sequence=1,
+                planned_arrival=datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+                planned_start=datetime(2026, 9, 26, 8, tzinfo=timezone.utc),
+                planned_finish=datetime(2026, 9, 26, 9, tzinfo=timezone.utc),
+                travel_from_previous_min=0,
+                distance_from_previous_meters=1_500,
+                waiting_before_job_min=0,
+                drop_penalty_snapshot=4_000,
+            )
+        )
+        baseline_id = await session.scalar(
+            insert(planning_baseline_results)
+            .values(
+                project_id=project_id,
+                planning_run_id=run_id,
+                planning_date=planning_date,
+                status="PENDING",
+                algorithm_version="FIFO_V1",
+                input_hash=_hash(snapshot),
+                attempt_count=0,
+            )
+            .returning(planning_baseline_results.c.id)
+        )
+        await session.commit()
+
+        provider_calls = []
+
+        class MatrixFactory:
+            def create(self, provider: str):
+                assert provider == "STATIC_TEST"
+
+                class MissingArcProvider:
+                    async def get_matrix(self, coordinates, profile, cache_ttl_days):
+                        provider_calls.append((len(coordinates), profile))
+                        assert len(coordinates) == 2
+                        assert profile == "auto"
+                        return TravelMatrix(
+                            [[0, 120], [120, 0]],
+                            [[0, 2_000], [2_000, 0]],
+                            profile,
+                            "STATIC_TEST",
+                        )
+
+                return MissingArcProvider()
+
+        operations = SqlaBaselineRetryOperations(session, MatrixFactory())
+        with pytest.raises(ConflictError) as pending_retry:
+            await operations.retry(project_id, int(run_id))
+        assert pending_retry.value.code == "BASELINE_RETRY_NOT_ALLOWED"
+        await session.rollback()
+        original_save_ready = operations._save_ready
+
+        async def fail_save_ready(*args, **kwargs):
+            await session.execute(
+                text("INSERT INTO simulated_missing_baseline_table VALUES (1)")
+            )
+
+        monkeypatch.setattr(operations, "_save_ready", fail_save_ready)
+        initial = await operations.run_queued(project_id, int(run_id))
+        assert initial["status"] == "FAILED"
+        assert initial["attempt_count"] == 1
+        assert initial["failure_code"] == "BASELINE_STORAGE_ERROR"
+
+        monkeypatch.setattr(operations, "_save_ready", original_save_ready)
+        # Mimic publication: hold the project row, then update the baseline
+        # row. A worker which updates baseline before inserting project-FK
+        # audit rows deadlocks against this exact lock order.
+        async with AsyncSession(pg_engine) as publisher_session:
+            async with AsyncSession(pg_engine) as worker_session:
+                await publisher_session.execute(
+                    select(projects.c.id)
+                    .where(projects.c.id == project_id)
+                    .with_for_update()
+                )
+                worker_operations = SqlaBaselineRetryOperations(
+                    worker_session, MatrixFactory()
+                )
+                worker_task = asyncio.create_task(
+                    worker_operations.retry(project_id, int(run_id))
+                )
+                await asyncio.sleep(0.1)
+                await publisher_session.execute(
+                    update(planning_baseline_results)
+                    .where(planning_baseline_results.c.id == baseline_id)
+                    .values(failure_message="publication lock order")
+                )
+                await publisher_session.commit()
+                first = await asyncio.wait_for(worker_task, timeout=5)
+        second = await operations.retry(project_id, int(run_id))
+
+        assert first["status"] == "READY"
+        assert first["attempt_count"] == 2
+        assert second == {
+            "planning_run_id": int(run_id),
+            "status": "READY",
+            "attempt_count": 2,
+            "reused": True,
+        }
+        saved = (
+            (
+                await session.execute(
+                    select(planning_baseline_results).where(
+                        planning_baseline_results.c.id == baseline_id
+                    )
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert saved.status == "READY"
+        assert saved.result_hash
+        assert saved.travel_matrix_hash
+        assert saved.finished_at
+        assert saved.attempt_count == 2
+        assert provider_calls == [(2, "auto"), (2, "auto")]
+        frozen_arcs = await session.scalar(
+            select(planning_runs.c.travel_snapshot).where(planning_runs.c.id == run_id)
+        )
+        assert len(frozen_arcs) == 4
+        added_arc = next(
+            item
+            for item in frozen_arcs
+            if (item["origin_latitude"], item["origin_longitude"]) == coordinates[1]
+            and (
+                item["destination_latitude"],
+                item["destination_longitude"],
+            ) == coordinates[0]
+        )
+        assert added_arc["distance_meters"] == 2_000
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(planning_plan_comparisons)
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(planning_baseline_routes)
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(planning_baseline_route_jobs)
+            )
+            == 1
+        )
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(planning_baseline_unassigned_jobs)
+            )
+            == 0
+        )
 
 
 def owner_values(user_id: uuid.UUID, login: str) -> dict:
@@ -836,6 +1262,9 @@ async def test_planning_board_reads_one_outcome_per_day_input(
             another_project_id, int(day_result_id), job_ids[0]
         )
         comparison = await repository.get_plan_version(project_id, int(version_id))
+        baseline_status = await repository.get_baseline_comparison(
+            project_id, planning_date
+        )
 
     assert day["counts"] == {"assigned": 1, "unassigned": 1, "cancelled": 1}
     assert day["engineer_columns"][0]["name"] == "Иван Петров"
@@ -871,6 +1300,7 @@ async def test_planning_board_reads_one_outcome_per_day_input(
     assert board["plan_version"]["status"] == "SUCCESS"
     assert day["day_result_id"] == day_result_id
     assert comparison is not None
+    assert baseline_status["status"] == "NOT_AVAILABLE_LEGACY_PLAN"
     assert comparison["comparison"]["metrics"]["current"]["days"][0] == {
         "planning_date": planning_date.isoformat(),
         "personnel_count": 1,

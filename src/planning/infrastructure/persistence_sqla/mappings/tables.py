@@ -136,6 +136,13 @@ jobs = Table(
     Column("import_batch_id", ForeignKey("job_import_batches.id")),
     Column("import_row_number", Integer),
     Column(
+        "received_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    Column("ingest_sequence", Integer, nullable=False, server_default="1"),
+    Column(
         "created_at",
         DateTime(timezone=True),
         nullable=False,
@@ -158,6 +165,7 @@ jobs = Table(
         "service_duration_min IS NULL OR service_duration_min > 0",
         name="job_duration_positive",
     ),
+    CheckConstraint("ingest_sequence > 0", name="job_ingest_sequence_positive"),
     CheckConstraint(
         "(latitude IS NULL) = (longitude IS NULL)", name="job_coordinate_pair"
     ),
@@ -527,6 +535,7 @@ planning_runs = Table(
     Column("input_snapshot", JSONB, nullable=False, server_default="{}"),
     Column("normalized_input_hash", String(64)),
     Column("travel_matrix_hash", String(64)),
+    Column("travel_snapshot", JSONB, nullable=False, server_default="[]"),
     Column("traffic_reference_time", DateTime(timezone=True)),
     Column("solver_version", String(64)),
     Column("solver_time_ms", Integer),
@@ -997,6 +1006,200 @@ Index(
     "ix_planning_day_results_project_date",
     planning_day_results.c.project_id,
     planning_day_results.c.planning_date,
+)
+
+# The comparison is stored against the immutable planning run, not recomputed
+# from mutable jobs or engineers.  The complete baseline payload keeps the
+# deterministic FIFO order, route legs and diagnostics available for audit.
+planning_baseline_results = Table(
+    "planning_baseline_results",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "planning_run_id",
+        ForeignKey("planning_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "plan_version_id",
+        ForeignKey("project_plan_versions.id", ondelete="SET NULL"),
+    ),
+    Column("planning_date", Date, nullable=False),
+    Column("status", String(48), nullable=False),
+    Column("algorithm_version", String(32), nullable=False),
+    Column(
+        "snapshot_version", String(32), nullable=False, server_default="DAY_INPUT_V1"
+    ),
+    Column("input_hash", String(64), nullable=False),
+    Column("travel_matrix_hash", String(64)),
+    Column("result_hash", String(64)),
+    Column("input_jobs_count", Integer, nullable=False, server_default="0"),
+    Column("assigned_jobs_count", Integer, nullable=False, server_default="0"),
+    Column("unassigned_jobs_count", Integer, nullable=False, server_default="0"),
+    Column("window_hit_count", Integer, nullable=False, server_default="0"),
+    Column("window_miss_count", Integer, nullable=False, server_default="0"),
+    Column("window_hit_rate", Numeric(7, 4)),
+    Column("active_engineer_count", Integer, nullable=False, server_default="0"),
+    Column("total_distance_meters", BigInteger, nullable=False, server_default="0"),
+    Column("earliest_shift_start", DateTime(timezone=True)),
+    Column("calculation_time_ms", Integer, nullable=False, server_default="0"),
+    Column("failure_code", String(64)),
+    Column("failure_message", Text),
+    Column("started_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("attempt_count", Integer, nullable=False, server_default="1"),
+    Column("next_retry_at", DateTime(timezone=True)),
+    Column("last_attempt_at", DateTime(timezone=True)),
+    Column("result_payload", JSONB, nullable=False, server_default="{}"),
+    Column("distance_matrices", JSONB, nullable=False, server_default="{}"),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    UniqueConstraint(
+        "project_id",
+        "planning_run_id",
+        "algorithm_version",
+        name="uq_planning_baseline_run_algorithm",
+    ),
+)
+Index(
+    "ix_planning_baseline_project_date",
+    planning_baseline_results.c.project_id,
+    planning_baseline_results.c.planning_date,
+)
+
+planning_baseline_routes = Table(
+    "planning_baseline_routes",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "baseline_result_id",
+        ForeignKey("planning_baseline_results.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("engineer_id", ForeignKey("engineers.id"), nullable=False),
+    Column("engineer_input_order", Integer, nullable=False),
+    Column("shift_start", DateTime(timezone=True), nullable=False),
+    Column("shift_end", DateTime(timezone=True), nullable=False),
+    Column("capacity_minutes", Integer, nullable=False),
+    Column("assigned_jobs_count", Integer, nullable=False),
+    Column("consumed_minutes", Integer, nullable=False),
+    Column("remaining_minutes", Integer, nullable=False),
+    Column("distance_meters", BigInteger, nullable=False),
+    Column("start_location_snapshot", JSONB, nullable=False),
+    UniqueConstraint(
+        "baseline_result_id",
+        "engineer_id",
+        name="uq_planning_baseline_route_engineer",
+    ),
+)
+
+planning_baseline_route_jobs = Table(
+    "planning_baseline_route_jobs",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "baseline_result_id",
+        ForeignKey("planning_baseline_results.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "baseline_route_id",
+        ForeignKey("planning_baseline_routes.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("job_input_order", Integer, nullable=False),
+    Column("route_position", Integer, nullable=False),
+    Column("received_at", DateTime(timezone=True), nullable=False),
+    Column("ingest_sequence", Integer, nullable=False),
+    Column("service_duration_minutes", Integer, nullable=False),
+    Column("standard_travel_minutes", Integer, nullable=False, server_default="20"),
+    Column("planned_start", DateTime(timezone=True), nullable=False),
+    Column("planned_finish", DateTime(timezone=True), nullable=False),
+    Column("window_from_min", Integer, nullable=False),
+    Column("window_to_min", Integer, nullable=False),
+    Column("window_hit", Boolean, nullable=False),
+    Column("previous_location_type", String(24), nullable=False),
+    Column("distance_from_previous_meters", BigInteger, nullable=False),
+    UniqueConstraint(
+        "baseline_result_id",
+        "job_id",
+        name="uq_planning_baseline_result_job",
+    ),
+    UniqueConstraint(
+        "baseline_route_id",
+        "route_position",
+        name="uq_planning_baseline_route_position",
+    ),
+)
+
+planning_baseline_unassigned_jobs = Table(
+    "planning_baseline_unassigned_jobs",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "baseline_result_id",
+        ForeignKey("planning_baseline_results.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("job_id", ForeignKey("jobs.id"), nullable=False),
+    Column("job_input_order", Integer, nullable=False),
+    Column("reason_code", String(64), nullable=False),
+    Column("diagnostics", JSONB, nullable=False, server_default="{}"),
+    UniqueConstraint(
+        "baseline_result_id",
+        "job_id",
+        name="uq_planning_baseline_unassigned_job",
+    ),
+)
+
+planning_plan_comparisons = Table(
+    "planning_plan_comparisons",
+    metadata_obj,
+    Column("id", BigInteger, primary_key=True),
+    Column("project_id", ForeignKey("projects.id", ondelete="CASCADE"), nullable=False),
+    Column(
+        "planning_run_id",
+        ForeignKey("planning_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "baseline_result_id",
+        ForeignKey("planning_baseline_results.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("formula_version", String(64), nullable=False),
+    Column("coverage_comparable", Boolean, nullable=False),
+    Column("baseline_assigned_job_ids_hash", String(64), nullable=False),
+    Column("optimized_assigned_job_ids_hash", String(64), nullable=False),
+    Column("baseline_metrics", JSONB, nullable=False),
+    Column("optimized_metrics", JSONB, nullable=False),
+    Column("deltas", JSONB, nullable=False),
+    Column("engineer_metrics", JSONB, nullable=False, server_default="[]"),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    UniqueConstraint(
+        "planning_run_id",
+        "formula_version",
+        name="uq_planning_comparison_run_formula",
+    ),
+)
+Index(
+    "ix_planning_comparisons_project_run",
+    planning_plan_comparisons.c.project_id,
+    planning_plan_comparisons.c.planning_run_id,
 )
 
 planning_cancelled_job_snapshots = Table(

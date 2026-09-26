@@ -6,12 +6,14 @@ from fastapi import APIRouter, Header, Query, status
 
 from planning.application.interactors.dynamic_planning import (
     GetCurrentProjectPlanInteractor,
+    GetPlanningBaselineComparisonInteractor,
     GetPlanningBoardDayInteractor,
     GetPlanningBoardInteractor,
     GetPlanningEventInteractor,
     GetPlanningJobExplanationInteractor,
     GetProjectPlanVersionInteractor,
     ListProjectPlanVersionsInteractor,
+    RetryPlanningBaselineInteractor,
     StartDynamicPlanningInteractor,
 )
 from planning.application.interactors.project.address_search import (
@@ -50,6 +52,43 @@ async def planning_board_day(
     plan_version_id: int | None = Query(default=None),
 ) -> dict[str, Any]:
     return await interactor(planning_date, plan_version_id)
+
+
+@router.get("/planning/current/days/{planning_date}/comparison")
+@inject
+async def planning_baseline_comparison(
+    planning_date: date,
+    interactor: FromDishka[GetPlanningBaselineComparisonInteractor],
+    plan_version_id: int | None = Query(default=None),
+) -> dict[str, Any]:
+    return await interactor(planning_date, plan_version_id=plan_version_id)
+
+
+@router.post(
+    "/planning/current/days/{planning_date}/comparison/engineers-expanded"
+)
+@inject
+async def record_planning_comparison_engineers_expanded(
+    planning_date: date,
+    interactor: FromDishka[GetPlanningBaselineComparisonInteractor],
+    planning_run_id: int = Query(...),
+    plan_version_id: int | None = Query(default=None),
+) -> dict[str, str]:
+    return await interactor.record_engineers_expanded(
+        planning_date, planning_run_id, plan_version_id=plan_version_id
+    )
+
+
+@router.post(
+    "/planning/runs/{planning_run_id}/baseline/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+@inject
+async def retry_planning_baseline(
+    planning_run_id: int,
+    interactor: FromDishka[RetryPlanningBaselineInteractor],
+) -> dict[str, Any]:
+    return await interactor(planning_run_id)
 
 
 @router.get("/planning/day-results/{day_result_id}/jobs/{job_id}/explanation")

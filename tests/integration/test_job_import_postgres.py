@@ -165,6 +165,13 @@ async def test_csv_validation_and_atomic_apply(monkeypatch):
             assert job["service_duration_min"] == 45
             assert job["status"] == "NEW"
             assert job["external_id"] is None
+            batch_created_at = await session.scalar(
+                select(job_import_batches.c.created_at).where(
+                    job_import_batches.c.id == batch["id"]
+                )
+            )
+            assert job["received_at"] == batch_created_at
+            assert job["ingest_sequence"] == 1
             assert (
                 await session.scalar(
                     select(func.count())
