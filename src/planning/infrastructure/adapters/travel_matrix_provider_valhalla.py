@@ -70,16 +70,34 @@ def _limit_missing_pairs(
     if limit is None or limit <= 0:
         return missing
     result: set[tuple[int, int]] = set()
-    for source in range(len(coordinates)):
-        targets = [target for origin, target in missing if origin == source]
+    by_source: dict[int, list[int]] = {}
+    for source, target in missing:
+        if source != target:
+            by_source.setdefault(source, []).append(target)
+    for source, targets in by_source.items():
         targets.sort(
-            key=lambda target: (
-                (coordinates[source].latitude - coordinates[target].latitude) ** 2
-                + (coordinates[source].longitude - coordinates[target].longitude) ** 2
+            key=lambda target: _haversine_distance_meters(
+                coordinates[source], coordinates[target]
             )
         )
         result.update((source, target) for target in targets[:limit])
+    result.update((index, index) for index in range(len(coordinates)))
     return result
+
+
+def _haversine_distance_meters(origin: Coordinate, destination: Coordinate) -> float:
+    """Return great-circle distance for candidate ranking."""
+    latitude_1 = math.radians(origin.latitude)
+    latitude_2 = math.radians(destination.latitude)
+    delta_latitude = latitude_2 - latitude_1
+    delta_longitude = math.radians(destination.longitude - origin.longitude)
+    haversine = (
+        math.sin(delta_latitude / 2) ** 2
+        + math.cos(latitude_1)
+        * math.cos(latitude_2)
+        * math.sin(delta_longitude / 2) ** 2
+    )
+    return 2 * 6_371_000 * math.asin(math.sqrt(min(1.0, haversine)))
 
 
 class ValhallaTravelMatrixProvider:
@@ -228,6 +246,9 @@ class ValhallaTravelMatrixProvider:
         missing = _limit_missing_pairs(
             missing, coordinates, self._config.matrix_candidate_limit
         )
+        for index in range(size):
+            if times[index][index] is None or distances[index][index] is None:
+                times[index][index] = distances[index][index] = 0
 
         block = max(1, self._config.matrix_block_size)
         async with httpx.AsyncClient(
