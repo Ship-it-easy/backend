@@ -53,8 +53,6 @@ class ValhallaTravelMatrixProvider:
         # travel faster than the route shown later on the map.
         times: list[list[int | None]] = [[None] * size for _ in range(size)]
         distances: list[list[int | None]] = [[None] * size for _ in range(size)]
-        selected_pairs = [(i, j) for i in range(size) for j in range(size)]
-        limit = asyncio.Semaphore(8)
         async with httpx.AsyncClient(
             base_url=self._config.valhalla_url,
             timeout=max(60, self._config.geoservice_timeout_sec),
@@ -65,56 +63,61 @@ class ValhallaTravelMatrixProvider:
                 if origin == destination:
                     times[i][j] = distances[i][j] = 0
                     return
-                async with limit:
-                    response = await client.post(
-                        "/route",
-                        json={
-                            "locations": [_location(origin), _location(destination)],
-                            "costing": profile,
-                            "date_time": {
-                                "type": 1,
-                                "value": departure_at.astimezone(
-                                    timezone(timedelta(hours=3))
-                                ).strftime("%Y-%m-%dT%H:%M"),
-                            },
-                            "units": "kilometers",
+                response = await client.post(
+                    "/route",
+                    json={
+                        "locations": [_location(origin), _location(destination)],
+                        "costing": profile,
+                        "date_time": {
+                            "type": 1,
+                            "value": departure_at.astimezone(
+                                timezone(timedelta(hours=3))
+                            ).strftime("%Y-%m-%dT%H:%M"),
                         },
-                    )
-                    valhalla_unreachable = (
-                        response.status_code == 400
-                        and response.json().get("error_code") in {441, 442}
-                    )
-                    if not valhalla_unreachable:
-                        response.raise_for_status()
-                        trip = response.json()["trip"]
-                        summary = trip["summary"]
-                        times[i][j] = math.ceil(float(summary["time"]))
-                        distances[i][j] = math.ceil(float(summary["length"]) * 1000)
-                    has_gtfs_transit = not valhalla_unreachable and any(
-                        maneuver.get("travel_mode") == "transit"
-                        for leg in trip.get("legs", [])
-                        for maneuver in leg.get("maneuvers", [])
-                    )
-                    if self._metro.enabled and not has_gtfs_transit:
-                        try:
-                            metro = await metro_matrix_candidate(
-                                self._metro,
-                                (origin.latitude, origin.longitude),
-                                (destination.latitude, destination.longitude),
-                                self._config.mosmetro_max_access_meters,
-                                self._config.mosmetro_waiting_seconds,
-                                departure_at,
-                            )
-                        except (httpx.HTTPError, ValueError, KeyError, TypeError):
-                            metro = None
-                        if metro and (
-                            times[i][j] is None or metro[0] < times[i][j]
-                        ):
-                            times[i][j], distances[i][j] = metro
+                        "units": "kilometers",
+                    },
+                )
+                valhalla_unreachable = (
+                    response.status_code == 400
+                    and response.json().get("error_code") in {441, 442}
+                )
+                if not valhalla_unreachable:
+                    response.raise_for_status()
+                    trip = response.json()["trip"]
+                    summary = trip["summary"]
+                    times[i][j] = math.ceil(float(summary["time"]))
+                    distances[i][j] = math.ceil(float(summary["length"]) * 1000)
+                has_gtfs_transit = not valhalla_unreachable and any(
+                    maneuver.get("travel_mode") == "transit"
+                    for leg in trip.get("legs", [])
+                    for maneuver in leg.get("maneuvers", [])
+                )
+                if self._metro.enabled and not has_gtfs_transit:
+                    try:
+                        metro = await metro_matrix_candidate(
+                            self._metro,
+                            (origin.latitude, origin.longitude),
+                            (destination.latitude, destination.longitude),
+                            self._config.mosmetro_max_access_meters,
+                            self._config.mosmetro_waiting_seconds,
+                            departure_at,
+                        )
+                    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                        metro = None
+                    if metro and (times[i][j] is None or metro[0] < times[i][j]):
+                        times[i][j], distances[i][j] = metro
 
-            async with asyncio.TaskGroup() as group:
-                for i, j in selected_pairs:
-                    group.create_task(fetch(i, j))
+            # Keep at most eight requests/tasks alive. Creating a task for every
+            # matrix cell exhausts memory when the planning batch is large.
+            batch: list[asyncio.Task[None]] = []
+            for i in range(size):
+                for j in range(size):
+                    batch.append(asyncio.create_task(fetch(i, j)))
+                    if len(batch) == 8:
+                        await asyncio.gather(*batch)
+                        batch.clear()
+            if batch:
+                await asyncio.gather(*batch)
         source = (
             "VALHALLA_TRANSIT+MOSMETRO" if self._metro.enabled else "VALHALLA_TRANSIT"
         )
