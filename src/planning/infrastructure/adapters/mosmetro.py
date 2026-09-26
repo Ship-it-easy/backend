@@ -329,6 +329,25 @@ async def build_metro_map_candidate(
         previous_last_point = points[-1]
     if not metro_segments:
         return None
+    # Keep the API's total authoritative even when part durations differ after
+    # rounding. Apply a positive remainder to the last segment and remove a
+    # negative remainder from the end without ever producing negative time.
+    target_metro_seconds = journey.duration_seconds + waiting_seconds
+    remainder = target_metro_seconds - sum(
+        segment["duration_seconds"] for segment in metro_segments
+    )
+    for segment in reversed(metro_segments):
+        if remainder == 0:
+            break
+        if remainder > 0:
+            segment["duration_seconds"] += remainder
+            segment["baseline_seconds"] += remainder
+            remainder = 0
+            break
+        reduction = min(segment["duration_seconds"], -remainder)
+        segment["duration_seconds"] -= reduction
+        segment["baseline_seconds"] -= reduction
+        remainder += reduction
     final_departure = metro_departure + timedelta(seconds=journey.duration_seconds)
     final_walk = await pedestrian_leg(
         valhalla_client,
