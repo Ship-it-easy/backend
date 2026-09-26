@@ -11,9 +11,13 @@ from planning.domain.traffic import (
     QUALITY,
     SOURCES,
     VERSION,
-    district_profile_for,
     direction_for,
+    district_profile_for,
     traverse,
+)
+from planning.infrastructure.adapters.mosmetro import (
+    MosMetroClient,
+    build_metro_map_candidate,
 )
 
 
@@ -65,6 +69,23 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
                 raise ValueError("Invalid maneuver geometry")
             part = shape[begin : end + 1]
             names = maneuver.get("street_names", [])
+            travel_mode = maneuver.get("travel_mode")
+            transit_info = maneuver.get("transit_info") or {}
+            transit_route = (
+                transit_info.get("long_name") or transit_info.get("short_name")
+                if maneuver.get("travel_type") in {"subway", "metro"}
+                else transit_info.get("short_name") or transit_info.get("long_name")
+            )
+            transit_stops = transit_info.get("transit_stops") or []
+            transit = (
+                {
+                    "route": transit_route,
+                    "from_stop": transit_stops[0].get("name"),
+                    "to_stop": transit_stops[-1].get("name"),
+                }
+                if travel_mode == "transit" and transit_stops
+                else None
+            )
             corridor = district_profile_for(part) if profile == "auto" else None
             direction = direction_for(part, corridor)
             entered = departure + timedelta(seconds=elapsed)
@@ -75,7 +96,14 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
             )
             segments.append(
                 {
-                    "road": ", ".join(names) or "Без названия",
+                    "road": (
+                        transit_route or "Транспорт"
+                        if travel_mode == "transit"
+                        else ", ".join(names) or "Без названия"
+                    ),
+                    "travel_mode": travel_mode,
+                    "travel_type": maneuver.get("travel_type"),
+                    "transit": transit,
                     "corridor_id": corridor,
                     "traffic_source": "district" if corridor else "not_applicable",
                     "direction": direction,
@@ -89,7 +117,8 @@ def evaluate_trip(trip, departure, profile, traffic_enabled=True):
                         else 1
                     ),
                     "quality": (
-                        "district_estimate" if corridor and traffic_enabled
+                        "district_estimate"
+                        if corridor and traffic_enabled
                         else (
                             "disabled"
                             if profile == "auto" and not traffic_enabled
@@ -187,6 +216,10 @@ async def build_traffic_route(request, config, *, client=None):
         ) as owned:
             return await build_traffic_route(request, config, client=owned)
     start_timing, current = stop_timing(request.departure_at, request.stops[0])
+    metro = MosMetroClient(
+        getattr(config, "mosmetro_url", ""),
+        getattr(config, "geoservice_timeout_sec", 15),
+    )
     legs = []
     for origin, destination in zip(request.stops, request.stops[1:], strict=False):
         if (origin.latitude, origin.longitude) == (
@@ -213,27 +246,65 @@ async def build_traffic_route(request, config, *, client=None):
                     "costing": request.profile,
                     "units": "kilometers",
                     "shape_format": "polyline6",
-                    "alternates": 2,
+                    "alternates": 0 if request.profile == "multimodal" else 2,
                     # Disable predicted/current speeds to avoid double counting.
                     # With no freeflow feed Valhalla falls back to its OSM base speed.
-                    "costing_options": {request.profile: {"speed_types": ["freeflow"]}},
+                    "costing_options": (
+                        {"auto": {"speed_types": ["freeflow"]}}
+                        if request.profile == "auto"
+                        else {}
+                    ),
                     "date_time": {
                         # Type 1 suppresses alternatives in Valhalla.
-                        "type": 3,
+                        "type": 1 if request.profile == "multimodal" else 3,
                         "value": current.astimezone(MOSCOW).strftime("%Y-%m-%dT%H:%M"),
                     },
                     "language": "ru-RU",
                 },
             )
-            response.raise_for_status()
-            payload = response.json()
-            candidates = [payload["trip"]] + [
-                a["trip"] for a in payload.get("alternates", [])
-            ]
-            evaluated = [
-                evaluate_trip(trip, current, request.profile, traffic_enabled)
-                for trip in candidates
-            ]
+            valhalla_unreachable = (
+                response.status_code == 400
+                and response.json().get("error_code") in {441, 442}
+            )
+            evaluated = []
+            if not valhalla_unreachable:
+                response.raise_for_status()
+                payload = response.json()
+                candidates = [payload["trip"]] + [
+                    a["trip"] for a in payload.get("alternates", [])
+                ]
+                evaluated = [
+                    evaluate_trip(trip, current, request.profile, traffic_enabled)
+                    for trip in candidates
+                ]
+            has_gtfs_transit = any(
+                segment.get("travel_mode") == "transit"
+                for candidate in evaluated
+                for segment in candidate["segments"]
+            )
+            if (
+                request.profile == "multimodal"
+                and metro.enabled
+                and not has_gtfs_transit
+            ):
+                try:
+                    metro_candidate = await build_metro_map_candidate(
+                        metro,
+                        client,
+                        (origin.latitude, origin.longitude),
+                        (destination.latitude, destination.longitude),
+                        current,
+                        evaluate_trip,
+                        getattr(config, "mosmetro_max_access_meters", 2500),
+                        getattr(config, "mosmetro_waiting_seconds", 180),
+                    )
+                except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                    metro_candidate = None
+                if metro_candidate:
+                    evaluated.append(metro_candidate)
+            if not evaluated:
+                response.raise_for_status()
+                raise ValueError("No route found")
             # Every auto segment has a district profile, so candidates are
             # comparable by their time-adjusted duration in either mode.
             chosen = min(
@@ -279,10 +350,14 @@ async def build_traffic_route(request, config, *, client=None):
         "delay_seconds": math.ceil(seconds) - math.ceil(baseline),
         "coefficient": round(seconds / baseline, 3) if baseline else 1,
         "coverage_fraction": 1 if request.profile == "auto" else None,
-        "coverage_status": "complete" if request.profile == "auto" else "not_applicable",
+        "coverage_status": "complete"
+        if request.profile == "auto"
+        else "not_applicable",
         "district_fallback_fraction": (
             round(district_fallback / baseline, 3) if baseline else 0
-        ) if request.profile == "auto" else None,
+        )
+        if request.profile == "auto"
+        else None,
         "warnings": (
             ["Для всех автомобильных дорог применён районный коэффициент по времени."]
             if district_fallback and traffic_enabled
@@ -302,7 +377,47 @@ async def build_traffic_route(request, config, *, client=None):
             else "Модель пробок выключена: используется базовое время Valhalla."
         ),
     }
-    if request.include_departure_options:
+    if request.profile == "multimodal":
+        api_metro_legs = sum(leg.get("provider") == "MOSMETRO_HYBRID" for leg in legs)
+        gtfs_metro_legs = sum(
+            any(
+                segment.get("travel_type") in {"subway", "metro"}
+                for segment in leg["segments"]
+            )
+            for leg in legs
+            if leg.get("provider") != "MOSMETRO_HYBRID"
+        )
+        scheduled_legs = sum(
+            any(segment.get("travel_mode") == "transit" for segment in leg["segments"])
+            for leg in legs
+            if leg.get("provider") != "MOSMETRO_HYBRID"
+        )
+        result["warning"] = (
+            "Часть метро построена через MosMetro API: ожидание поезда оценочное, "
+            "линия между станциями схематична."
+            if api_metro_legs
+            else (
+                "Маршрут по загруженным данным GTFS в Valhalla. "
+                "Интервалы метро — модель движения, не расписание отдельных поездов."
+                if gtfs_metro_legs
+                else (
+                    "Наземный транспорт построен по расписанию GTFS в Valhalla."
+                    if scheduled_legs
+                    else "Valhalla выбрала пеший маршрут для этого выезда. "
+                    "Он может быть быстрее поездки с пересадками, "
+                    "либо доступных рейсов нет."
+                )
+            )
+        )
+        result["metro_legs"] = api_metro_legs + gtfs_metro_legs
+        result["metro_gtfs_legs"] = gtfs_metro_legs
+        result["warnings"].append(
+            "Планирование использует время начала смены; "
+            "на карте каждый участок пересчитан на время отправления."
+        )
+    elif request.profile != "auto":
+        result["warning"] = "Время маршрута без автомобильных коэффициентов пробок."
+    if request.include_departure_options and request.profile != "multimodal":
         result["departure_options"] = departure_options(request, legs, traffic_enabled)
         result["departure_options_basis"] = "same_paths_scenario_not_reoptimized"
     return result

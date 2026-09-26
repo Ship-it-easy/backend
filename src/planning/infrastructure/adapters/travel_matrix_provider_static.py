@@ -13,7 +13,9 @@ class StaticTravelMatrixProvider:
         profile: str,
         cache_ttl_days: int | None = None,
     ) -> TravelMatrix:
-        speed_kmh = 25 if profile == "auto" else 5
+        speed_kmh = {"auto": 25, "pedestrian": 5, "bicycle": 15, "multimodal": 20}[
+            profile
+        ]
         times: list[list[int | None]] = []
         distances: list[list[int | None]] = []
         for origin in coordinates:

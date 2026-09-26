@@ -46,7 +46,7 @@ async def prepare_travel_matrices(
         engineer.coordinate for engineer in data.engineers
     ]
     profiles = {
-        "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
+        TransportType(engineer.transport_type).routing_profile
         for engineer in data.engineers
     }
 
@@ -62,6 +62,9 @@ async def prepare_travel_matrices(
             )
     except TimeoutError as error:
         raise SolverTimeLimit("MATRIX_TIME_LIMIT") from error
+    # Validate provider output before traffic coefficients can round invalid
+    # fractional values into apparently valid integer travel times.
+    _convert_matrices(raw_matrices, len(coordinates))
     if getattr(matrix_provider, "planning_traffic_enabled", False):
         raw_matrices = _traffic_envelope(data, coordinates, raw_matrices)
     return _convert_matrices(raw_matrices, len(coordinates))
@@ -93,10 +96,12 @@ def _traffic_envelope(data, coordinates, raw_matrices):
             math.ceil(
                 value
                 * coefficient(
-                    district_profile_for([
-                        [coordinates[i].latitude, coordinates[i].longitude],
-                        [coordinates[j].latitude, coordinates[j].longitude],
-                    ]),
+                    district_profile_for(
+                        [
+                            [coordinates[i].latitude, coordinates[i].longitude],
+                            [coordinates[j].latitude, coordinates[j].longitude],
+                        ]
+                    ),
                     representative,
                 )
             )
@@ -135,11 +140,12 @@ def refine_district_times_for_routes(data, travel, result):
         for profile, values in travel.seconds.items()
     }
     meters = {
-        profile: [row[:] for row in values]
-        for profile, values in travel.meters.items()
+        profile: [row[:] for row in values] for profile, values in travel.meters.items()
     }
     job_index = {job.id: index for index, job in enumerate(data.jobs)}
-    engineer_index = {engineer.id: index for index, engineer in enumerate(data.engineers)}
+    engineer_index = {
+        engineer.id: index for index, engineer in enumerate(data.engineers)
+    }
     coordinates = [job.coordinate for job in data.jobs] + [
         engineer.coordinate for engineer in data.engineers
     ]
@@ -166,7 +172,10 @@ def refine_district_times_for_routes(data, travel, result):
                 district = district_profile_for(
                     [
                         [origin_coordinate.latitude, origin_coordinate.longitude],
-                        [destination_coordinate.latitude, destination_coordinate.longitude],
+                        [
+                            destination_coordinate.latitude,
+                            destination_coordinate.longitude,
+                        ],
                     ]
                 )
                 elapsed = math.ceil(traverse(baseline, departure, district))
@@ -185,20 +194,39 @@ async def _load_snapshot_matrices(
 ) -> dict[str, TravelMatrix]:
     result = {}
     for profile in sorted(profiles):
+        departure = datetime.combine(
+            data.planning_date, time.min, ZoneInfo(data.timezone)
+        ) + timedelta(
+            minutes=min(
+                e.shift_start_min
+                for e in data.engineers
+                if TransportType(e.transport_type).routing_profile == profile
+            )
+        )
+        # Transit schedules must not leak between planning days in a batch.
+        snapshot_profile = (
+            f"{profile}:{departure.isoformat()}" if profile == "multimodal" else profile
+        )
         keys = [
             [
-                (profile, a.latitude, a.longitude, b.latitude, b.longitude)
+                (snapshot_profile, a.latitude, a.longitude, b.latitude, b.longitude)
                 for b in coordinates
             ]
             for a in coordinates
         ]
         if any(key not in data.travel_snapshot for row in keys for key in row):
             try:
-                matrix = await matrix_provider.get_matrix(
-                    coordinates,
-                    profile,
-                    data.config.travel_cache_ttl_days,
+                dated_provider = getattr(
+                    matrix_provider, "get_matrix_for_departure", None
                 )
+                if profile == "multimodal" and dated_provider is not None:
+                    matrix = await dated_provider(coordinates, profile, departure)
+                else:
+                    matrix = await matrix_provider.get_matrix(
+                        coordinates,
+                        profile,
+                        data.config.travel_cache_ttl_days,
+                    )
             except Exception as error:
                 raise RuntimeError("TRAVEL_PROVIDER_UNAVAILABLE") from error
             size = len(coordinates)

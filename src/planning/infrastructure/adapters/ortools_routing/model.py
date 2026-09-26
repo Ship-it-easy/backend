@@ -107,9 +107,7 @@ class DailyRoutingModel:
         self.distance_callbacks: list[int] = []
         weights = self.weights
         for vehicle, engineer in enumerate(self.data.engineers):
-            profile = (
-                "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-            )
+            profile = TransportType(engineer.transport_type).routing_profile
             matrix = self.matrices[profile]
             seconds_matrix = self.seconds_matrices[profile]
             distance_matrix = self.distance_matrices[profile]
@@ -317,9 +315,7 @@ class DailyRoutingModel:
     def _forbid_missing_arcs(self) -> None:
         """Запретить переезды, для которых провайдер не нашёл дороги."""
         for vehicle, engineer in enumerate(self.data.engineers):
-            profile = (
-                "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-            )
+            profile = TransportType(engineer.transport_type).routing_profile
             matrix = self.matrices[profile]
             distance_matrix = self.distance_matrices[profile]
             start_index = self.routing.Start(vehicle)
@@ -349,9 +345,7 @@ class DailyRoutingModel:
         по-прежнему проверяет Time dimension во время поиска.
         """
         for vehicle, engineer in enumerate(self.data.engineers):
-            profile = (
-                "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-            )
+            profile = TransportType(engineer.transport_type).routing_profile
             matrix = self.matrices[profile]
             start_index = self.routing.Start(vehicle)
             start_node = self.job_count + vehicle

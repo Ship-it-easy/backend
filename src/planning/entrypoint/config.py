@@ -21,6 +21,10 @@ class PlanningServiceConfig:
     yandex_geocoder_api_key: str = ""
     yandex_geocoder_bbox: str = ""
     traffic_model_enabled: bool = True
+    mosmetro_url: str = ""
+    mosmetro_max_access_meters: int = 2500
+    mosmetro_waiting_seconds: int = 180
+    transit_matrix_route_limit: int = 256
 
     @staticmethod
     def from_env() -> "PlanningServiceConfig":
@@ -37,4 +41,10 @@ class PlanningServiceConfig:
             yandex_geocoder_api_key=getenv("YANDEX_GEOCODER_API_KEY", ""),
             yandex_geocoder_bbox=getenv("YANDEX_GEOCODER_BBOX", ""),
             traffic_model_enabled=_env_flag("TRAFFIC_MODEL_ENABLED", True),
+            mosmetro_url=getenv("MOSMETRO_URL", ""),
+            mosmetro_max_access_meters=int(
+                getenv("MOSMETRO_MAX_ACCESS_METERS", "2500")
+            ),
+            mosmetro_waiting_seconds=int(getenv("MOSMETRO_WAITING_SECONDS", "180")),
+            transit_matrix_route_limit=int(getenv("TRANSIT_MATRIX_ROUTE_LIMIT", "256")),
         )

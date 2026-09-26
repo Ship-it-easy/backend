@@ -44,7 +44,7 @@ class EngineerCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
     active: bool = True
-    transport_type: Literal["CAR", "NONE"]
+    transport_type: Literal["CAR", "NONE", "BICYCLE", "PUBLIC_TRANSPORT"]
     start_address: str = Field(min_length=1)
     start_latitude: float | None = None
     start_longitude: float | None = None
@@ -61,7 +61,7 @@ class EngineerPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=255)
     active: bool | None = None
-    transport_type: Literal["CAR", "NONE"] | None = None
+    transport_type: Literal["CAR", "NONE", "BICYCLE", "PUBLIC_TRANSPORT"] | None = None
     start_address: str | None = Field(default=None, min_length=1)
     start_latitude: float | None = None
     start_longitude: float | None = None

@@ -30,9 +30,7 @@ def calculate_objective_ranges(
     )
     max_arc_distance = max_arc_time = 0
     for vehicle, engineer in enumerate(data.engineers):
-        profile = (
-            "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-        )
+        profile = TransportType(engineer.transport_type).routing_profile
         time_matrix = time_seconds_matrices[profile]
         distance_matrix = distance_matrices[profile]
         compatible = [
@@ -250,9 +248,7 @@ def _validate_drop_priority_stages(
                     raise ValueError
             described_ids.extend(costs)
             names.append(name)
-            order_keys.append(
-                (group_order[group], work_priority_rank(priority))
-            )
+            order_keys.append((group_order[group], work_priority_rank(priority)))
     except (KeyError, TypeError, ValueError):
         raise RuntimeError("OBJECTIVE_RANGE_OVERFLOW") from None
     if (

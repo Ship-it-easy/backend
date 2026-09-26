@@ -18,9 +18,7 @@ class UnassignedReasonResolver:
         )
         for vehicle in compatible_vehicles:
             engineer = data.engineers[vehicle]
-            profile = (
-                "auto" if engineer.transport_type == TransportType.CAR else "pedestrian"
-            )
+            profile = TransportType(engineer.transport_type).routing_profile
             matrix = matrices[profile]
             start_node = len(data.jobs) + vehicle
             if matrix[start_node][target] is not None:

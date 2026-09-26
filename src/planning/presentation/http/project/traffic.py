@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import AwareDatetime, BaseModel, Field
 
 from planning.application.access import ProjectAccess
+from planning.application.interfaces.traffic_route_service import TrafficRouteService
 from planning.domain.traffic import (
     INTERVAL_MINUTES,
     MOSCOW,
@@ -16,7 +17,6 @@ from planning.domain.traffic import (
     profile_table,
 )
 from planning.entrypoint.config import PlanningServiceConfig
-from planning.infrastructure.adapters.traffic_route import build_traffic_route
 
 router = APIRouter()
 
@@ -33,7 +33,7 @@ class TrafficStop(BaseModel):
 
 class TrafficRouteRequest(BaseModel):
     departure_at: AwareDatetime
-    profile: Literal["auto", "pedestrian"] = "auto"
+    profile: Literal["auto", "pedestrian", "bicycle", "multimodal"] = "auto"
     stops: list[TrafficStop] = Field(min_length=2, max_length=100)
     include_departure_options: bool = True
 
@@ -78,7 +78,7 @@ async def traffic_profiles(
 async def traffic_route(
     body: TrafficRouteRequest,
     access: FromDishka[ProjectAccess],
-    config: FromDishka[PlanningServiceConfig],
+    routes: FromDishka[TrafficRouteService],
 ) -> dict:
     await access.dispatcher()
     # Valhalla interprets date_time as local to the origin, not as UTC.
@@ -89,7 +89,7 @@ async def traffic_route(
         # the former fixed one-minute limit.
         timeout_seconds = min(300, 15 + 3 * (len(body.stops) - 1))
         async with asyncio.timeout(timeout_seconds):
-            return await build_traffic_route(body, config)
+            return await routes.build(body)
     except (httpx.TimeoutException, TimeoutError) as error:
         raise HTTPException(504, "Превышено время построения маршрута") from error
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as error:
