@@ -1,38 +1,71 @@
-# Демо на одном VPS (Москва, 4 ГБ RAM)
+# Демо на NAT-VPS с Nginx Proxy Manager провайдера
 
-Этот способ поднимает фронтенд, backend, PostgreSQL, Valhalla, Nominatim и
-Traefik одним Docker Compose-проектом. Снаружи доступны только HTTPS-сайт и
-его `/api/` через Traefik. Прямых опубликованных портов у остальных сервисов
-нет. Конфигурация использует экстракт Москвы; адреса и маршруты за её пределами
-для такого демо не подходят.
+Схема для этого сервера:
 
-## 0. Что подготовлено в репозиториях
+```text
+браузер → Nginx Proxy Manager провайдера → 192.168.8.29:8080 → frontend
+                                                           └→ /api/ → backend
+backend → PostgreSQL, Valhalla, API Геокодера Яндекса
+SSH: 54.37.83.206:51440 → 192.168.8.29:22
+```
 
-- В backend: `compose.demo.yml`, `.env.demo.example`, этот документ и скрипты
-  подготовки демонстрационных учётных записей.
-- Во frontend: `Dockerfile`, `.dockerignore`, `nginx.conf`.
+NPM уже работает у провайдера: **не устанавливайте и не запускайте его на VPS**.
+Traefik тоже не нужен. Docker Compose публикует только HTTP фронтенда на
+внутреннем адресе `192.168.8.29:8080`. Backend, PostgreSQL и Valhalla не имеют
+опубликованных портов. Nominatim не запускается: геокодирование делает API
+Яндекса. Конфигурация Valhalla использует экстракт Москвы.
 
-Перед клонированием на сервер **закоммитьте и отправьте эти изменения в оба
-GitHub-репозитория**. Локальные незакоммиченные файлы команда `git clone` не
-получит. В существующий `docker-compose.yml` для разработки изменения не
-вносились.
+Порт `51440` относится только к SSH. По этой записи нельзя определить IP,
+который нужен для DNS сайта: запись `A` должна вести на адрес **NPM**, который
+указал провайдер. Он может совпадать с `54.37.83.206`, но это надо проверить
+в панели или документации провайдера. Для работы NPM провайдера должен иметь
+доступ к `192.168.8.29:8080` в своей внутренней сети. Если NPM выдаёт 502,
+уточните у провайдера, какой внутренний адрес и порт он разрешает проксировать.
 
-## 1. Сервер и DNS
+## 1. Сначала отправить подготовленные файлы в GitHub
 
-Рекомендуемый вариант для этого набора: VPS x86-64, Ubuntu 24.04, 2 vCPU,
-4 ГБ RAM, SSD от 60 ГБ, публичный IPv4. Желательно 2 ГБ swap для кратких пиков
-памяти. Если арендуется 8 ГБ RAM, можно запускать все сервисы сразу.
+На вашем компьютере есть локальные изменения, которых пока нет на GitHub.
+Выполните на компьютере (не на VPS):
 
-Создайте запись `A` для выбранного имени, например `demo.example.ru`, на IPv4
-VPS. Удалите ошибочную запись `AAAA`, если IPv6 на VPS не настроен. В панели
-провайдера разрешите входящие TCP `22` (SSH), `80` (сертификат и редирект) и
-`443` (сайт). Остальные входящие порты не нужны. Серверу нужен исходящий
-доступ к Docker Hub, GHCR, PyPI, npm, источнику OSM и Let's Encrypt.
+```bash
+cd /Users/pavelepanov/ship-it-backend
+git add .env.demo.example compose.demo.yml docs/DEPLOY_DEMO_VPS.md \
+  scripts/check_demo_yandex.py scripts/demo_up_low_ram.sh
+git commit -m "Prepare NAT VPS demo behind provider proxy"
+git push origin main
 
-## 2. Установить Docker и Git на чистой Ubuntu
+cd /Users/pavelepanov/ship-it-frontend
+git add nginx.conf
+git commit -m "Proxy demo API through frontend nginx"
+git push origin main
+```
 
-Подключитесь по SSH и установите Docker Engine с Compose plugin из
-официального репозитория Docker:
+Если не выполнить этот шаг, `git clone` скачает старый Compose с Traefik и
+Nominatim.
+
+## 2. Войти на VPS и проверить ОС, Docker, память и диск
+
+Используйте SSH-логин, выданный провайдером. Если это `root`:
+
+```bash
+ssh -p 51440 root@54.37.83.206
+```
+
+Если выдан `ubuntu`, замените `root` на `ubuntu`. Все команды ниже выполняются
+уже внутри SSH-сеанса:
+
+```bash
+cat /etc/os-release
+free -h
+df -h /
+ip -4 addr
+sudo docker --version
+sudo docker compose version
+```
+
+Убедитесь, что `192.168.8.29` действительно назначен VPS. Если Docker и
+Compose уже работают, сразу переходите к шагу 3. Если Docker отсутствует и
+ОС — Ubuntu 24.04, установите его из официального репозитория:
 
 ```bash
 sudo apt update
@@ -54,160 +87,172 @@ sudo docker compose version
 ```
 
 Официальная инструкция: https://docs.docker.com/engine/install/ubuntu/ .
-Команды далее используют `sudo docker`, поэтому добавлять пользователя в группу
-`docker` не требуется.
+Для Debian или другой ОС используйте соответствующую инструкцию Docker.
+Если Docker уже есть, а нет только Compose plugin, на Ubuntu с репозиторием
+Docker достаточно `sudo apt install -y docker-compose-plugin`.
 
-Проверьте swap командой `swapon --show`. Если вывода нет, для VPS с 4 ГБ RAM
-можно добавить 2 ГБ:
+## 3. Создать swap при 2 ГБ RAM
 
 ```bash
-sudo fallocate -l 2G /swapfile
+swapon --show
+df -h /
+```
+
+Если `swapon --show` ничего не вывел и на диске свободно минимум 4 ГБ:
+
+```bash
+sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+swapon --show
+free -h
 ```
 
-## 3. Клонировать оба репозитория рядом
+Строка в `/etc/fstab` включает swap после перезагрузки. На 1 vCPU сборка и
+импорт карты могут идти долго даже со swap.
+
+## 4. Клонировать оба репозитория рядом
+
+Если Git и OpenSSL ещё не установлены, на Ubuntu выполните
+`sudo apt install -y git openssl`. Для публичных репозиториев:
 
 ```bash
 sudo mkdir -p /opt/ship-it
 sudo chown "$USER":"$(id -gn)" /opt/ship-it
 cd /opt/ship-it
-git clone git@github.com:Ship-it-easy/backend.git ship-it-backend
-git clone git@github.com:Ship-it-easy/frontend.git ship-it-frontend
+git clone https://github.com/Ship-it-easy/backend.git ship-it-backend
+git clone https://github.com/Ship-it-easy/frontend.git ship-it-frontend
 cd ship-it-backend
 ```
 
-Для приватных репозиториев заранее настройте на сервере GitHub SSH-ключ с
-правом чтения. Если репозитории публичные, можно использовать HTTPS-адреса
-`https://github.com/Ship-it-easy/backend.git` и
-`https://github.com/Ship-it-easy/frontend.git`.
+Если репозитории приватные, настройте на VPS GitHub SSH-ключ с правом чтения
+и используйте `git@github.com:Ship-it-easy/backend.git` и
+`git@github.com:Ship-it-easy/frontend.git`.
 
-## 4. Заполнить конфигурацию
+## 5. Заполнить настройки приложения
 
 ```bash
+cd /opt/ship-it/ship-it-backend
 cp .env.demo.example .env.demo
 chmod 600 .env.demo
-openssl rand -hex 24
 openssl rand -hex 24
 nano .env.demo
 ```
 
-В `.env.demo` замените `DEMO_DOMAIN`, `ACME_EMAIL`, `POSTGRES_PASS` и
-`NOMINATIM_PASSWORD`. Для двух паролей используйте **разные** строки из
-`openssl`. Остальные значения подходят для московского демо. Не копируйте
-frontend `.env.example` в `.env`: он задаёт `VITE_API_URL=localhost`, тогда
-браузер на другом компьютере не сможет обратиться к API.
-
-Проверьте, что в конфигурации не осталось шаблонных значений:
-
-```bash
-grep -nE 'REPLACE_WITH|example\.ru' .env.demo
-```
-
-Эта команда не должна вывести строк.
-
-Создайте хранилище сертификата и проверьте Compose:
+Замените `POSTGRES_PASS` на случайную строку из `openssl`, а
+`YANDEX_GEOCODER_API_KEY` — на ключ API Геокодера Яндекса. Проверьте
+`DEMO_HTTP_BIND=192.168.8.29` и `DEMO_HTTP_PORT=8080`. Если адрес или порт
+отличаются в панели провайдера, поправьте их. Оставьте
+`USE_YANDEX_GEOCODER=true`, `VALHALLA_THREADS=1` и московский `OSM_PBF_URL`.
+Не загружайте `.env.demo` в GitHub. Frontend `.env.example` не копируйте в
+`.env`: там адрес API localhost для локальной разработки.
 
 ```bash
-mkdir -p letsencrypt
-touch letsencrypt/acme.json
-chmod 600 letsencrypt/acme.json
+grep -n 'REPLACE_WITH' .env.demo
 sudo docker compose --env-file .env.demo -f compose.demo.yml config -q
 ```
 
-Файл `.env.demo` и каталог `letsencrypt` исключены из Git. Не отправляйте их в
-репозиторий. Если команда `config -q` сообщит об ошибке, исправьте её до запуска.
+Первая команда не должна ничего вывести. Если на порту 8080 уже что-то
+работает (`sudo ss -ltnp | grep ':8080'`), выберите другой порт и укажите его
+в `.env.demo` и Proxy Host.
 
-## 5. Первый запуск на VPS с 4 ГБ RAM
+## 6. Запустить приложение
 
-На 4 ГБ импортируйте геоданные последовательно, чтобы Nominatim и Valhalla
-не строили базы одновременно. Каждая команда `--wait` завершится после
-готовности сервиса или ошибки/тайм-аута; импорт может занять время.
-
-```bash
-sudo docker compose --env-file .env.demo -f compose.demo.yml up -d --wait --wait-timeout 7200 postgres nominatim
-sudo docker compose --env-file .env.demo -f compose.demo.yml up -d --wait --wait-timeout 7200 valhalla
-sudo docker compose --env-file .env.demo -f compose.demo.yml up -d --build --wait --wait-timeout 900
-```
-
-Если ожидание прервалось, посмотрите состояние и логи. Не удаляйте тома с
-данными, просто продолжите после устранения причины:
+На VPS с малой памятью подготовленный скрипт сначала импортирует карту
+Valhalla, затем по одному собирает backend и frontend:
 
 ```bash
+cd /opt/ship-it/ship-it-backend
+sudo ./scripts/demo_up_low_ram.sh
 sudo docker compose --env-file .env.demo -f compose.demo.yml ps
-sudo docker compose --env-file .env.demo -f compose.demo.yml logs --tail=100 nominatim valhalla backend traefik
-free -h
-df -h
+curl -I http://192.168.8.29:8080/
 ```
 
-После первого импорта обычный запуск и обновление — одна команда:
+Последний запрос должен вернуть `200`. Если запуск прервался, смотрите:
 
 ```bash
-sudo docker compose --env-file .env.demo -f compose.demo.yml up -d --build
+sudo docker compose --env-file .env.demo -f compose.demo.yml logs --tail=100 valhalla backend frontend
+free -h
+df -h /
 ```
 
-Для обновления сначала выполните `git pull` в **обоих** каталогах. Для сохранения
-данных не запускайте `docker compose down -v`: ключ `-v` удалит тома PostgreSQL,
-OSM и демо-манифестов.
+Не выполняйте `docker compose down -v`: ключ `-v` удалит базу и карту.
 
-## 6. Проверить сайт и подготовить данные для показа
+## 7. Настроить готовый NPM провайдера
 
-Откройте `https://ВАШ_ДОМЕН`. Traefik должен выдать сертификат автоматически.
-Для быстрой проверки с сервера:
+В панели NPM под выданными провайдером учётными данными откройте `Hosts` →
+`Proxy Hosts` → `Add Proxy Host`:
+
+| Поле | Значение |
+| --- | --- |
+| Domain Names | ваш домен или поддомен без `https://` |
+| Scheme | `http` |
+| Forward Hostname / IP | `192.168.8.29` |
+| Forward Port | `8080` |
+
+Во вкладке `SSL` запросите новый сертификат Let's Encrypt и включите
+`Force SSL`. Отдельное правило `/api` в NPM не нужно: nginx фронтенда
+передаст эти запросы бэкенду. DNS имени настройте на внешний адрес **NPM**
+по инструкции провайдера, не на внутренний `192.168.8.29`. Дополнительное
+NAT-правило для порта 8080 может не понадобиться, если NPM видит внутреннюю
+сеть напрямую; если в панели провайдера требуется отдельное правило,
+используйте предоставленный для HTTP порт и уточните у провайдера схему.
+
+Для доступа снаружи нужны только SSH через выданный порт 51440 и HTTPS через
+NPM. Не открывайте наружу 5432, 8000, 8002 или 8080. При наличии
+фаервола провайдера ограничьте 8080 доступом только от NPM, если провайдер
+сообщает его внутренний IP. Не включайте UFW вслепую: можно потерять SSH.
+
+## 8. Проверить демонстрацию
+
+Подставьте свой домен:
 
 ```bash
 curl -I https://ВАШ_ДОМЕН/
 curl -i https://ВАШ_ДОМЕН/api/auth/me
 ```
 
-Первый запрос должен вернуть `200`, второй без входа — `401`. Это нормальный
-ответ API, подтверждающий маршрутизацию. Если сайт открывается без карты,
-проверьте, что браузер может загружать тайлы с `tile.openstreetmap.org`.
+Ожидается `200` для главной и `401` для `/api/auth/me` без входа: это
+нормальный ответ API. Проверьте доступ к API Геокодера Яндекса:
 
-Демо на 27 сентября 2026 года создаётся так:
+```bash
+cd /opt/ship-it/ship-it-backend
+sudo docker compose --env-file .env.demo -f compose.demo.yml exec -T backend \
+  python scripts/check_demo_yandex.py
+```
+
+Подготовьте данные для показа 27 сентября 2026 года:
 
 ```bash
 sudo docker compose --env-file .env.demo -f compose.demo.yml exec -T backend \
   python scripts/prepare_transport_demo.py --date 2026-09-27 --manifest-dir /demo-manifests
 ```
 
-Скрипт выведет логин и пароль диспетчера. Сохраните их в надёжном месте. Его
-манифест хранится в отдельном постоянном Docker volume, поэтому повторная
-команда после пересоздания backend вернёт те же данные.
-
-Для проверки расчёта **26 сентября** создайте отдельный набор на эту дату:
-
-```bash
-sudo docker compose --env-file .env.demo -f compose.demo.yml exec -T backend \
-  python scripts/prepare_transport_demo.py --date 2026-09-26 --manifest-dir /demo-manifests
-```
-
-27 сентября войдите в интерфейс диспетчером набора от 27-го, откройте
-«Планирование» и запустите расчёт. Дата запуска должна быть текущей в timezone
-демо-проекта (`Europe/Moscow`). Проверьте маршруты, карту, объяснения заявок и
-повторный вход после перезагрузки страницы.
-
-Если нужен кабинет `owner`, задайте пароль владельцу после запуска миграций:
+Сохраните напечатанные логин и пароль диспетчера. Войдите в сайт и проверьте
+авторизацию, карту, планирование, обновление страницы. Расчёт планирования
+на 27-е запускайте 27 сентября по московскому времени. Если нужен кабинет
+владельца:
 
 ```bash
 sudo docker compose --env-file .env.demo -f compose.demo.yml exec backend \
   python scripts/set_owner_password.py
 ```
 
-Пароль вводится интерактивно и не попадает в историю команд. Логин — `owner`.
+## Если что-то не работает
 
-## Частые проблемы
-
-- **Сертификат не выдался:** проверьте запись `A`, ошибочную `AAAA`, входящий
-  порт `80` и `sudo docker compose ... logs traefik`.
-- **Backend не стартует:** обычно ещё идёт импорт OSM либо один из геосервисов
-  не прошёл healthcheck. Проверьте `ps` и логи `nominatim`/`valhalla`.
-- **В браузере запросы идут на `localhost:8000`:** во frontend случайно попал
-  `.env` с `VITE_API_URL`. Удалите его и пересоберите frontend.
-- **Пустой интерфейс после входа:** новая база не содержит локальных данных
-  разработчика; выполните команду подготовки демо-набора выше.
-- **Нет памяти при импорте:** убедитесь, что используется московский PBF,
-  поднимается по одному геосервису и настроен swap. Не меняйте PBF при уже
-  созданных томах: существующий импорт сам не заменится.
+- `curl` к `192.168.8.29:8080` не отвечает: проверьте `docker compose ps`,
+  `docker compose logs frontend backend` и `sudo ss -ltnp | grep ':8080'`.
+- Локальный `curl` работает, но NPM выдаёт 502: уточните у провайдера, видит
+  ли их NPM внутренний адрес `192.168.8.29:8080` и какой адрес нужен в поле
+  Forward Hostname/IP.
+- Сертификат не выпускается: проверьте, куда указывает DNS домена, и что
+  входящий 80/443 обслуживает NPM провайдера.
+- Адреса не находятся: проверьте ключ Яндекса командой
+  `check_demo_yandex.py`.
+- В браузере запросы идут на `localhost:8000`: в frontend попал `.env` с
+  `VITE_API_URL`; удалите его и пересоберите frontend.
+- Для обновления выполните `git pull` в **обоих** репозиториях и повторите
+  `sudo ./scripts/demo_up_low_ram.sh`. Первый импорт Valhalla сохраняется в
+  Docker volume.
