@@ -27,6 +27,61 @@ def _cache_key(origin: Coordinate, destination: Coordinate, profile: str) -> str
     return hashlib.sha256(value.encode()).hexdigest()
 
 
+def _deduplicate_coordinates(
+    coordinates: list[Coordinate],
+) -> tuple[list[Coordinate], list[int]]:
+    """Return unique points and a map from each input position to its point.
+
+    Coordinates are rounded in the cache key to six decimals, so use the same
+    precision here. This keeps duplicate geocoding results from producing
+    duplicate Valhalla calls while preserving the original matrix shape.
+    """
+    unique: list[Coordinate] = []
+    by_key: dict[tuple[float, float], int] = {}
+    positions: list[int] = []
+    for coordinate in coordinates:
+        key = (round(coordinate.latitude, 6), round(coordinate.longitude, 6))
+        index = by_key.get(key)
+        if index is None:
+            index = len(unique)
+            by_key[key] = index
+            unique.append(coordinate)
+        positions.append(index)
+    return unique, positions
+
+
+def _expand_matrix(
+    values: list[list[int | None]], positions: list[int]
+) -> list[list[int | None]]:
+    return [[values[source][target] for target in positions] for source in positions]
+
+
+def _limit_missing_pairs(
+    missing: set[tuple[int, int]],
+    coordinates: list[Coordinate],
+    limit: int | None,
+) -> set[tuple[int, int]]:
+    """Keep only the nearest unresolved destinations for each origin.
+
+    Cached values are deliberately not removed: the limit applies only to new
+    Valhalla calls. A missing pair outside the shortlist remains unavailable
+    to the solver, so the returned matrix shape is unchanged.
+    """
+    if limit is None or limit <= 0:
+        return missing
+    result: set[tuple[int, int]] = set()
+    for source in range(len(coordinates)):
+        targets = [target for origin, target in missing if origin == source]
+        targets.sort(
+            key=lambda target: (
+                (coordinates[source].latitude - coordinates[target].latitude) ** 2
+                + (coordinates[source].longitude - coordinates[target].longitude) ** 2
+            )
+        )
+        result.update((source, target) for target in targets[:limit])
+    return result
+
+
 class ValhallaTravelMatrixProvider:
     def __init__(self, session: AsyncSession, config: PlanningServiceConfig):
         self._session = session
@@ -47,6 +102,7 @@ class ValhallaTravelMatrixProvider:
         """
         if profile != "multimodal":
             raise ValueError("Departure-specific pairs are for public transport")
+        coordinates, positions = _deduplicate_coordinates(coordinates)
         size = len(coordinates)
         # The solver must see only real multimodal values. A walking value in
         # this matrix would make a public-transport engineer appear able to
@@ -121,7 +177,12 @@ class ValhallaTravelMatrixProvider:
         source = (
             "VALHALLA_TRANSIT+MOSMETRO" if self._metro.enabled else "VALHALLA_TRANSIT"
         )
-        return TravelMatrix(times, distances, profile, source)
+        return TravelMatrix(
+            _expand_matrix(times, positions),
+            _expand_matrix(distances, positions),
+            profile,
+            source,
+        )
 
     async def get_matrix(
         self,
@@ -131,6 +192,7 @@ class ValhallaTravelMatrixProvider:
     ) -> TravelMatrix:
         if profile == "multimodal":
             raise ValueError("Public transport requires a planning departure date")
+        coordinates, positions = _deduplicate_coordinates(coordinates)
         size = len(coordinates)
         times: list[list[int | None]] = [[None] * size for _ in range(size)]
         distances: list[list[int | None]] = [[None] * size for _ in range(size)]
@@ -163,6 +225,9 @@ class ValhallaTravelMatrixProvider:
                 distances[pair[0]][pair[1]] = int(row.distance_meters)
             else:
                 missing.add(pair)
+        missing = _limit_missing_pairs(
+            missing, coordinates, self._config.matrix_candidate_limit
+        )
 
         block = max(1, self._config.matrix_block_size)
         async with httpx.AsyncClient(
@@ -295,7 +360,12 @@ class ValhallaTravelMatrixProvider:
             )
         if values:
             await self._session.commit()
-        return TravelMatrix(times, distances, profile, "VALHALLA_LOCAL")
+        return TravelMatrix(
+            _expand_matrix(times, positions),
+            _expand_matrix(distances, positions),
+            profile,
+            "VALHALLA_LOCAL",
+        )
 
 
 def _location(coordinate: Coordinate) -> dict[str, float]:

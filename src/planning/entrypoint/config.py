@@ -16,6 +16,7 @@ class PlanningServiceConfig:
     nominatim_viewbox: str
     geoservice_timeout_sec: float
     matrix_block_size: int
+    matrix_candidate_limit: int | None = None
     use_yandex_geocoder: bool = False
     yandex_geocoder_url: str = "https://geocode-maps.yandex.ru"
     yandex_geocoder_api_key: str = ""
@@ -33,6 +34,9 @@ class PlanningServiceConfig:
             nominatim_viewbox=getenv("NOMINATIM_VIEWBOX", "35.0,57.0,40.5,54.0"),
             geoservice_timeout_sec=float(getenv("GEOSERVICE_TIMEOUT_SEC", "15")),
             matrix_block_size=int(getenv("MATRIX_BLOCK_SIZE", "40")),
+            matrix_candidate_limit=(
+                int(value) if (value := getenv("MATRIX_CANDIDATE_LIMIT")) else None
+            ),
             use_yandex_geocoder=_env_flag("USE_YANDEX_GEOCODER"),
             yandex_geocoder_url=getenv(
                 "YANDEX_GEOCODER_URL", "https://geocode-maps.yandex.ru"
