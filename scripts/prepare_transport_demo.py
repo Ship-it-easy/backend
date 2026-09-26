@@ -1,4 +1,4 @@
-"""Create an isolated Moscow demo with all four engineer transport types.
+"""Create an isolated Moscow demo with the three supported engineer transport types.
 
 Run inside the backend container after migrations. The generated login is saved
 in a mode-0600 manifest under /tmp and printed once for the local operator.
@@ -33,7 +33,7 @@ from planning.infrastructure.persistence_sqla.mappings.tables import (
     work_types,
 )
 
-# The points are inside the local Moscow OSM graph and near the imported GTFS.
+# The points are inside the local Moscow OSM graph.
 PROFILES = (
     (
         "CAR",
@@ -62,15 +62,7 @@ PROFILES = (
             ("Преображенская площадь", 55.794706, 37.713076),
         ),
     ),
-    (
-        "PUBLIC_TRANSPORT",
-        "Общественный транспорт",
-        ("ВДНХ", 55.823504, 37.635019),
-        (
-            ("Улица Лётчика Бабушкина", 55.869095, 37.674435),
-            ("Платформа Лось", 55.880069, 37.713399),
-        ),
-    ),
+
 )
 
 

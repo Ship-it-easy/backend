@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from planning.application.errors import ConflictError
 from planning.application.services.dynamic_today_planning import (
     CandidateComparisonTimeout,
     DynamicTodayPlanningService,
@@ -566,7 +567,8 @@ class InProcessPlanningBatchExecutor:
             <= current_block_end
         }
         full_replan = any(
-            item["event_type"] in {"MANUAL", "NIGHTLY"} for item in events
+            item["event_type"] in {"MANUAL", "NIGHTLY", "WORK_TYPE_PRIORITY_CHANGED"}
+            for item in events
         ) or bool(
             lost_engineer_ids
             or cancelled_current_block_engineers
@@ -885,7 +887,19 @@ class InProcessPlanningBatchExecutor:
                     ValhallaTravelMatrixProvider(session, self._config),
                 )
                 operations = SqlaBaselineRetryOperations(session, matrix_factory)
-                result = await operations.run_queued(project_id, planning_run_id)
+                try:
+                    result = await operations.run_queued(project_id, planning_run_id)
+                except ConflictError as error:
+                    # Another worker may finish or exhaust the same retry while
+                    # this task sleeps. These states are already terminal for
+                    # this worker; do not leak a background task exception.
+                    if error.code in {
+                        "BASELINE_RETRY_LIMIT_EXCEEDED",
+                        "BASELINE_RETRY_NOT_ALLOWED",
+                        "BASELINE_RETRY_RUN_NOT_SUCCESSFUL",
+                    }:
+                        return
+                    raise
             if result.get("status") != "FAILED":
                 return
 

@@ -126,10 +126,12 @@ class UpdateWorkTypeInteractor(_CatalogInteractor):
         scoped_project_id: int | None = None,
     ) -> dict[str, Any]:
         project_id = await self._project_id(scoped_project_id, write=True)
+        actor = await self._access.user()
         return await self._repository.update_work_type(
             project_id,
             item_id,
             values,
             qualification_ids,
             equipment_type_ids,
+            actor.id,
         )

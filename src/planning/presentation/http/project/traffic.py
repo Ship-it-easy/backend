@@ -33,7 +33,7 @@ class TrafficStop(BaseModel):
 
 class TrafficRouteRequest(BaseModel):
     departure_at: AwareDatetime
-    profile: Literal["auto", "pedestrian", "bicycle", "multimodal"] = "auto"
+    profile: Literal["auto", "pedestrian", "bicycle"] = "auto"
     stops: list[TrafficStop] = Field(min_length=2, max_length=100)
     include_departure_options: bool = True
 

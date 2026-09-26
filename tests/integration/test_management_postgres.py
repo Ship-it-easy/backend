@@ -44,6 +44,7 @@ from planning.infrastructure.adapters.project_access_repository_sqla import (
 )
 from planning.infrastructure.adapters.project_management_repositories_sqla import (
     SqlaEngineerAccountRepository,
+    SqlaProjectCatalogRepository,
 )
 from planning.infrastructure.adapters.transaction_manager_sqla import (
     SqlAlchemyTransactionManager,
@@ -120,6 +121,69 @@ async def seed_project(session: AsyncSession) -> int:
             .returning(projects.c.id)
         )
     )
+
+
+async def test_work_type_priority_change_enqueues_one_full_replan(
+    pg_engine: AsyncEngine,
+) -> None:
+    async with AsyncSession(pg_engine, expire_on_commit=False) as session:
+        project_id = await seed_project(session)
+        work_type_id = int(
+            await session.scalar(
+                insert(work_types)
+                .values(
+                    project_id=project_id,
+                    code=f"WT-{uuid.uuid4().hex}",
+                    name="Priority work",
+                    active=True,
+                    priority="LOW",
+                )
+                .returning(work_types.c.id)
+            )
+        )
+        job_id = int(
+            await session.scalar(
+                insert(jobs)
+                .values(
+                    project_id=project_id,
+                    internal_code=f"JOB-{uuid.uuid4().hex}",
+                    status="NEW",
+                    address="Test address",
+                    sla_date=date(2030, 1, 1),
+                    work_type_id=work_type_id,
+                )
+                .returning(jobs.c.id)
+            )
+        )
+        await session.commit()
+        catalog = SqlaProjectCatalogRepository(session)
+        changed = await catalog.update_work_type(
+            project_id, work_type_id, {"priority": "HIGH"}, None, None
+        )
+        assert changed["planning_event_state"] == "PENDING"
+        event = (
+            await session.execute(
+                select(planning_events).where(
+                    planning_events.c.id == changed["planning_event_id"]
+                )
+            )
+        ).mappings().one()
+        assert event.event_type == "WORK_TYPE_PRIORITY_CHANGED"
+        assert event.job_ids == [job_id]
+        assert event.event_payload == {
+            "work_type_id": work_type_id,
+            "previous_priority": "LOW",
+            "new_priority": "HIGH",
+        }
+        unchanged = await catalog.update_work_type(
+            project_id, work_type_id, {"priority": "HIGH"}, None, None
+        )
+        assert unchanged["planning_event_id"] is None
+        assert await session.scalar(
+            select(func.count()).select_from(planning_events).where(
+                planning_events.c.project_id == project_id
+            )
+        ) == 1
 
 
 def baseline_config() -> PlanningConfig:

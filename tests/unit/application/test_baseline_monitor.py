@@ -68,6 +68,16 @@ def test_monitor_alerts_when_failed_rate_rises():
     assert "BASELINE_FAILED_RATE_INCREASED" in summarize(current, previous)["alerts"]
 
 
+def test_monitor_separates_missing_road_from_transient_failures():
+    result = summarize(
+        [sample(), sample("FAILED", failure_code="BASELINE_ROUTE_UNAVAILABLE")],
+        [],
+    )
+    assert result["route_unavailable"] == 1
+    assert result["ready_share_route_eligible"] == 1.0
+    assert result["matrix_errors"] == 0
+
+
 def test_duration_percentiles_measure_full_attempt_not_only_fifo_cpu_time():
     started = datetime(2030, 1, 1, tzinfo=timezone.utc)
     result = summarize(

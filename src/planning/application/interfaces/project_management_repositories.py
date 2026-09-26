@@ -39,6 +39,7 @@ class ProjectCatalogRepository(Protocol):
         values: dict[str, Any],
         qualification_ids: list[int] | None,
         equipment_type_ids: list[int] | None,
+        actor_user_id: Any | None = None,
     ) -> dict[str, Any]: ...
 
 

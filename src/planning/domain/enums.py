@@ -24,7 +24,14 @@ class TransportType(StrEnum):
     CAR = "CAR"
     NONE = "NONE"  # Backward-compatible pedestrian value.
     BICYCLE = "BICYCLE"
-    PUBLIC_TRANSPORT = "PUBLIC_TRANSPORT"
+
+    @classmethod
+    def _missing_(cls, value):
+        # Stored batch snapshots may outlive the migration of engineer rows.
+        # Never infer that a former transit rider owns a car.
+        if value == "PUBLIC_TRANSPORT":
+            return cls.NONE
+        return None
 
     @property
     def routing_profile(self) -> str:
@@ -32,7 +39,6 @@ class TransportType(StrEnum):
             self.CAR: "auto",
             self.NONE: "pedestrian",
             self.BICYCLE: "bicycle",
-            self.PUBLIC_TRANSPORT: "multimodal",
         }[self]
 
 

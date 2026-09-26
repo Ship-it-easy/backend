@@ -39,12 +39,22 @@ class WorkTypePatch(NamedPatch):
     qualification_ids: list[int] | None = None
     equipment_type_ids: list[int] | None = None
 
+    def update_values(self) -> dict[str, object]:
+        values = self.model_dump(
+            exclude_unset=True,
+            exclude_none=True,
+            exclude={"qualification_ids", "equipment_type_ids"},
+        )
+        if "required_transport" in self.model_fields_set:
+            values["required_transport"] = self.required_transport
+        return values
+
 
 class EngineerCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
     active: bool = True
-    transport_type: Literal["CAR", "NONE", "BICYCLE", "PUBLIC_TRANSPORT"]
+    transport_type: Literal["CAR", "NONE", "BICYCLE"]
     start_address: str = Field(min_length=1)
     start_latitude: float | None = None
     start_longitude: float | None = None
@@ -61,7 +71,7 @@ class EngineerPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=255)
     active: bool | None = None
-    transport_type: Literal["CAR", "NONE", "BICYCLE", "PUBLIC_TRANSPORT"] | None = None
+    transport_type: Literal["CAR", "NONE", "BICYCLE"] | None = None
     start_address: str | None = Field(default=None, min_length=1)
     start_latitude: float | None = None
     start_longitude: float | None = None

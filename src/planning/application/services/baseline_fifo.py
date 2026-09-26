@@ -23,6 +23,7 @@ from planning.domain.enums import TransportType
 
 BASELINE_ALGORITHM_VERSION = "FIFO_V2"
 BASELINE_TRAVEL_MINUTES = 20
+BaselineArc = tuple[str, float, float, float, float]
 
 
 class BaselineCalculationError(RuntimeError):
@@ -213,6 +214,14 @@ def required_baseline_travel_arcs(
             )
             previous = destination
     return required
+
+
+def baseline_route_unavailable(
+    snapshot: dict[BaselineArc, tuple[int | None, int | None]],
+    required_arcs: set[BaselineArc],
+) -> bool:
+    """Both missing values mean no route in this snapshot, not a partial response."""
+    return any(snapshot.get(arc) == (None, None) for arc in required_arcs)
 
 
 def calculate_fifo_baseline(

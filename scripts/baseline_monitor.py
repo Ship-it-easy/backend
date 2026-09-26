@@ -26,6 +26,7 @@ MATRIX_FAILURES = {
     "BASELINE_DISTANCE_DATA_NOT_READY",
     "BASELINE_TRAVEL_PROVIDER_UNAVAILABLE",
 }
+ROUTE_UNAVAILABLE = "BASELINE_ROUTE_UNAVAILABLE"
 
 
 def percentile(values: list[int | float], rank: float) -> float | None:
@@ -40,6 +41,11 @@ def summarize(rows: list[dict], previous_rows: list[dict]) -> dict:
     statuses = Counter(str(row["status"]) for row in rows)
     previous = Counter(str(row["status"]) for row in previous_rows)
     total = len(rows)
+    eligible = [
+        row for row in rows
+        if row["status"] in {"READY", "FAILED"}
+        and row["failure_code"] != ROUTE_UNAVAILABLE
+    ]
     durations = []
     for row in rows:
         if row["status"] not in {"READY", "FAILED"}:
@@ -121,6 +127,13 @@ def summarize(rows: list[dict], previous_rows: list[dict]) -> dict:
             for row in rows
         ),
         "matrix_errors": sum(row["failure_code"] in MATRIX_FAILURES for row in rows),
+        "route_unavailable": sum(
+            row["failure_code"] == ROUTE_UNAVAILABLE for row in rows
+        ),
+        "ready_share_route_eligible": (
+            sum(row["status"] == "READY" for row in eligible) / len(eligible)
+            if eligible else None
+        ),
         "input_hash_mismatches": hash_mismatches,
         "coverage_mismatch_share": (
             sum(not value for value in comparable) / len(comparable)

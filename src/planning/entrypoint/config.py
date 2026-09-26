@@ -22,11 +22,7 @@ class PlanningServiceConfig:
     yandex_geocoder_api_key: str = ""
     yandex_geocoder_bbox: str = ""
     traffic_model_enabled: bool = True
-    mosmetro_url: str = ""
-    mosmetro_max_access_meters: int = 2500
-    mosmetro_waiting_seconds: int = 180
     baseline_comparison_enabled: bool = True
-    valhalla_transit_use_rail: bool = True
 
     @staticmethod
     def from_env() -> "PlanningServiceConfig":
@@ -46,11 +42,5 @@ class PlanningServiceConfig:
             yandex_geocoder_api_key=getenv("YANDEX_GEOCODER_API_KEY", ""),
             yandex_geocoder_bbox=getenv("YANDEX_GEOCODER_BBOX", ""),
             traffic_model_enabled=_env_flag("TRAFFIC_MODEL_ENABLED", True),
-            mosmetro_url=getenv("MOSMETRO_URL", ""),
-            mosmetro_max_access_meters=int(
-                getenv("MOSMETRO_MAX_ACCESS_METERS", "2500")
-            ),
-            mosmetro_waiting_seconds=int(getenv("MOSMETRO_WAITING_SECONDS", "180")),
             baseline_comparison_enabled=_env_flag("BASELINE_COMPARISON_ENABLED", True),
-            valhalla_transit_use_rail=_env_flag("VALHALLA_TRANSIT_USE_RAIL", True),
         )

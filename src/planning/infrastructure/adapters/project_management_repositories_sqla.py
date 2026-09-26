@@ -258,8 +258,24 @@ class SqlaProjectCatalogRepository(ProjectCatalogRepository):
         values: dict[str, Any],
         qualification_ids: list[int] | None,
         equipment_type_ids: list[int] | None,
+        actor_user_id: Any | None = None,
     ) -> dict[str, Any]:
-        await _belongs(self._session, work_types, item_id, project_id)
+        previous = (
+            (
+                await self._session.execute(
+                    select(work_types)
+                    .where(
+                        work_types.c.id == item_id,
+                        work_types.c.project_id == project_id,
+                    )
+                    .with_for_update()
+                )
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if previous is None:
+            raise ObjectNotFoundError("Object not found")
         await self._validate_requirements(
             project_id,
             qualification_ids or [],
@@ -281,13 +297,48 @@ class SqlaProjectCatalogRepository(ProjectCatalogRepository):
             await self._replace_requirements(
                 item_id, qualification_ids, equipment_type_ids
             )
+            event_id = None
+            if row.priority != previous.priority:
+                affected_job_ids = list(
+                    (
+                        await self._session.scalars(
+                            select(jobs.c.id).where(
+                                jobs.c.project_id == project_id,
+                                jobs.c.work_type_id == item_id,
+                                jobs.c.status == "NEW",
+                            )
+                        )
+                    ).all()
+                )
+                if affected_job_ids:
+                    event_id = await self._session.scalar(
+                        insert(planning_events)
+                        .values(
+                            project_id=project_id,
+                            event_type="WORK_TYPE_PRIORITY_CHANGED",
+                            job_ids=affected_job_ids,
+                            event_payload={
+                                "work_type_id": item_id,
+                                "previous_priority": previous.priority,
+                                "new_priority": row.priority,
+                            },
+                            initiator="USER" if actor_user_id else "SYSTEM",
+                            actor_user_id=actor_user_id,
+                            idempotency_key=f"work-type-priority:{item_id}:{uuid.uuid4()}",
+                            state="PENDING",
+                        )
+                        .returning(planning_events.c.id)
+                    )
             await self._session.commit()
         except IntegrityError as error:
             await self._session.rollback()
             raise ConflictError(
                 "Name already exists in project", code="NAME_EXISTS"
             ) from error
-        return await self._work_type_result(row)
+        result = await self._work_type_result(row)
+        result["planning_event_id"] = event_id
+        result["planning_event_state"] = "PENDING" if event_id else None
+        return result
 
     async def _validate_requirements(
         self,

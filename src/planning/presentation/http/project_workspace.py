@@ -199,10 +199,7 @@ async def work_type_patch(
     body: WorkTypePatch,
     interactor: FromDishka[UpdateWorkTypeInteractor],
 ) -> dict[str, Any]:
-    values = body.model_dump(
-        exclude_none=True,
-        exclude={"qualification_ids", "equipment_type_ids"},
-    )
+    values = body.update_values()
     return await interactor(
         item_id,
         values,

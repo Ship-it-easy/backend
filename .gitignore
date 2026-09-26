@@ -172,6 +172,5 @@ todo/
 
 # Local database snapshots made before migrations
 /db-backups/
-
-# Local GTFS schedules are large and refreshed outside Git.
+# Historical local GTFS data is not used by the road-only stack.
 /data/gtfs/

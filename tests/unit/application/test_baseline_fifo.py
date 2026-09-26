@@ -9,6 +9,7 @@ from planning.application.services.baseline_fifo import (
     BaselineCalculationError,
     _hash,
     baseline_applicable,
+    baseline_route_unavailable,
     calculate_fifo_baseline,
     compare_with_optimized,
     not_applicable_result,
@@ -92,12 +93,6 @@ async def test_fifo_uses_the_engineers_transport_matrix_after_main_merge(transpo
             assert requested_profile == profile
             return TravelMatrix(matrix(2, 60), matrix(2, 123), profile, "TEST")
 
-        async def get_matrix_for_departure(
-            self, coordinates, requested_profile, departure
-        ):
-            assert requested_profile == "multimodal"
-            assert departure.date() == planning.planning_date
-            return TravelMatrix(matrix(2, 60), matrix(2, 123), profile, "TEST")
 
     travel = await prepare_travel_matrices_for_jobs(
         planning, planning.baseline_jobs, Provider(), required_arcs=required
@@ -147,6 +142,31 @@ async def test_fifo_fetches_when_required_arc_is_not_cached():
             UnavailableProvider(),
             required_arcs=required,
         )
+
+
+@pytest.mark.asyncio
+async def test_fifo_resolves_required_arc_skipped_by_solver_shortlist():
+    planning = baseline_data([job(1)], [engineer()])
+    required = required_baseline_travel_arcs(planning)
+    required_arc = next(iter(required))
+    planning.travel_snapshot[required_arc] = (None, None)
+
+    class Provider:
+        async def get_matrix(self, *args, **kwargs):
+            raise AssertionError("FIFO must request its mandatory arcs")
+
+        async def get_required_matrix(
+            self, coordinates, profile, cache_ttl_days, required_arcs
+        ):
+            assert required_arcs == required
+            assert profile == required_arc[0]
+            return TravelMatrix(matrix(2, 60), matrix(2, 123), profile, "TEST")
+
+    travel = await prepare_travel_matrices_for_jobs(
+        planning, planning.baseline_jobs, Provider(), required_arcs=required
+    )
+    assert planning.travel_snapshot[required_arc] == (60, 123)
+    assert calculate_fifo_baseline(planning, travel.meters).total_distance_meters == 123
 
 
 def test_fifo_100_jobs_20_engineers_p95_under_two_seconds():
@@ -427,6 +447,14 @@ def test_fifo_fails_when_a_required_distance_arc_is_missing():
     with pytest.raises(BaselineCalculationError, match="Distance is missing") as error:
         calculate_fifo_baseline(baseline_data([job(1)], [engineer()]), {"auto": meters})
     assert error.value.code == "BASELINE_DISTANCE_DATA_NOT_READY"
+
+
+def test_fifo_distinguishes_no_route_from_partial_distance_data():
+    planning = baseline_data([job(1)], [engineer()])
+    required = required_baseline_travel_arcs(planning)
+    arc = next(iter(required))
+    assert baseline_route_unavailable({arc: (None, None)}, required)
+    assert not baseline_route_unavailable({arc: (120, None)}, required)
 
 
 def test_comparison_suppresses_winner_when_assigned_job_sets_differ():

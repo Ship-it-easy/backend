@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from planning.application.errors import ConflictError, ObjectNotFoundError
 from planning.application.services.baseline_fifo import (
     BaselineCalculationError,
+    baseline_route_unavailable,
     calculate_fifo_baseline,
     compare_with_optimized,
     failed_result,
@@ -118,6 +119,11 @@ class SqlaBaselineRetryOperations:
                 provider,
                 required_arcs=required_arcs,
             )
+            if baseline_route_unavailable(data.travel_snapshot, required_arcs):
+                raise BaselineCalculationError(
+                    "BASELINE_ROUTE_UNAVAILABLE",
+                    "Required FIFO arc is unavailable in the captured travel snapshot",
+                )
             logger.info(
                 "baseline_distance_calculated",
                 extra={
@@ -242,7 +248,8 @@ class SqlaBaselineRetryOperations:
             "failure_message": message,
             "next_retry_at": (
                 datetime.now(timezone.utc) + RETRY_DELAY
-                if int(context["attempt_count"]) < MAX_BASELINE_ATTEMPTS
+                if code != "BASELINE_ROUTE_UNAVAILABLE"
+                and int(context["attempt_count"]) < MAX_BASELINE_ATTEMPTS
                 else None
             ),
         }
@@ -557,7 +564,8 @@ class SqlaBaselineRetryOperations:
                 finished_at=datetime.now(timezone.utc),
                 next_retry_at=(
                     datetime.now(timezone.utc) + RETRY_DELAY
-                    if attempt_count < MAX_BASELINE_ATTEMPTS
+                    if failure.failure_code != "BASELINE_ROUTE_UNAVAILABLE"
+                    and attempt_count < MAX_BASELINE_ATTEMPTS
                     else None
                 ),
                 result_payload=_jsonable(asdict(failure)),
@@ -673,6 +681,10 @@ def _safe_failure_message(code: str) -> str:
         ),
         "BASELINE_DISTANCE_DATA_NOT_READY": (
             "Дорожные расстояния для контрольного плана ещё не готовы"
+        ),
+        "BASELINE_ROUTE_UNAVAILABLE": (
+            "Нужный участок контрольного маршрута отсутствует "
+            "в сохранённом дорожном снимке"
         ),
         "BASELINE_TRAVEL_PROVIDER_UNAVAILABLE": ("Дорожный сервис временно недоступен"),
         "BASELINE_VALIDATION_FAILED": (

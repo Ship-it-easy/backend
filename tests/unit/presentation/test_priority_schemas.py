@@ -1,7 +1,11 @@
 import pytest
 from pydantic import ValidationError
 
-from planning.presentation.http.project.schemas import JobCreate, WorkTypeCreate
+from planning.presentation.http.project.schemas import (
+    JobCreate,
+    WorkTypeCreate,
+    WorkTypePatch,
+)
 
 
 @pytest.mark.parametrize("priority", ["CRITICAL", "HIGH", "MEDIUM", "LOW"])
@@ -23,3 +27,15 @@ def test_job_does_not_accept_its_own_priority() -> None:
             work_type_id=1,
             priority="CRITICAL",
         )
+
+
+def test_work_type_patch_can_clear_required_transport() -> None:
+    assert WorkTypePatch(required_transport=None).update_values() == {
+        "required_transport": None
+    }
+    assert WorkTypePatch(name="Диагностика").update_values() == {
+        "name": "Диагностика"
+    }
+    assert WorkTypePatch(required_transport="CAR").update_values() == {
+        "required_transport": "CAR"
+    }

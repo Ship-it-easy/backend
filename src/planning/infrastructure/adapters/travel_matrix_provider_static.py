@@ -13,7 +13,7 @@ class StaticTravelMatrixProvider:
         profile: str,
         cache_ttl_days: int | None = None,
     ) -> TravelMatrix:
-        speed_kmh = {"auto": 25, "pedestrian": 5, "bicycle": 15, "multimodal": 20}[
+        speed_kmh = {"auto": 25, "pedestrian": 5, "bicycle": 15}[
             profile
         ]
         times: list[list[int | None]] = []

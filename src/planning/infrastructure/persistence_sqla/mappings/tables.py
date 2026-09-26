@@ -104,6 +104,11 @@ work_types = Table(
         "priority IN ('CRITICAL','HIGH','MEDIUM','LOW')",
         name="work_type_priority_valid",
     ),
+    CheckConstraint(
+        "required_transport IS NULL OR "
+        "required_transport IN ('CAR','NONE','BICYCLE')",
+        name="transport_valid",
+    ),
 )
 Index(
     "uq_work_types_project_name_ci",
@@ -279,6 +284,9 @@ engineers = Table(
     Column("internal_code", String(64), nullable=False),
     Column("active", Boolean, nullable=False, server_default="true"),
     Column("transport_type", String(16), nullable=False),
+    CheckConstraint(
+        "transport_type IN ('CAR','NONE','BICYCLE')", name="transport_valid"
+    ),
     Column("start_address", Text),
     Column("start_latitude", Numeric(9, 6)),
     Column("start_longitude", Numeric(9, 6)),

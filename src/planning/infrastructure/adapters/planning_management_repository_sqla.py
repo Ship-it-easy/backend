@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import func, insert, select, update
@@ -101,7 +101,9 @@ class SqlaPlanningManagementRepository(PlanningManagementRepository):
             .where(
                 engineers.c.project_id == project_id,
                 engineers.c.active.is_(True),
-                engineer_schedules.c.work_date == planning_date,
+                engineer_schedules.c.work_date.between(
+                    planning_date, planning_date + timedelta(days=6)
+                ),
             )
         )
         checks = {

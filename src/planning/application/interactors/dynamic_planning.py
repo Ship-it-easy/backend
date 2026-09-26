@@ -235,7 +235,7 @@ class GetPlanningBoardInteractor:
             ),
             (
                 "SHIFTS_MISSING",
-                "Нет инженеров со сменой на текущую дату",
+                "Нет инженеров со сменой в ближайшие семь дней",
                 readiness.has_shifts,
                 "engineers",
             ),

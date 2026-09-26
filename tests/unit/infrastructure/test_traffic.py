@@ -54,28 +54,6 @@ def trip(seconds=600, road="МКАД", points=None):
     }
 
 
-def test_transit_maneuver_preserves_route_and_stops():
-    route = trip(600)
-    route["legs"][0]["maneuvers"][0].update(
-        travel_mode="transit",
-        travel_type="tram",
-        transit_info={
-            "short_name": "37",
-            "transit_stops": [{"name": "Каланчёвская"}, {"name": "МЭИ"}],
-        },
-    )
-    segment = evaluate_trip(
-        route, datetime(2026, 9, 25, 15, tzinfo=MOSCOW), "multimodal"
-    )["segments"][0]
-    assert segment["travel_mode"] == "transit"
-    assert segment["travel_type"] == "tram"
-    assert segment["transit"] == {
-        "route": "37",
-        "from_stop": "Каланчёвская",
-        "to_stop": "МЭИ",
-    }
-
-
 def test_profiles_are_complete_and_explicitly_estimates():
     table = profile_table(date(2026, 9, 23))
     assert table["quality"] == "uncalibrated_estimate"

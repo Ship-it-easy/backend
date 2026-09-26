@@ -205,92 +205,6 @@ def refine_district_times_for_routes(data, travel, result):
     return RoutingMatrices(minutes, seconds, meters)
 
 
-async def refine_transit_times_for_routes(
-    data: PlanningInput,
-    travel: RoutingMatrices,
-    result,
-    matrix_provider: TravelMatrixProvider,
-    cache: dict,
-) -> RoutingMatrices:
-    """Check selected transit arcs at the departures in the solved timetable."""
-    if "multimodal" not in travel.minutes:
-        return travel
-    dated_provider = getattr(matrix_provider, "get_matrix_for_departure", None)
-    if dated_provider is None:
-        return travel
-
-    minutes = {
-        profile: [row[:] for row in values]
-        for profile, values in travel.minutes.items()
-    }
-    seconds = {
-        profile: [row[:] for row in values]
-        for profile, values in travel.seconds.items()
-    }
-    meters = {
-        profile: [row[:] for row in values] for profile, values in travel.meters.items()
-    }
-    job_index = {job.id: index for index, job in enumerate(data.jobs)}
-    engineer_index = {
-        engineer.id: index for index, engineer in enumerate(data.engineers)
-    }
-    coordinates = [job.coordinate for job in data.jobs] + [
-        engineer.coordinate for engineer in data.engineers
-    ]
-    # Multiple engineers can use the same matrix cell at different times. The
-    # conservative maximum keeps the static solver timetable feasible for both.
-    selected: dict[tuple[int, int], tuple[int | None, int | None]] = {}
-    for route in result.routes:
-        engineer_position = engineer_index[route.engineer_id]
-        engineer = data.engineers[engineer_position]
-        if TransportType(engineer.transport_type) != TransportType.PUBLIC_TRANSPORT:
-            continue
-        origin = len(data.jobs) + engineer_position
-        departure = route.planned_start
-        for route_job in route.jobs:
-            destination = job_index[route_job.job_id]
-            first, second = coordinates[origin], coordinates[destination]
-            key = (
-                first.latitude,
-                first.longitude,
-                second.latitude,
-                second.longitude,
-                departure,
-            )
-            if key not in cache:
-                pair = await dated_provider([first, second], "multimodal", departure)
-                duration = pair.travel_time_seconds[0][1]
-                distance = pair.distance_meters[0][1]
-                if (duration is None) != (distance is None) or any(
-                    not isinstance(value, int) or value < 0
-                    for value in (duration, distance)
-                    if value is not None
-                ):
-                    raise RuntimeError("DISTANCE_DATA_NOT_READY")
-                cache[key] = (duration, distance)
-            actual = cache[key]
-            previous = selected.get((origin, destination))
-            if previous is None:
-                selected[(origin, destination)] = actual
-            elif actual[0] is None or previous[0] is None:
-                selected[(origin, destination)] = (None, None)
-            else:
-                selected[(origin, destination)] = (
-                    max(previous[0], actual[0]),
-                    max(previous[1], actual[1]),
-                )
-            departure = route_job.planned_finish
-            origin = destination
-
-    for (origin, destination), (duration, distance) in selected.items():
-        seconds["multimodal"][origin][destination] = duration
-        minutes["multimodal"][origin][destination] = (
-            math.ceil(duration / 60) if duration is not None else None
-        )
-        meters["multimodal"][origin][destination] = distance
-    return RoutingMatrices(minutes, seconds, meters)
-
-
 async def _load_snapshot_matrices(
     data: PlanningInput,
     coordinates: list[Coordinate],
@@ -300,19 +214,7 @@ async def _load_snapshot_matrices(
 ) -> dict[str, TravelMatrix]:
     result = {}
     for profile in sorted(profiles):
-        departure = datetime.combine(
-            data.planning_date, time.min, ZoneInfo(data.timezone)
-        ) + timedelta(
-            minutes=min(
-                e.shift_start_min
-                for e in data.engineers
-                if TransportType(e.transport_type).routing_profile == profile
-            )
-        )
-        # Transit schedules must not leak between planning days in a batch.
-        snapshot_profile = (
-            f"{profile}:{departure.isoformat()}" if profile == "multimodal" else profile
-        )
+        snapshot_profile = profile
         keys = [
             [
                 (snapshot_profile, a.latitude, a.longitude, b.latitude, b.longitude)
@@ -330,13 +232,22 @@ async def _load_snapshot_matrices(
                 if (profile, *key[1:]) in required_arcs
             }
         )
-        if any(key not in data.travel_snapshot for key in needed):
+        if any(
+            key not in data.travel_snapshot
+            or (required_arcs is not None and None in data.travel_snapshot[key])
+            for key in needed
+        ):
             try:
-                dated_provider = getattr(
-                    matrix_provider, "get_matrix_for_departure", None
+                get_required_matrix = getattr(
+                    matrix_provider, "get_required_matrix", None
                 )
-                if profile == "multimodal" and dated_provider is not None:
-                    matrix = await dated_provider(coordinates, profile, departure)
+                if required_arcs is not None and get_required_matrix is not None:
+                    matrix = await get_required_matrix(
+                        coordinates,
+                        profile,
+                        data.config.travel_cache_ttl_days,
+                        required_arcs,
+                    )
                 else:
                     matrix = await matrix_provider.get_matrix(
                         coordinates,
@@ -360,13 +271,16 @@ async def _load_snapshot_matrices(
                         continue
                     # Все кандидаты события используют первое полученное значение
                     # пары, даже если следующий запрос содержит другие точки.
-                    data.travel_snapshot.setdefault(
-                        key,
-                        (
-                            matrix.travel_time_seconds[i][j],
-                            matrix.distance_meters[i][j],
-                        ),
+                    fresh = (
+                        matrix.travel_time_seconds[i][j],
+                        matrix.distance_meters[i][j],
                     )
+                    if key not in data.travel_snapshot or (
+                        None in data.travel_snapshot[key] and None not in fresh
+                    ):
+                        # A skipped candidate is not a confirmed no-route.
+                        # Replace incomplete cells only with a verified pair.
+                        data.travel_snapshot[key] = fresh
         result[profile] = TravelMatrix(
             [
                 [data.travel_snapshot[key][0] if key in needed else None for key in row]
