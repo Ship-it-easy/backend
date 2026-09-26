@@ -1,10 +1,12 @@
 import logging
+import time as monotonic_time
 from datetime import date, datetime, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from planning.application.access import ProjectAccess
 from planning.application.errors import ConflictError, ObjectNotFoundError
+from planning.application.interfaces.baseline_retry import BaselineRetryOperations
 from planning.application.interfaces.dynamic_planning_repository import (
     DynamicPlanningRepository,
 )
@@ -307,6 +309,135 @@ class GetPlanningBoardDayInteractor:
             project_id,
             result.get("plan_version_id"),
             planning_date,
+        )
+        return result
+
+
+class GetPlanningBaselineComparisonInteractor:
+    def __init__(self, access: ProjectAccess, repository: DynamicPlanningRepository):
+        self._access = access
+        self._repository = repository
+
+    async def __call__(
+        self,
+        planning_date: date,
+        scoped_project_id: int | None = None,
+        plan_version_id: int | None = None,
+        *,
+        log_viewed: bool = True,
+    ) -> dict[str, Any]:
+        started = monotonic_time.perf_counter()
+        if scoped_project_id is None:
+            _, project_id = await self._access.dispatcher()
+        else:
+            project_id = scoped_project_id
+            await self._access.project(project_id)
+        result = await self._repository.get_baseline_comparison(
+            project_id, planning_date
+        )
+        if (
+            plan_version_id is not None
+            and result.get("plan_version_id") != plan_version_id
+        ):
+            raise ConflictError(
+                "The current plan version changed",
+                code="BASELINE_VERSION_CHANGED",
+            )
+        if log_viewed:
+            logger.info(
+                "planning_comparison_viewed",
+                extra={
+                    "project_id": project_id,
+                    "planning_run_id": result.get("planning_run_id"),
+                    "planning_date": planning_date.isoformat(),
+                    "plan_version": result.get("plan_version_id"),
+                    "algorithm_version": (result.get("algorithm") or {}).get(
+                        "baseline"
+                    ),
+                    "input_hash": result.get("input_hash"),
+                    "duration_ms": int(
+                        (monotonic_time.perf_counter() - started) * 1000
+                    ),
+                    "jobs_count": result.get("input_jobs_count"),
+                    "engineers_count": result.get("input_engineers_count"),
+                    "status": result.get("status"),
+                    "coverage_comparable": result.get("coverage_comparable"),
+                },
+            )
+        return result
+
+    async def record_engineers_expanded(
+        self,
+        planning_date: date,
+        planning_run_id: int,
+        scoped_project_id: int | None = None,
+        plan_version_id: int | None = None,
+    ) -> dict[str, str]:
+        started = monotonic_time.perf_counter()
+        result = await self(
+            planning_date,
+            scoped_project_id,
+            plan_version_id,
+            log_viewed=False,
+        )
+        if (
+            result.get("status") != "READY"
+            or result.get("planning_run_id") != planning_run_id
+        ):
+            raise ConflictError(
+                "The comparison changed before expansion",
+                code="BASELINE_VERSION_CHANGED",
+            )
+        logger.info(
+            "planning_comparison_engineers_expanded",
+            extra={
+                "project_id": result.get("project_id"),
+                "planning_run_id": planning_run_id,
+                "planning_date": planning_date.isoformat(),
+                "plan_version": result.get("plan_version_id"),
+                "algorithm_version": (result.get("algorithm") or {}).get(
+                    "baseline"
+                ),
+                "input_hash": result.get("input_hash"),
+                "duration_ms": int(
+                    (monotonic_time.perf_counter() - started) * 1000
+                ),
+                "jobs_count": result.get("input_jobs_count"),
+                "engineers_count": result.get("input_engineers_count"),
+                "status": result.get("status"),
+                "coverage_comparable": result.get("coverage_comparable"),
+            },
+        )
+        return {"status": "RECORDED"}
+
+
+class RetryPlanningBaselineInteractor:
+    def __init__(
+        self,
+        access: ProjectAccess,
+        operations: BaselineRetryOperations,
+    ):
+        self._access = access
+        self._operations = operations
+
+    async def __call__(
+        self,
+        planning_run_id: int,
+        scoped_project_id: int | None = None,
+    ) -> dict[str, Any]:
+        if scoped_project_id is None:
+            _, project_id = await self._access.dispatcher()
+        else:
+            project_id = scoped_project_id
+            await self._access.project(project_id, write=True)
+        result = await self._operations.retry(project_id, planning_run_id)
+        logger.info(
+            "planning_baseline_retry_completed project_id=%s "
+            "planning_run_id=%s status=%s attempt_count=%s",
+            project_id,
+            planning_run_id,
+            result.get("status"),
+            result.get("attempt_count"),
         )
         return result
 

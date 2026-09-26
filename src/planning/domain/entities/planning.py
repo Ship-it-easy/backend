@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
 
+from planning.domain.entities.baseline import BaselineComparison, BaselinePlanResult
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job, UnassignedJob
 
@@ -97,6 +98,7 @@ class PlanningInput:
         tuple[str, float, float, float, float], tuple[int | None, int | None]
     ] = field(default_factory=dict, repr=False)
     solve_deadline_monotonic: float | None = None
+    baseline_jobs: list[Job] = field(default_factory=list)
 
 
 @dataclass
@@ -115,3 +117,8 @@ class PlanningResult:
     )
     distance_matrices: dict[str, list[list[int | None]]] = field(default_factory=dict)
     objective_metrics: dict[str, Any] = field(default_factory=dict)
+    baseline_result: BaselinePlanResult | None = None
+    baseline_comparison: BaselineComparison | None = None
+    baseline_distance_matrices: dict[str, list[list[int | None]]] = field(
+        default_factory=dict
+    )

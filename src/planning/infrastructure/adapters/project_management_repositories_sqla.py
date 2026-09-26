@@ -1146,6 +1146,7 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
         }
         valid: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
+        received_at = datetime.now(timezone.utc)
         for number, values in enumerate(rows, start=2):
             work_type = by_key.get(
                 str(values.get("work_type") or "").strip().casefold()
@@ -1162,6 +1163,8 @@ class SqlaProjectJobsRepository(ProjectJobsRepository):
                     "external_id": values.get("external_id") or None,
                     "internal_code": _code("JOB"),
                     "status": "NEW",
+                    "received_at": received_at,
+                    "ingest_sequence": number - 1,
                     "address": values["address"],
                     "latitude": values.get("latitude"),
                     "longitude": values.get("longitude"),

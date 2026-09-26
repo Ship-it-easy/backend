@@ -86,6 +86,12 @@ EXPECTED_ROUTES = {
     ("POST", "/api/project/planning/events/manual"),
     ("GET", "/api/project/planning/events/{event_id}"),
     ("GET", "/api/project/planning/current"),
+    ("GET", "/api/project/planning/current/days/{planning_date}/comparison"),
+    (
+        "POST",
+        "/api/project/planning/current/days/{planning_date}/comparison/engineers-expanded",
+    ),
+    ("POST", "/api/project/planning/runs/{planning_run_id}/baseline/retry"),
     ("GET", "/api/project/planning/versions"),
     ("GET", "/api/project/planning/versions/{version_id}"),
     ("POST", "/api/project/planning/runs/{run_id}/publish"),

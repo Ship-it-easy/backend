@@ -102,3 +102,48 @@ async def test_overflow_stops_without_changing_objective(
 
     with pytest.raises(RuntimeError, match="OBJECTIVE_RANGE_OVERFLOW"):
         await OrToolsPlanningSolver(_MatrixProvider()).solve(data)
+
+
+async def test_baseline_feature_flag_skips_sidecar_calculation() -> None:
+    data = PlanningInput(
+        project_id=1,
+        planning_date=date(2026, 9, 21),
+        timezone="UTC",
+        config=_config(),
+        jobs=[],
+        engineers=[],
+        equipment_units={},
+        pre_unassigned=[],
+        input_jobs_count=0,
+        sla_critical_job_ids=frozenset(),
+        snapshot={},
+    )
+
+    result = await OrToolsPlanningSolver(
+        _MatrixProvider(), baseline_comparison_enabled=False
+    ).solve(data)
+
+    assert result.baseline_result is None
+    assert result.baseline_comparison is None
+
+
+async def test_baseline_is_queued_without_blocking_solver_result() -> None:
+    data = PlanningInput(
+        project_id=1,
+        planning_date=date(2026, 9, 21),
+        timezone="UTC",
+        config=_config(),
+        jobs=[],
+        engineers=[],
+        equipment_units={},
+        pre_unassigned=[],
+        input_jobs_count=0,
+        sla_critical_job_ids=frozenset(),
+        snapshot={"snapshot_time": "2026-09-20T00:00:00Z"},
+    )
+
+    result = await OrToolsPlanningSolver(_MatrixProvider()).solve(data)
+
+    assert result.baseline_result is not None
+    assert result.baseline_result.status == "PENDING"
+    assert result.baseline_comparison is None

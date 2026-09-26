@@ -1133,6 +1133,9 @@ class JobImportService:
             .values(status="APPLYING")
         )
         inserted = []
+        # FIFO starts when the package reached the server, not when a user
+        # eventually confirms applying an already validated import.
+        received_at = batch["created_at"]
         for row in rows:
             job_id = await self.session.scalar(
                 insert(jobs)
@@ -1140,6 +1143,8 @@ class JobImportService:
                     project_id=project_id,
                     import_batch_id=batch_id,
                     import_row_number=row["row_number"],
+                    received_at=received_at,
+                    ingest_sequence=max(1, int(row["row_number"]) - 1),
                     external_id=None,
                     internal_code=f"JOB-{uuid.uuid4().hex[:12].upper()}",
                     status="NEW",

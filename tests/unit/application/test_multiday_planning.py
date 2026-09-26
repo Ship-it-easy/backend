@@ -1,19 +1,29 @@
-from dataclasses import replace
-from datetime import date, datetime, timezone
+from dataclasses import asdict, replace
+from datetime import date, datetime, time, timedelta, timezone
 
+import pytest
+
+from planning.application.services.baseline_fifo import pending_result
 from planning.application.services.future_opportunities import (
     future_opportunity,
     permanent_issue,
     priority_group,
 )
 from planning.application.services.multi_day_planning import (
+    MultiDayPlanningService,
     _enforce_sla_hierarchy,
     _order_for_daily_limit,
 )
 from planning.domain.entities.coordinate import Coordinate
 from planning.domain.entities.engineer import Engineer
 from planning.domain.entities.job import Job
-from planning.domain.entities.planning import PlanningConfig, PlanningInput
+from planning.domain.entities.planning import (
+    PlanningConfig,
+    PlanningInput,
+    PlanningResult,
+    Route,
+    RouteJob,
+)
 from planning.domain.enums import TransportType
 from planning.infrastructure.adapters.planning_solver_ortools import _objective_ranges
 
@@ -88,6 +98,198 @@ def raw_job(**overrides) -> dict:
     }
     value.update(overrides)
     return value
+
+
+@pytest.mark.asyncio
+async def test_seven_day_cascade_keeps_independent_baseline_for_each_solver_run():
+    first_day = date(2026, 9, 27)
+    schedule_days = [first_day + timedelta(days=offset) for offset in range(7)]
+    created_at = datetime(2026, 9, 26, 7, tzinfo=timezone.utc)
+    batch_snapshot = {
+        "project": {"timezone": "UTC"},
+        "config": asdict(config(max_jobs_per_run=1)),
+        "jobs": [
+            {
+                **raw_job(id=job_id, sla_date=first_day.isoformat()),
+                "created_at": created_at.isoformat(),
+                "received_at": created_at.isoformat(),
+                "priority": "LOW",
+            }
+            for job_id in range(1, 8)
+        ],
+        "engineers": [
+            {
+                "id": 7,
+                "transport_type": "CAR",
+                "start_address": "base",
+                "start_latitude": 58.0,
+                "start_longitude": 56.0,
+                "created_at": created_at.isoformat(),
+            }
+        ],
+        "schedules": [
+            {
+                "engineer_id": 7,
+                "work_date": day.isoformat(),
+                "shift_start": "08:00:00",
+                "shift_end": "10:00:00",
+            }
+            for day in schedule_days
+        ],
+        "engineer_qualifications": {"7": [3]},
+        "required_qualifications": {"9": [3]},
+        "required_equipment": {"9": []},
+        "equipment_units": {},
+    }
+
+    class Repository:
+        def __init__(self):
+            self.saved = []
+            self.finished = None
+
+        async def load_for_execution(self, batch_id):
+            return {
+                "status": "CREATED",
+                "project_id": 1,
+                "input_snapshot": batch_snapshot,
+                "effective_start_date": first_day,
+                "maximum_horizon_end": schedule_days[-1],
+                "initiated_by_user_id": None,
+            }
+
+        async def mark_batch_status(self, *args):
+            pass
+
+        async def should_stop(self, *args):
+            return False
+
+        async def create_days(self, *args):
+            pass
+
+        async def mark_day_running(self, *args):
+            pass
+
+        async def create_daily_run(self, batch_id, day, *args):
+            return len(self.saved) + 1
+
+        async def mark_daily_run_running(self, *args):
+            pass
+
+        async def save_day_result(self, batch_id, run_id, data, result, decisions):
+            assert result.baseline_result is not None
+            assert result.baseline_result.status == "PENDING"
+            self.saved.append(
+                (run_id, data.planning_date, result.baseline_result.input_hash)
+            )
+            return {result.routes[0].jobs[0].job_id}
+
+        async def validate_terminal_state(self, *args):
+            return []
+
+        async def finish_batch(self, batch_id, status, reason, remaining, metrics):
+            self.finished = (status, reason, metrics)
+
+    class Normalizer:
+        async def normalize(self, project_id, planning_date, timezone_name, source):
+            jobs = [
+                Job(
+                    id=int(item["id"]),
+                    sla_date=item["sla_date"],
+                    duration_min=60,
+                    coordinate=Coordinate(58.0, 56.0),
+                    window_start_min=480,
+                    window_end_min=960,
+                    required_transport=TransportType.CAR,
+                    required_qualifications=frozenset({3}),
+                    required_equipment=frozenset(),
+                    created_at=item["created_at"],
+                    received_at=item["received_at"],
+                )
+                for item in source["jobs"]
+            ]
+            engineer = Engineer(
+                id=7,
+                transport_type=TransportType.CAR,
+                coordinate=Coordinate(58.0, 56.0),
+                shift_start_min=480,
+                shift_end_min=600,
+                qualifications=frozenset({3}),
+                created_at=created_at,
+            )
+            return PlanningInput(
+                project_id=project_id,
+                planning_date=planning_date,
+                timezone=timezone_name,
+                config=config(**source["config"]),
+                jobs=jobs,
+                engineers=[engineer],
+                equipment_units={},
+                pre_unassigned=[],
+                input_jobs_count=len(jobs),
+                sla_critical_job_ids=frozenset(job.id for job in jobs),
+                snapshot={
+                    "snapshot_time": created_at,
+                    "project_id": project_id,
+                    "planning_date": planning_date,
+                    "timezone": timezone_name,
+                    "jobs": [asdict(job) for job in jobs],
+                    "engineers": [asdict(engineer)],
+                    "baseline_earliest_shift_start_min": 480,
+                },
+                baseline_jobs=jobs,
+            )
+
+    class Solver:
+        async def solve(self, data):
+            selected = data.jobs[0]
+            start = datetime.combine(data.planning_date, time(8), timezone.utc)
+            finish = start + timedelta(minutes=60)
+            route = Route(
+                engineer_id=7,
+                planned_start=start,
+                planned_finish=finish,
+                total_travel_min=0,
+                total_service_min=60,
+                total_waiting_min=0,
+                jobs=[RouteJob(selected.id, 1, start, start, finish, 0, 0, 0)],
+                equipment_type_ids=set(),
+            )
+            return PlanningResult(
+                routes=[route],
+                unassigned=[],
+                solver_status="OPTIMAL",
+                objective=0,
+                drop_cost=0,
+                travel_cost=0,
+                solver_time_ms=1,
+                baseline_result=pending_result(data),
+            )
+
+    class SolverFactory:
+        def create(self, provider):
+            return Solver()
+
+    class DailyValidator:
+        def validate(self, data, result):
+            return []
+
+    class BatchValidator:
+        def validate_day(self, *args):
+            return []
+
+        def validate(self, *args):
+            return []
+
+    repository = Repository()
+    service = MultiDayPlanningService(
+        repository, Normalizer(), SolverFactory(), DailyValidator(), BatchValidator()
+    )
+    await service.execute(1)
+
+    assert [day for _, day, _ in repository.saved] == schedule_days
+    assert len({run_id for run_id, _, _ in repository.saved}) == 7
+    assert len({input_hash for _, _, input_hash in repository.saved}) == 7
+    assert repository.finished[0:2] == ("SUCCESS", "ALL_ELIGIBLE_ASSIGNED")
 
 
 def test_future_opportunity_counts_engineer_day_pairs_and_maps_bonus() -> None:
@@ -190,9 +392,7 @@ def test_primary_penalty_is_greater_than_all_reserve_penalties() -> None:
     ordered = _enforce_sla_hierarchy(ordered, decisions, data)
 
     assert ordered[0].id == 1
-    assert ordered[0].drop_penalty > sum(
-        item.drop_penalty for item in ordered[1:]
-    )
+    assert ordered[0].drop_penalty > sum(item.drop_penalty for item in ordered[1:])
 
 
 def test_sla_hierarchy_normalizes_a_common_penalty_scale() -> None:

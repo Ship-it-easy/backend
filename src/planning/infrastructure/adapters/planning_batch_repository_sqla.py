@@ -1481,6 +1481,8 @@ class SqlaPlanningBatchRepository:
                         jobs.c.time_window_end,
                         jobs.c.work_type_id,
                         jobs.c.service_duration_min,
+                        jobs.c.received_at,
+                        jobs.c.ingest_sequence,
                         jobs.c.created_at,
                         jobs.c.updated_at,
                         work_types.c.priority.label("priority"),
@@ -1506,6 +1508,7 @@ class SqlaPlanningBatchRepository:
                         engineers.c.start_address,
                         engineers.c.start_latitude,
                         engineers.c.start_longitude,
+                        engineers.c.created_at,
                         engineers.c.updated_at,
                     )
                     .where(
@@ -1658,7 +1661,15 @@ def _snapshot_hash(snapshot: dict[str, Any]) -> str:
 def _jsonable(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _jsonable(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, (set, frozenset)):
+        items = [_jsonable(item) for item in value]
+        return sorted(
+            items,
+            key=lambda item: json.dumps(
+                item, sort_keys=True, separators=(",", ":")
+            ),
+        )
+    if isinstance(value, (list, tuple)):
         return [_jsonable(item) for item in value]
     if isinstance(value, (datetime, date, time)):
         return value.isoformat().replace("+00:00", "Z")

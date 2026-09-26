@@ -22,7 +22,6 @@ from planning.domain.entities.job import UnassignedJob
 from planning.domain.entities.planning import (
     PlanningConfig,
     PlanningInput,
-    PlanningResult,
 )
 from planning.domain.enums import ReasonCode
 from planning.domain.priority import (
@@ -430,21 +429,9 @@ class MultiDayPlanningService:
                     batch["initiated_by_user_id"],
                 )
                 await self._repository.mark_daily_run_running(run_id, data)
-                if data.jobs:
-                    result = await self._solver_factory.create(
-                        data.config.travel_provider
-                    ).solve(data)
-                else:
-                    drop_cost = sum(item.drop_penalty for item in data.pre_unassigned)
-                    result = PlanningResult(
-                        routes=[],
-                        unassigned=list(data.pre_unassigned),
-                        solver_status="EMPTY",
-                        objective=drop_cost,
-                        drop_cost=drop_cost,
-                        travel_cost=0,
-                        solver_time_ms=0,
-                    )
+                result = await self._solver_factory.create(
+                    data.config.travel_provider
+                ).solve(data)
                 result.validation_errors = self._daily_validator.validate(data, result)
                 if result.validation_errors:
                     raise RuntimeError("; ".join(result.validation_errors))
@@ -760,6 +747,8 @@ def _daily_source(
         engineer_rows.append(
             {
                 "engineer_id": engineer["id"],
+                "name": engineer.get("name"),
+                "created_at": _datetime(engineer.get("created_at")),
                 "transport_type": engineer["transport_type"],
                 "start_address": engineer["start_address"],
                 "start_latitude": engineer["start_latitude"],
@@ -777,6 +766,7 @@ def _daily_source(
         value["created_at"] = datetime.fromisoformat(
             value["created_at"].replace("Z", "+00:00")
         )
+        value["received_at"] = _datetime(value.get("received_at"))
         value["time_window_start"] = _optional_time(value["time_window_start"])
         value["time_window_end"] = _optional_time(value["time_window_end"])
         jobs.append(value)

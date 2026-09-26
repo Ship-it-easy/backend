@@ -39,6 +39,12 @@ class DynamicPlanningRepository(Protocol):
         plan_version_id: int | None,
     ) -> dict[str, Any]: ...
 
+    async def get_baseline_comparison(
+        self,
+        project_id: int,
+        planning_date: date,
+    ) -> dict[str, Any]: ...
+
     async def get_planning_job_explanation(
         self, project_id: int, day_result_id: int, job_id: int
     ) -> dict[str, Any] | None: ...

@@ -128,6 +128,10 @@ Timezone должен совпадать с timezone проекта. Все аб
   `/planning/versions/{version_id}`;
 - семидневная доска текущего плана: `GET /api/project/planning/board`;
 - результат отдельного дня: `GET /api/project/planning/board/{planning_date}`;
+- сохранённое сравнение оптимального плана с FIFO:
+  `GET /api/project/planning/current/days/{planning_date}/comparison`;
+- идемпотентный повтор неуспешного FIFO-расчёта на исходном snapshot:
+  `POST /api/project/planning/runs/{planning_run_id}/baseline/retry`;
 - объяснение решения по заявке:
   `GET /api/project/planning/day-results/{day_result_id}/jobs/{job_id}/explanation`;
 - CSV-пакет заявок: `POST /api/projects/{project_id}/job-imports`, просмотр
@@ -164,6 +168,9 @@ Read model связывает каждую дату опубликованной
 Ночной запуск настраивается полями `nightly_planning_enabled` и
 `nightly_planning_time` активной конфигурации проекта. Он использует тот же
 алгоритм защиты и публикации, что и ручной запуск.
+
+Методика, контракт API и сценарий показа FIFO-сравнения описаны в
+[docs/FIFO_BASELINE_COMPARISON.md](docs/FIFO_BASELINE_COMPARISON.md).
 
 ## Файловая структура
 

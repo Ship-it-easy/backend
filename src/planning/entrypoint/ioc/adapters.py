@@ -8,6 +8,7 @@ from planning.application.interfaces.admin_management_repositories import (
     AdminUserRepository,
 )
 from planning.application.interfaces.assignment_repository import AssignmentRepository
+from planning.application.interfaces.baseline_retry import BaselineRetryOperations
 from planning.application.interfaces.dynamic_planning_repository import (
     DynamicPlanningRepository,
 )
@@ -42,6 +43,9 @@ from planning.infrastructure.adapters.admin_management_repositories_sqla import 
 )
 from planning.infrastructure.adapters.assignment_repository_sqla import (
     SqlaAssignmentRepository,
+)
+from planning.infrastructure.adapters.baseline_retry_sqla import (
+    SqlaBaselineRetryOperations,
 )
 from planning.infrastructure.adapters.dynamic_planning_repository_sqla import (
     SqlaDynamicPlanningRepository,
@@ -116,6 +120,10 @@ class PlanningAdaptersProvider(Provider):
         SqlaDynamicPlanningRepository,
         provides=DynamicPlanningRepository,
     )
+    baseline_retry_operations = provide(
+        SqlaBaselineRetryOperations,
+        provides=BaselineRetryOperations,
+    )
     project_access = provide(ProjectAccess)
     transaction_manager = provide(
         SqlAlchemyTransactionManager,
@@ -183,7 +191,13 @@ class PlanningAdaptersProvider(Provider):
     static_matrix_provider = provide(StaticTravelMatrixProvider)
     valhalla_matrix_provider = provide(ValhallaTravelMatrixProvider)
     matrix_factory = provide(TravelMatrixProviderFactory)
-    solver_factory = provide(
-        OrToolsPlanningSolverFactory,
-        provides=PlanningSolverFactory,
-    )
+    @provide
+    def solver_factory(
+        self,
+        matrix_factory: TravelMatrixProviderFactory,
+        config: PlanningServiceConfig,
+    ) -> PlanningSolverFactory:
+        return OrToolsPlanningSolverFactory(
+            matrix_factory,
+            config.baseline_comparison_enabled,
+        )

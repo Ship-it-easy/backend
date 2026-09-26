@@ -20,6 +20,7 @@ class PlanningServiceConfig:
     yandex_geocoder_url: str = "https://geocode-maps.yandex.ru"
     yandex_geocoder_api_key: str = ""
     yandex_geocoder_bbox: str = ""
+    baseline_comparison_enabled: bool = True
 
     @staticmethod
     def from_env() -> "PlanningServiceConfig":
@@ -35,4 +36,7 @@ class PlanningServiceConfig:
             ),
             yandex_geocoder_api_key=getenv("YANDEX_GEOCODER_API_KEY", ""),
             yandex_geocoder_bbox=getenv("YANDEX_GEOCODER_BBOX", ""),
+            baseline_comparison_enabled=_env_flag(
+                "BASELINE_COMPARISON_ENABLED", True
+            ),
         )

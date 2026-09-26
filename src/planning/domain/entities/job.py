@@ -22,6 +22,8 @@ class Job:
     allowed_engineer_ids: frozenset[int] | None = None
     mandatory: bool = False
     priority: WorkPriority = WorkPriority.LOW
+    received_at: datetime | None = None
+    ingest_sequence: int = 1
 
 
 @dataclass

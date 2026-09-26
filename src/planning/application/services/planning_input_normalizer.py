@@ -45,6 +45,17 @@ class PlanningInputNormalizer:
         equipment_units = source["equipment_units"]
         snapshot_time = snapshot_time or datetime.now(timezone.utc)
         local_today = snapshot_time.astimezone(ZoneInfo(timezone_name)).date()
+        earliest_source_shift_start_min = min(
+            (
+                _time_to_start_minute(row["shift_start"])
+                for row in source["engineers"]
+                if row.get("shift_start") is not None
+                and row.get("shift_end") is not None
+                and _time_to_start_minute(row["shift_start"])
+                < _time_to_end_minute(row["shift_end"])
+            ),
+            default=None,
+        )
         engineers = await self._normalize_engineers(
             source["engineers"],
             source,
@@ -205,6 +216,7 @@ class PlanningInputNormalizer:
             "project_id": project_id,
             "planning_date": planning_date,
             "timezone": timezone_name,
+            "baseline_earliest_shift_start_min": earliest_source_shift_start_min,
             "jobs": [
                 {**source_jobs.get(job.id, {}), **asdict(job)}
                 for job in jobs_with_penalty
@@ -238,6 +250,7 @@ class PlanningInputNormalizer:
                     "preallocated_equipment_by_engineer", {}
                 ).items()
             },
+            baseline_jobs=jobs_with_penalty,
         )
 
     async def _normalize_engineers(
@@ -275,6 +288,8 @@ class PlanningInputNormalizer:
                             int(row["engineer_id"]), set()
                         )
                     ),
+                    name=row.get("name"),
+                    created_at=_optional_datetime(row.get("created_at")),
                 )
             )
         return result
@@ -341,6 +356,12 @@ class PlanningInputNormalizer:
                         source["required_equipment"].get(work_type_id, set())
                     ),
                     created_at=row["created_at"],
+                    received_at=(
+                        _optional_datetime(row.get("received_at")) or row["created_at"]
+                    ),
+                    ingest_sequence=int(
+                        row.get("ingest_sequence") or row.get("import_row_number") or 1
+                    ),
                     allowed_engineer_ids=(
                         frozenset(int(value) for value in row["allowed_engineer_ids"])
                         if row.get("allowed_engineer_ids") is not None
@@ -498,3 +519,9 @@ def current_minute_ceil(timezone_name: str, instant: datetime | None = None) -> 
         + local_now.minute
         + int(local_now.second > 0 or local_now.microsecond > 0)
     )
+
+
+def _optional_datetime(value: datetime | str | None) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
