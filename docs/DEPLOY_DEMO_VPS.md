@@ -59,13 +59,18 @@ cat /etc/os-release
 free -h
 df -h /
 ip -4 addr
+systemd-detect-virt
 sudo docker --version
 sudo docker compose version
 ```
 
-Убедитесь, что `192.168.8.29` действительно назначен VPS. Если Docker и
-Compose уже работают, сразу переходите к шагу 3. Если Docker отсутствует и
-ОС — Ubuntu 24.04, установите его из официального репозитория:
+Убедитесь, что `192.168.8.29` действительно назначен VPS. Для купленного
+сервера указана Ubuntu 22.04; она поддерживается Docker. Если
+`systemd-detect-virt` показывает `lxc` или другую контейнерную виртуализацию,
+запуск Docker и включение swap могут зависеть от настроек провайдера.
+Проверка после установки — `docker run --rm hello-world`.
+Если Docker и Compose уже работают, сразу переходите к шагу 3. Если Docker
+отсутствует, установите его из официального репозитория:
 
 ```bash
 sudo apt update
@@ -84,6 +89,7 @@ EOF
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 sudo docker compose version
+sudo docker run --rm hello-world
 ```
 
 Официальная инструкция: https://docs.docker.com/engine/install/ubuntu/ .
@@ -104,14 +110,21 @@ df -h /
 sudo fallocate -l 4G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
-sudo swapon /swapfile
-grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+if sudo swapon /swapfile; then
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+else
+  sudo rm -f /swapfile
+  echo 'Swap запрещён настройками VPS — обратитесь к провайдеру'
+fi
 swapon --show
 free -h
 ```
 
-Строка в `/etc/fstab` включает swap после перезагрузки. На 1 vCPU сборка и
-импорт карты могут идти долго даже со swap.
+Строка в `/etc/fstab` включает swap после перезагрузки. Если команда
+`swapon /swapfile` выдаст `Operation not permitted`, блок удалит созданный
+файл и не изменит `/etc/fstab`; попросите провайдера включить swap для этого
+контейнера. На 1 vCPU сборка и импорт
+карты могут идти долго даже со swap.
 
 ## 4. Клонировать оба репозитория рядом
 
