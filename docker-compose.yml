@@ -15,8 +15,10 @@ services:
         condition: service_healthy
       valhalla:
         condition: service_healthy
-      nominatim:
-        condition: service_healthy
+    environment:
+      # The reviewer-facing local stack always uses Yandex for geocoding.
+      USE_YANDEX_GEOCODER: "true"
+      YANDEX_GEOCODER_API_KEY: ${YANDEX_GEOCODER_API_KEY:?Set YANDEX_GEOCODER_API_KEY in .env.docker}
     command: >-
       sh -c "alembic upgrade head &&
       gunicorn -c conf/gunicorn.conf.py 'auth.run:make_app()'"
@@ -63,6 +65,10 @@ services:
       start_period: 10m
 
   nominatim:
+    # Kept for development and regression checks, but deliberately excluded
+    # from the default Yandex-based startup. Start explicitly with
+    # `docker compose --profile nominatim up -d nominatim` when needed.
+    profiles: ["nominatim"]
     image: mediagis/nominatim:5.3
     environment:
       PBF_URL: ${NOMINATIM_PBF_URL:-${OSM_PBF_URL:-https://download.openstreetmap.fr/extracts/russia/central_federal_district-latest.osm.pbf}}
